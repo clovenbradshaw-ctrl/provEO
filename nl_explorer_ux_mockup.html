@@ -1,0 +1,438 @@
+
+<style>
+  h2.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --amber-fill:#FAEEDA;--amber-mid:#BA7517;--amber-text:#633806;
+    --red-fill:#FCEBEB;--red-mid:#E24B4A;--red-text:#501313;
+    --blue-fill:#E6F1FB;--blue-mid:#378ADD;--blue-text:#042C53;
+    --teal-fill:#E1F5EE;--teal-mid:#1D9E75;--teal-text:#04342C;
+  }
+  .shell{display:flex;flex-direction:column;height:740px;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden;font-family:var(--font-sans);font-size:14px}
+  .topbar{display:flex;align-items:center;gap:0;padding:0 16px;border-bottom:0.5px solid var(--color-border-tertiary);height:44px;flex-shrink:0;background:var(--color-background-primary)}
+  .appname{font-size:13px;font-weight:500;color:var(--color-text-primary);margin-right:20px;letter-spacing:-0.01em}
+  .modetabs{display:flex;gap:2px}
+  .mtab{padding:5px 14px;border-radius:var(--border-radius-md);font-size:13px;font-weight:400;color:var(--color-text-secondary);cursor:pointer;border:none;background:transparent}
+  .mtab.active{background:var(--color-background-secondary);color:var(--color-text-primary);font-weight:500}
+  .topright{margin-left:auto;display:flex;align-items:center;gap:12px}
+  .srcbadge{font-size:12px;color:var(--color-text-secondary);display:flex;align-items:center;gap:5px}
+  .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+  .dot-green{background:#1D9E75}.dot-amber{background:#BA7517}
+  .body{display:flex;flex:1;overflow:hidden}
+  .sources{width:168px;flex-shrink:0;border-right:0.5px solid var(--color-border-tertiary);display:flex;flex-direction:column;background:var(--color-background-secondary)}
+  .spanel-head{padding:10px 12px 6px;font-size:11px;font-weight:500;color:var(--color-text-secondary);letter-spacing:0.04em;text-transform:uppercase}
+  .slist{flex:1;overflow-y:auto;padding:4px 8px}
+  .sitem{padding:7px 8px;border-radius:var(--border-radius-md);cursor:pointer;border:0.5px solid transparent;margin-bottom:2px}
+  .sitem:hover{background:var(--color-background-primary);border-color:var(--color-border-tertiary)}
+  .sitem-name{font-size:12px;font-weight:500;color:var(--color-text-primary);line-height:1.3}
+  .sitem-meta{font-size:11px;color:var(--color-text-secondary);margin-top:1px;display:flex;align-items:center;gap:4px}
+  .stag{font-size:10px;font-weight:500;padding:1px 5px;border-radius:3px}
+  .stag-csv{background:var(--teal-fill);color:var(--teal-text)}.stag-pdf{background:var(--amber-fill);color:var(--amber-text)}.stag-txt{background:var(--blue-fill);color:var(--blue-text)}
+  .sadd{margin:8px 8px 8px;padding:7px;border:0.5px dashed var(--color-border-tertiary);border-radius:var(--border-radius-md);text-align:center;font-size:12px;color:var(--color-text-secondary);cursor:pointer}
+  .sadd:hover{border-color:var(--color-border-secondary);color:var(--color-text-primary)}
+  .center{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+  .editor-wrap{flex:1;overflow-y:auto;padding:28px 36px}
+  .article-meta{font-size:12px;color:var(--color-text-secondary);margin-bottom:20px;display:flex;gap:12px;align-items:center}
+  .article-title{font-family:var(--font-serif);font-size:22px;font-weight:500;line-height:1.25;color:var(--color-text-primary);margin-bottom:14px}
+  .article-body{font-family:var(--font-serif);font-size:15px;line-height:1.75;color:var(--color-text-primary)}
+  .article-body p{margin-bottom:14px}
+  .g{border-bottom:2px solid var(--amber-mid);cursor:pointer;position:relative}
+  .g:hover{background:var(--amber-fill);border-radius:2px}
+  .g.active{background:var(--amber-fill);border-radius:2px}
+  .conflict{border-bottom:2px dashed var(--red-mid);cursor:pointer}
+  .conflict:hover{background:var(--red-fill);border-radius:2px}
+  .conflict.active{background:var(--red-fill);border-radius:2px}
+  .absent{border-bottom:2px dotted var(--blue-mid);cursor:pointer}
+  .absent:hover{background:var(--blue-fill);border-radius:2px}
+  .statusbar{height:32px;border-top:0.5px solid var(--color-border-tertiary);padding:0 36px;display:flex;align-items:center;gap:20px;flex-shrink:0;background:var(--color-background-secondary)}
+  .sstat{font-size:11px;color:var(--color-text-secondary);display:flex;align-items:center;gap:5px}
+  .sstat-n{font-weight:500;color:var(--color-text-primary)}
+  .sstat-dot{width:7px;height:7px;border-radius:50%}
+  .right-panel{width:280px;flex-shrink:0;border-left:0.5px solid var(--color-border-tertiary);display:flex;flex-direction:column;background:var(--color-background-primary)}
+  .rphead{padding:12px 14px 8px;border-bottom:0.5px solid var(--color-border-tertiary);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+  .rphead-title{font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:var(--color-text-secondary)}
+  .rphead-close{font-size:18px;color:var(--color-text-secondary);cursor:pointer;line-height:1;border:none;background:transparent}
+  .rpbody{flex:1;overflow-y:auto;padding:12px 14px}
+  .rp-empty{flex:1;display:flex;align-items:center;justify-content:center;padding:24px}
+  .rp-empty-inner{text-align:center}
+  .rp-empty-icon{font-size:28px;opacity:0.2;margin-bottom:10px;font-family:var(--font-mono)}
+  .rp-empty-text{font-size:12px;color:var(--color-text-secondary);line-height:1.5}
+  .prov-section{margin-bottom:14px}
+  .prov-label{font-size:10px;font-weight:500;letter-spacing:0.06em;text-transform:uppercase;color:var(--color-text-secondary);margin-bottom:5px}
+  .prov-value{font-size:12px;color:var(--color-text-primary);line-height:1.4}
+  .prov-code{font-family:var(--font-mono);font-size:11px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:7px 9px;color:var(--color-text-primary);line-height:1.5}
+  .prov-tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 8px;border-radius:var(--border-radius-md);border:0.5px solid transparent}
+  .prov-tag-amber{background:var(--amber-fill);color:var(--amber-text);border-color:#FAC775}
+  .prov-tag-red{background:var(--red-fill);color:var(--red-text);border-color:#F7C1C1}
+  .prov-tag-blue{background:var(--blue-fill);color:var(--blue-text);border-color:#B5D4F4}
+  .conf-bar-wrap{height:4px;background:var(--color-background-secondary);border-radius:2px;margin-top:4px;overflow:hidden}
+  .conf-bar{height:4px;border-radius:2px}
+  .divider{height:0.5px;background:var(--color-border-tertiary);margin:12px 0}
+  .prov-actions{display:flex;gap:6px;margin-top:4px}
+  .btn-sm{padding:4px 10px;font-size:11px;border-radius:var(--border-radius-md);cursor:pointer;font-weight:500;border:0.5px solid var(--color-border-secondary);background:transparent;color:var(--color-text-primary)}
+  .btn-sm:hover{background:var(--color-background-secondary)}
+  .btn-sm-danger{border-color:#F09595;color:var(--red-text);background:var(--red-fill)}
+  .btn-sm-danger:hover{background:#F7C1C1}
+  .traverse-step{display:flex;align-items:flex-start;gap:7px;margin-bottom:5px}
+  .traverse-step-dot{width:5px;height:5px;border-radius:50%;background:var(--color-border-secondary);flex-shrink:0;margin-top:5px}
+  .traverse-step-text{font-family:var(--font-mono);font-size:10px;color:var(--color-text-secondary);line-height:1.45}
+  .review-layout{display:flex;flex:1;overflow:hidden}
+  .review-article{flex:1;overflow-y:auto;padding:28px 32px;min-width:0}
+  .review-queue{width:296px;flex-shrink:0;border-left:0.5px solid var(--color-border-tertiary);overflow-y:auto;padding:12px}
+  .qhead{font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:var(--color-text-secondary);margin-bottom:10px;padding:0 2px}
+  .qcard{border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:11px 13px;margin-bottom:8px;cursor:pointer;background:var(--color-background-primary)}
+  .qcard:hover{border-color:var(--color-border-secondary)}
+  .qcard.selected{border-color:var(--color-border-primary)}
+  .qcard-type{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+  .qcard-text{font-size:12px;color:var(--color-text-primary);line-height:1.45;margin-bottom:7px}
+  .qcard-source{font-size:11px;font-family:var(--font-mono);color:var(--color-text-secondary);margin-bottom:8px}
+  .qcard-actions{display:flex;gap:5px}
+  .qa{padding:4px 10px;font-size:11px;border-radius:var(--border-radius-md);cursor:pointer;border:0.5px solid var(--color-border-secondary);background:transparent;color:var(--color-text-primary);font-weight:500}
+  .qa:hover{background:var(--color-background-secondary)}
+  .qa-confirm{border-color:#5DCAA5;color:var(--teal-text);background:var(--teal-fill)}
+  .qa-confirm:hover{background:#9FE1CB}
+  .qa-release{border-color:#F09595;color:var(--red-text)}
+  .chat-layout{display:flex;flex:1;overflow:hidden}
+  .chat-main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+  .chat-msgs{flex:1;overflow-y:auto;padding:20px 28px;display:flex;flex-direction:column;gap:16px}
+  .chat-msg{display:flex;gap:10px;align-items:flex-start}
+  .chat-msg-user{flex-direction:row-reverse}
+  .chat-avatar{width:28px;height:28px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500}
+  .av-sys{background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary)}
+  .av-user{background:var(--blue-fill);color:var(--blue-text)}
+  .chat-bubble{max-width:540px;font-size:13px;line-height:1.65;color:var(--color-text-primary);background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:11px 14px}
+  .chat-bubble-user{background:var(--color-background-primary)}
+  .evidence-toggle{margin-top:9px;border-top:0.5px solid var(--color-border-tertiary);padding-top:7px;display:flex;align-items:center;justify-content:space-between;cursor:pointer}
+  .ev-toggle-label{font-size:11px;color:var(--color-text-secondary);font-weight:500}
+  .ev-toggle-count{font-size:11px;font-family:var(--font-mono);color:var(--color-text-secondary)}
+  .ev-cards{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+  .ev-card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:8px 10px}
+  .ev-card-claim{font-family:var(--font-mono);font-size:11px;font-weight:500;color:var(--color-text-primary);margin-bottom:4px}
+  .ev-card-path{font-size:11px;color:var(--color-text-secondary);line-height:1.4}
+  .ev-card-footer{display:flex;align-items:center;justify-content:space-between;margin-top:6px}
+  .ev-rederive{font-size:11px;padding:3px 8px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary);background:transparent;cursor:pointer;color:var(--color-text-secondary);font-weight:500}
+  .ev-rederive:hover{background:var(--color-background-secondary)}
+  .chat-input-wrap{padding:12px 28px;border-top:0.5px solid var(--color-border-tertiary);display:flex;gap:8px;align-items:flex-end;flex-shrink:0}
+  .chat-textarea{flex:1;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:9px 12px;font-size:13px;font-family:var(--font-sans);color:var(--color-text-primary);background:var(--color-background-primary);resize:none;outline:none;min-height:40px}
+  .chat-send{padding:9px 16px;background:var(--color-text-primary);color:var(--color-background-primary);border:none;border-radius:var(--border-radius-lg);font-size:13px;font-weight:500;cursor:pointer}
+  .chat-right{width:240px;flex-shrink:0;border-left:0.5px solid var(--color-border-tertiary);display:flex;flex-direction:column;background:var(--color-background-secondary)}
+  .cr-head{padding:10px 12px 8px;font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:var(--color-text-secondary);border-bottom:0.5px solid var(--color-border-tertiary)}
+  .cr-body{flex:1;overflow-y:auto;padding:10px 12px}
+  .iset-rule{border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:9px 10px;margin-bottom:7px;background:var(--color-background-primary)}
+  .iset-rule-head{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+  .iset-type{font-size:10px;font-weight:500;padding:1px 6px;border-radius:3px}
+  .iset-trigger{font-size:10px;color:var(--color-text-secondary)}
+  .iset-text{font-size:11px;color:var(--color-text-primary);line-height:1.45}
+  .mode-panel{display:none;flex:1;overflow:hidden;flex-direction:column}
+  .mode-panel.active{display:flex}
+  .cursor{display:inline-block;width:2px;height:15px;background:var(--color-text-primary);vertical-align:text-bottom;animation:blink 1s step-end infinite}
+  @keyframes blink{50%{opacity:0}}
+</style>
+
+<h2 class="sr-only">NL Explorer — three-mode UX mockup showing Write, Review, and Chat interfaces with provenance annotations</h2>
+
+<div class="shell">
+  <div class="topbar">
+    <span class="appname">NL Explorer</span>
+    <div class="modetabs">
+      <button class="mtab active" onclick="switchMode('write')">Write</button>
+      <button class="mtab" onclick="switchMode('review')">Review</button>
+      <button class="mtab" onclick="switchMode('chat')">Chat</button>
+    </div>
+    <div class="topright">
+      <div class="srcbadge"><div class="dot dot-green"></div>3 indexed</div>
+      <div class="srcbadge"><div class="dot dot-amber"></div>1 indexing</div>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="sources">
+      <div class="spanel-head">Sources</div>
+      <div class="slist">
+        <div class="sitem">
+          <div class="sitem-name">ndp_budget_fy25.csv</div>
+          <div class="sitem-meta"><span class="stag stag-csv">CSV</span>847 rows</div>
+        </div>
+        <div class="sitem">
+          <div class="sitem-name">council_minutes_mar7.pdf</div>
+          <div class="sitem-meta"><span class="stag stag-pdf">PDF</span>12 pp</div>
+        </div>
+        <div class="sitem">
+          <div class="sitem-name">ohs_quarterly_q4.pdf</div>
+          <div class="sitem-meta"><span class="stag stag-pdf">PDF</span>31 pp</div>
+        </div>
+        <div class="sitem" style="opacity:0.5">
+          <div class="sitem-name">vendor_contracts.txt</div>
+          <div class="sitem-meta"><span class="stag stag-txt">TXT</span>indexing…</div>
+        </div>
+      </div>
+      <div class="sadd">+ add source</div>
+    </div>
+
+    <div class="mode-panel active" id="mode-write" style="flex-direction:row;overflow:hidden">
+      <div class="center">
+        <div class="editor-wrap" id="editor-area">
+          <div class="article-meta">
+            <span>Untitled draft</span>
+            <span style="color:var(--color-border-secondary)">·</span>
+            <span style="color:var(--amber-mid);font-size:11px">14 grounded · 1 conflict · 2 absent</span>
+          </div>
+          <div class="article-title" contenteditable="true">The Private Police and the Public Budget<span class="cursor"></span></div>
+          <div class="article-body">
+            <p>The Nashville Downtown Partnership received <span class="g" data-id="m1" onclick="showClaim('m1')">$4.2 million</span> in public funds during fiscal year 2025, a <span class="g" data-id="m2" onclick="showClaim('m2')">14.3 percent increase</span> over the prior year, according to budget documents obtained from Metro Finance. The increase followed a motion by <span class="g" data-id="m3" onclick="showClaim('m3')">Councilmember Torres</span> on <span class="g" data-id="m4" onclick="showClaim('m4')">March 7</span> to amend the public safety allocation.</p>
+            <p>The Partnership has contracted with <span class="g" data-id="m5" onclick="showClaim('m5')">Solaren International</span> for private security services since <span class="g" data-id="m6" onclick="showClaim('m6')">2019</span>, at a cost the organization describes as <span class="conflict" data-id="c1" onclick="showClaim('c1')">$280,000 annually</span>. Internal documents reviewed by this reporter put the figure at <span class="g" data-id="m7" onclick="showClaim('m7')">$312,000</span>, a discrepancy the Partnership has not publicly explained.</p>
+            <p>Metro's Office of Homeless Services <span class="absent" data-id="a1" onclick="showClaim('a1')">did not respond to requests for comment</span> about the overlap between the Partnership's security footprint and OHS encampment clearance operations. <span class="absent" data-id="a2" onclick="showClaim('a2')">No disclosure of the Solaren contract</span> appears in the Partnership's public filings for the period.</p>
+          </div>
+        </div>
+        <div class="statusbar">
+          <div class="sstat"><div class="sstat-dot" style="background:var(--amber-mid)"></div><span class="sstat-n">14</span> grounded</div>
+          <div class="sstat"><div class="sstat-dot" style="background:#E24B4A"></div><span class="sstat-n">1</span> conflict</div>
+          <div class="sstat"><div class="sstat-dot" style="background:var(--blue-mid)"></div><span class="sstat-n">2</span> absent</div>
+          <div class="sstat" style="margin-left:auto"><span style="color:var(--color-text-secondary)">pipeline: </span><span class="sstat-n" style="color:#1D9E75">live</span></div>
+        </div>
+      </div>
+
+      <div class="right-panel" id="rp-write">
+        <div class="rp-empty" id="rp-empty">
+          <div class="rp-empty-inner">
+            <div class="rp-empty-icon">⊨</div>
+            <div class="rp-empty-text">Click any underlined<br>claim to inspect its<br>provenance path</div>
+          </div>
+        </div>
+        <div id="rp-content" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+          <div class="rphead">
+            <span class="rphead-title" id="rp-type-label">Grounded</span>
+            <button class="rphead-close" onclick="closeClaim()">×</button>
+          </div>
+          <div class="rpbody">
+            <div class="prov-section">
+              <div class="prov-label">Claim</div>
+              <div id="rp-claim-text" class="prov-code"></div>
+            </div>
+            <div class="prov-section" id="rp-source-section">
+              <div class="prov-label">Source</div>
+              <div id="rp-source" class="prov-value"></div>
+            </div>
+            <div class="prov-section" id="rp-op-section">
+              <div class="prov-label">Operation</div>
+              <div id="rp-op" class="prov-code"></div>
+            </div>
+            <div class="prov-section" id="rp-conflict-section" style="display:none">
+              <div class="prov-label">Conflict</div>
+              <div id="rp-conflict" class="prov-value"></div>
+            </div>
+            <div class="prov-section">
+              <div class="prov-label">Traversal</div>
+              <div id="rp-traversal"></div>
+            </div>
+            <div class="prov-section" id="rp-conf-section">
+              <div class="prov-label">Confidence</div>
+              <div class="conf-bar-wrap"><div class="conf-bar" id="rp-conf-bar"></div></div>
+            </div>
+            <div class="divider"></div>
+            <div class="prov-actions">
+              <button class="btn-sm">Correct</button>
+              <button class="btn-sm btn-sm-danger">Release</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mode-panel" id="mode-review">
+      <div class="review-layout">
+        <div class="review-article">
+          <div class="article-meta"><span style="color:var(--color-text-secondary)">Review mode — read only</span></div>
+          <div class="article-title" style="font-family:var(--font-serif)">The Private Police and the Public Budget</div>
+          <div class="article-body">
+            <p>The Nashville Downtown Partnership received <span class="g">$4.2 million</span> in public funds during fiscal year 2025, a <span class="g">14.3 percent increase</span> over the prior year, according to budget documents obtained from Metro Finance. The increase followed a motion by <span class="g">Councilmember Torres</span> on <span class="g">March 7</span> to amend the public safety allocation.</p>
+            <p>The Partnership has contracted with <span class="g">Solaren International</span> for private security services since <span class="g">2019</span>, at a cost the organization describes as <span class="conflict">$280,000 annually</span>. Internal documents reviewed by this reporter put the figure at <span class="g">$312,000</span>, a discrepancy the Partnership has not publicly explained.</p>
+            <p>Metro's Office of Homeless Services <span class="absent">did not respond to requests for comment</span> about the overlap between the Partnership's security footprint and OHS encampment clearance operations. <span class="absent">No disclosure of the Solaren contract</span> appears in the Partnership's public filings for the period.</p>
+          </div>
+        </div>
+        <div class="review-queue">
+          <div class="qhead">Review queue — 7 remaining</div>
+
+          <div class="qcard selected">
+            <div class="qcard-type"><span class="prov-tag prov-tag-red">conflict</span></div>
+            <div class="qcard-text">"$280,000 annually" — source says $312,000</div>
+            <div class="qcard-source">ndp_budget_fy25.csv:row 201 vs council_minutes_mar7.pdf:p.4</div>
+            <div class="qcard-actions">
+              <button class="qa qa-confirm">Confirm</button>
+              <button class="qa">Correct</button>
+              <button class="qa qa-release">Release</button>
+            </div>
+          </div>
+
+          <div class="qcard">
+            <div class="qcard-type"><span class="prov-tag prov-tag-blue">absent</span></div>
+            <div class="qcard-text">"No disclosure of Solaren contract" — expected in public filings period</div>
+            <div class="qcard-source">stageNUL · ohs_quarterly_q4.pdf</div>
+            <div class="qcard-actions">
+              <button class="qa qa-confirm">Confirm</button>
+              <button class="qa">Correct</button>
+              <button class="qa qa-release">Release</button>
+            </div>
+          </div>
+
+          <div class="qcard">
+            <div class="qcard-type"><span class="prov-tag prov-tag-amber">grounded</span></div>
+            <div class="qcard-text">"$4.2 million" — SUM(amount) WHERE dept=public_safety AND fy=2025</div>
+            <div class="qcard-source">ndp_budget_fy25.csv · rows 112–116</div>
+            <div class="qcard-actions">
+              <button class="qa qa-confirm">Confirm</button>
+              <button class="qa">Correct</button>
+              <button class="qa qa-release">Release</button>
+            </div>
+          </div>
+
+          <div class="qcard">
+            <div class="qcard-type"><span class="prov-tag prov-tag-amber">grounded</span></div>
+            <div class="qcard-text">"Councilmember Torres" — NER:PERSON, coref chain resolved</div>
+            <div class="qcard-source">council_minutes_mar7.pdf · p.4 · span[1204:1220]</div>
+            <div class="qcard-actions">
+              <button class="qa qa-confirm">Confirm</button>
+              <button class="qa">Correct</button>
+              <button class="qa qa-release">Release</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mode-panel" id="mode-chat">
+      <div class="chat-layout">
+        <div class="chat-main">
+          <div class="chat-msgs">
+            <div class="chat-msg chat-msg-user">
+              <div class="chat-avatar av-user">M</div>
+              <div class="chat-bubble chat-bubble-user">What is NDP's financial relationship to OHS?</div>
+            </div>
+            <div class="chat-msg">
+              <div class="chat-avatar av-sys" style="font-family:var(--font-mono);font-size:9px">NL</div>
+              <div class="chat-bubble">
+                <div>This answer is fold-computable — traversing the CON graph directly.</div>
+                <br>
+                <div>The Nashville Downtown Partnership received <span class="g" style="cursor:default">$4.2M in public safety funds</span> in FY2025, routed through Metro Finance. The Partnership's <span class="g" style="cursor:default">Solaren contract ($312K)</span> operates in the same geographic zones as <span class="g" style="cursor:default">OHS encampment clearance operations</span>, with <span class="absent" style="cursor:default">no formal coordination agreement disclosed</span> in public filings.</div>
+                <div class="evidence-toggle" onclick="toggleEvidence(this)">
+                  <span class="ev-toggle-label">Evidence — 4 grounded claims</span>
+                  <span class="ev-toggle-count">show ↓</span>
+                </div>
+                <div class="ev-cards" style="display:none">
+                  <div class="ev-card">
+                    <div class="ev-card-claim">$4.2M public safety funds</div>
+                    <div class="ev-card-path">ndp_budget_fy25.csv · SUM(amount) · rows 112–116</div>
+                    <div class="ev-card-footer"><span class="prov-tag prov-tag-amber" style="font-size:10px">mechanical</span><button class="ev-rederive">re-derive</button></div>
+                  </div>
+                  <div class="ev-card">
+                    <div class="ev-card-claim">Solaren contract $312K</div>
+                    <div class="ev-card-path">ndp_budget_fy25.csv · row 201 · LOOKUP(overtime_actual)</div>
+                    <div class="ev-card-footer"><span class="prov-tag prov-tag-amber" style="font-size:10px">mechanical</span><button class="ev-rederive">re-derive</button></div>
+                  </div>
+                  <div class="ev-card">
+                    <div class="ev-card-claim">No coordination agreement disclosed</div>
+                    <div class="ev-card-path">stageNUL · ohs_quarterly_q4.pdf · expected disclosure pattern</div>
+                    <div class="ev-card-footer"><span class="prov-tag prov-tag-blue" style="font-size:10px">absent</span><button class="ev-rederive">re-derive</button></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="chat-input-wrap">
+            <textarea class="chat-textarea" rows="1" placeholder="Ask about the sources…"></textarea>
+            <button class="chat-send">Send</button>
+          </div>
+        </div>
+
+        <div class="chat-right">
+          <div class="cr-head">Instruction set</div>
+          <div class="cr-body">
+            <div class="iset-rule">
+              <div class="iset-rule-head">
+                <span class="iset-type stag stag-pdf">COREF</span>
+                <span class="iset-trigger">human correction</span>
+              </div>
+              <div class="iset-text">Torres → resolve "she" within same paragraph scope</div>
+            </div>
+            <div class="iset-rule">
+              <div class="iset-rule-head">
+                <span class="iset-type stag stag-csv">XREF</span>
+                <span class="iset-trigger">recursive</span>
+              </div>
+              <div class="iset-text">Budget line items co-occurring with minutes concept nodes → attempt cross-source link</div>
+            </div>
+            <div class="iset-rule">
+              <div class="iset-rule-head">
+                <span class="iset-type stag stag-txt">NUL</span>
+                <span class="iset-trigger">llm reflection</span>
+              </div>
+              <div class="iset-text">Absence of contract disclosure in quarterly filing = NUL event, not silence</div>
+            </div>
+            <div style="margin-top:10px;padding-top:10px;border-top:0.5px solid var(--color-border-tertiary)">
+              <div style="font-size:11px;color:var(--color-text-secondary);line-height:1.5">3 rules · 2 firings today · 1 candidate refinement pending review</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const claims = {
+  m1:{type:'grounded',text:'$4.2 million',source:'ndp_budget_fy25.csv · rows 112–116',op:'SUM(amount) WHERE dept=public_safety AND fy=2025',traversal:['stageINS → doc anchor minted','stageSIG → value recurrence detected','stageCON → linked to NDP entity','stageEVA → value confirmed'],conf:1.0,confColor:'#1D9E75'},
+  m2:{type:'grounded',text:'14.3 percent increase',source:'ndp_budget_fy25.csv · rows 88–91, 112–116',op:'(SUM_2025 - SUM_2024) / SUM_2024 × 100',traversal:['stageINS → anchors minted','stageCON → SUM_2024 / SUM_2025 linked','stageDEF → delta computed'],conf:1.0,confColor:'#1D9E75'},
+  m3:{type:'grounded',text:'Councilmember Torres',source:'council_minutes_mar7.pdf · p.4 · span[1204:1220]',op:'NER:PERSON + COREF_RESOLVE',traversal:['stageSIG → person pattern hit','stageINS → anchor minted','stageCON → coref chain resolved'],conf:0.97,confColor:'#BA7517'},
+  m4:{type:'grounded',text:'March 7',source:'council_minutes_mar7.pdf · p.1',op:'NER:DATE + temporal anchor',traversal:['stageSIG → date hit','stageCON → linked to Torres entity'],conf:0.99,confColor:'#1D9E75'},
+  m5:{type:'grounded',text:'Solaren International',source:'vendor_contracts.txt · line 88',op:'NER:ORG',traversal:['stageSIG → org pattern','stageINS → anchor minted'],conf:0.94,confColor:'#BA7517'},
+  m6:{type:'grounded',text:'2019',source:'vendor_contracts.txt · line 88',op:'NER:DATE',traversal:['stageSIG → year pattern','stageCON → linked to Solaren anchor'],conf:0.93,confColor:'#BA7517'},
+  m7:{type:'grounded',text:'$312,000',source:'ndp_budget_fy25.csv · row 201',op:'LOOKUP(overtime_actual)',traversal:['stageSIG → value hit','stageEVA → conflict with reported figure'],conf:1.0,confColor:'#1D9E75'},
+  c1:{type:'conflict',text:'$280,000 annually',source:'council_minutes_mar7.pdf:p.4 vs ndp_budget_fy25.csv:row 201',op:'stageEVA CONFLICT: reported=$280K, source=$312K',traversal:['stageSIG → value in both sources','stageEVA → value mismatch → DEF conflict emitted'],conf:0.9,confColor:'#BA7517',conflict:'Reported: $280,000 (NDP statement)\nSource log: $312,000 (budget row 201)\nDelta: $32,000 — resolution: null'},
+  a1:{type:'absent',text:'did not respond to requests for comment',source:'stageNUL · ohs_quarterly_q4.pdf',op:'NUL: expected OHS response entity not found in source log',traversal:['stageNUL → absence pattern matched','no OHS response anchor in indexed sources'],conf:0.85,confColor:'#378ADD'},
+  a2:{type:'absent',text:'No disclosure of the Solaren contract',source:'stageNUL · vendor_contracts.txt + ohs_quarterly_q4.pdf',op:'NUL: contract disclosure pattern expected, not found',traversal:['stageNUL → disclosure syntax scan','no matching entry in filing period'],conf:0.88,confColor:'#378ADD'},
+};
+
+const typeLabels = {grounded:'Grounded · mechanical',conflict:'Conflict · EVA fired',absent:'Absent · NUL event'};
+const tagClass = {grounded:'prov-tag-amber',conflict:'prov-tag-red',absent:'prov-tag-blue'};
+
+function switchMode(m){
+  document.querySelectorAll('.mtab').forEach((t,i)=>{t.classList.toggle('active',['write','review','chat'][i]===m)});
+  document.querySelectorAll('.mode-panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('mode-'+m).classList.add('active');
+}
+
+function showClaim(id){
+  const c = claims[id];
+  document.querySelectorAll('.g,.conflict,.absent').forEach(el=>el.classList.remove('active'));
+  const el = document.querySelector('[data-id="'+id+'"]');
+  if(el) el.classList.add('active');
+  document.getElementById('rp-empty').style.display='none';
+  const rc = document.getElementById('rp-content');
+  rc.style.display='flex';
+  document.getElementById('rp-type-label').textContent = typeLabels[c.type]||c.type;
+  document.getElementById('rp-claim-text').textContent = '"'+c.text+'"';
+  document.getElementById('rp-source').textContent = c.source;
+  document.getElementById('rp-op').textContent = c.op;
+  const cs = document.getElementById('rp-conflict-section');
+  if(c.conflict){cs.style.display='block';document.getElementById('rp-conflict').textContent=c.conflict;}
+  else{cs.style.display='none';}
+  const tv = document.getElementById('rp-traversal');
+  tv.innerHTML = c.traversal.map(s=>`<div class="traverse-step"><div class="traverse-step-dot"></div><div class="traverse-step-text">${s}</div></div>`).join('');
+  const cb = document.getElementById('rp-conf-bar');
+  cb.style.width=(c.conf*100)+'%';
+  cb.style.background=c.confColor;
+}
+
+function closeClaim(){
+  document.querySelectorAll('.g,.conflict,.absent').forEach(el=>el.classList.remove('active'));
+  document.getElementById('rp-empty').style.display='flex';
+  document.getElementById('rp-content').style.display='none';
+}
+
+function toggleEvidence(el){
+  const cards = el.nextElementSibling;
+  const open = cards.style.display!=='none';
+  cards.style.display = open?'none':'flex';
+  el.querySelector('.ev-toggle-count').textContent = open?'show ↓':'hide ↑';
+}
+</script>
