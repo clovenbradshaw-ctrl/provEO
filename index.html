@@ -1263,6 +1263,289 @@
   }
   @keyframes blink { 50% { opacity: 0; } }
 
+  /* ---------- UPLOADS & CITATIONS ---------- */
+  .sources { position: relative; }
+  .sources.is-dragover { background: var(--amber-fill); }
+  .sources.is-dragover .spanel-head { color: var(--amber-text); }
+  .sources.is-dragover::after {
+    content: "drop to add source";
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(250,238,218,0.85);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--amber-text);
+    letter-spacing: 0.04em;
+    pointer-events: none;
+    z-index: 5;
+  }
+  .sitem { position: relative; }
+  .sitem-del {
+    position: absolute;
+    top: 6px; right: 6px;
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    padding: 0 4px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.12s, color 0.12s;
+    font-family: inherit;
+    line-height: 1;
+  }
+  .sitem:hover .sitem-del { opacity: 1; }
+  .sitem-del:hover { color: var(--red-mid); }
+  .source-empty {
+    padding: 10px 12px;
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    text-align: center;
+    font-family: var(--font-serif);
+    font-style: italic;
+  }
+
+  .cite-toolbar {
+    position: absolute;
+    z-index: 50;
+    background: var(--color-text-primary);
+    color: var(--color-background-primary);
+    padding: 3px;
+    border-radius: var(--border-radius-md);
+    box-shadow: 0 4px 14px rgba(26,25,21,0.24);
+    transform: translate(-50%, -100%);
+    margin-top: -8px;
+    display: flex;
+    gap: 3px;
+  }
+  .cite-toolbar[hidden] { display: none; }
+  .cite-toolbar .ct-btn {
+    background: transparent;
+    color: inherit;
+    font-size: 11.5px;
+    font-family: inherit;
+    font-weight: 500;
+    border: none;
+    padding: 5px 10px;
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+  }
+  .cite-toolbar .ct-btn:hover { background: rgba(255,255,255,0.14); }
+
+  .cite-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .cite-modal[hidden] { display: none; }
+  .cite-modal-backdrop {
+    position: absolute; inset: 0;
+    background: rgba(26,25,21,0.45);
+  }
+  .cite-modal-body {
+    position: relative;
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-lg);
+    width: min(820px, 92vw);
+    max-height: 82vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 12px 48px rgba(26,25,21,0.22);
+    overflow: hidden;
+  }
+  .cite-modal-head {
+    padding: 14px 18px 12px;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .cite-modal-title {
+    font-family: var(--font-serif);
+    font-size: 16px;
+    font-weight: 500;
+  }
+  .cite-modal-sub {
+    font-size: 11.5px;
+    color: var(--color-text-secondary);
+    margin-top: 2px;
+  }
+  .cite-selected-claim {
+    padding: 10px 18px;
+    font-family: var(--font-serif);
+    font-size: 13.5px;
+    color: var(--color-text-secondary);
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+  }
+  .cite-selected-claim .sel {
+    color: var(--color-text-primary);
+    background: var(--amber-fill);
+    padding: 1px 4px;
+    border-radius: 2px;
+    box-shadow: inset 0 -2px 0 var(--amber-mid);
+  }
+  .cite-modal-grid {
+    display: flex;
+    flex: 1;
+    min-height: 340px;
+    overflow: hidden;
+  }
+  .cite-source-picker {
+    width: 220px;
+    border-right: 0.5px solid var(--color-border-tertiary);
+    background: var(--color-background-secondary);
+    padding: 10px 10px;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  .cite-picker-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    margin-bottom: 8px;
+  }
+  .cite-src-item {
+    padding: 7px 9px;
+    border-radius: var(--border-radius-md);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    cursor: pointer;
+    margin-bottom: 2px;
+    border: 0.5px solid transparent;
+    background: var(--color-background-primary);
+  }
+  .cite-src-item:hover { border-color: var(--color-border-tertiary); }
+  .cite-src-item.selected {
+    border-color: var(--color-text-primary);
+    background: var(--color-background-primary);
+  }
+  .cite-src-item.disabled { opacity: 0.45; cursor: not-allowed; }
+  .cite-src-item-meta {
+    font-size: 10px;
+    color: var(--color-text-secondary);
+    margin-top: 2px;
+    font-family: var(--font-mono);
+  }
+  .cite-snippet-picker {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .cite-picker-head {
+    padding: 10px 14px;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+  }
+  .cite-search {
+    width: 100%;
+    margin-top: 6px;
+    font-size: 12px;
+    padding: 7px 10px;
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    font-family: var(--font-sans);
+    outline: none;
+    color: var(--color-text-primary);
+    background: var(--color-background-primary);
+  }
+  .cite-search:focus { border-color: var(--color-text-primary); }
+  .cite-snippet-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 14px;
+    font-family: var(--font-serif);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .cite-snippet {
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    background: var(--color-background-primary);
+    cursor: pointer;
+  }
+  .cite-snippet:hover {
+    border-color: var(--color-text-primary);
+    background: var(--color-background-secondary);
+  }
+  .cite-snippet.selected {
+    background: var(--amber-fill);
+    border-color: var(--amber-mid);
+  }
+  .cite-snippet-loc {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 4px;
+  }
+  .cite-snippet-text mark {
+    background: transparent;
+    color: var(--amber-text);
+    font-weight: 600;
+  }
+  .cite-empty {
+    padding: 20px 14px;
+    color: var(--color-text-secondary);
+    font-size: 12px;
+    text-align: center;
+    font-family: var(--font-sans);
+  }
+  .cite-modal-actions {
+    border-top: 0.5px solid var(--color-border-tertiary);
+    padding: 10px 18px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 10px;
+  }
+  .cite-pick-note {
+    flex: 1;
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    font-family: var(--font-mono);
+  }
+  .btn-sm-primary {
+    background: var(--color-text-primary);
+    color: var(--color-background-primary);
+    border-color: var(--color-text-primary);
+  }
+  .btn-sm-primary:hover {
+    background: var(--color-text-primary);
+    opacity: 0.88;
+  }
+  .btn-sm-primary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--color-text-primary);
+    color: var(--color-background-primary);
+    padding: 8px 14px;
+    border-radius: var(--border-radius-md);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    z-index: 300;
+    box-shadow: 0 6px 24px rgba(26,25,21,0.2);
+    opacity: 0;
+    transition: opacity 0.18s;
+    pointer-events: none;
+  }
+  .toast.visible { opacity: 1; }
+
   /* scrollbar taming */
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -1382,6 +1665,48 @@
   </div>
 </div>
 
+<input type="file" id="file-input" multiple accept=".txt,.csv,.md,.tsv,.json,.log,.xml,.html,.htm" style="display:none">
+
+<div id="cite-toolbar" class="cite-toolbar" hidden>
+  <button class="ct-btn" id="cite-btn">＋ Cite source</button>
+</div>
+
+<div id="cite-modal" class="cite-modal" hidden>
+  <div class="cite-modal-backdrop" id="cite-backdrop"></div>
+  <div class="cite-modal-body">
+    <div class="cite-modal-head">
+      <div>
+        <div class="cite-modal-title">Cite source</div>
+        <div class="cite-modal-sub">Link a claim in your draft to a source span.</div>
+      </div>
+      <button class="rphead-close" id="cite-modal-close">×</button>
+    </div>
+    <div class="cite-selected-claim">
+      Claim: <span class="sel" id="cite-sel-text"></span>
+    </div>
+    <div class="cite-modal-grid">
+      <div class="cite-source-picker">
+        <div class="cite-picker-label">Sources</div>
+        <div id="cite-source-list"></div>
+      </div>
+      <div class="cite-snippet-picker">
+        <div class="cite-picker-head">
+          <div class="cite-picker-label">Find a matching span</div>
+          <input id="cite-search" class="cite-search" type="text" placeholder="Search within source…">
+        </div>
+        <div id="cite-snippet-list" class="cite-snippet-list"></div>
+      </div>
+    </div>
+    <div class="cite-modal-actions">
+      <span id="cite-pick-note" class="cite-pick-note">Pick a source and a matching span.</span>
+      <button class="btn-sm" id="cite-cancel">Cancel</button>
+      <button class="btn-sm btn-sm-primary" id="cite-confirm" disabled>Cite this span</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
 <script>
 /* ===========================================================================
    NL EXPLORER
@@ -1443,6 +1768,12 @@ const ARTICLE = [
 
 /* ---------- LIVE CLAIMS — populated by fold ---------- */
 let CLAIMS = {};
+
+/* ---------- USER-UPLOADED SOURCES — populated by fold from SRC events ---- */
+let USER_SOURCES = {};
+
+/* Cached text content (on-demand) for user-uploaded sources: { id -> text } */
+const SOURCE_TEXT = {};
 
 /* ---------- SEED_CLAIMS (fold output — what the nine-case dispatch produced) */
 /* Each claim has a typed `prov` field describing HOW it came from its source.
@@ -1728,15 +2059,59 @@ let selectedClaimId = null;
 let selectedReviewId = null;
 
 /* ---- Sources ---- */
+function allSources() {
+  // Seed sources (read-only demo corpus) merged with user-added sources from the log.
+  const user = Object.values(USER_SOURCES);
+  return [...SOURCES, ...user];
+}
 function renderSources() {
-  $('#slist').innerHTML = SOURCES.map(s => `
-    <div class="sitem${s.indexed ? '' : ' pending'}">
-      <div class="sitem-name">${s.name}</div>
-      <div class="sitem-meta">
-        <span class="stag stag-${s.kind}">${s.kind.toUpperCase()}</span>${s.meta}
+  const list = allSources();
+  const items = list.map(s => {
+    const kindTag = ['csv','pdf','txt'].includes(s.kind) ? s.kind : 'txt';
+    const delBtn = s.user_added
+      ? `<button class="sitem-del" data-del-src="${s.id}" title="Remove source">×</button>`
+      : '';
+    return `
+      <div class="sitem${s.indexed ? '' : ' pending'}" data-src-id="${s.id || ''}">
+        <div class="sitem-name">${escapeHtml(s.name)}</div>
+        <div class="sitem-meta">
+          <span class="stag stag-${kindTag}">${s.kind.toUpperCase()}</span>${escapeHtml(s.meta || '')}
+        </div>
+        ${delBtn}
       </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
+  $('#slist').innerHTML = items || `<div class="source-empty">No sources yet.<br>Click "+ add source" or drop files here.</div>`;
+
+  // update top-right indexed badges
+  const indexed = list.filter(s => s.indexed).length;
+  const pending = list.filter(s => !s.indexed).length;
+  const badges = $$('.srcbadge');
+  if (badges[0]) badges[0].innerHTML = `<div class="statdot statdot-green"></div>${indexed} indexed`;
+  if (badges[1]) {
+    if (pending > 0) { badges[1].style.display = ''; badges[1].innerHTML = `<div class="statdot statdot-amber"></div>${pending} indexing`; }
+    else { badges[1].style.display = 'none'; }
+  }
+
+  // delete handlers
+  $$('[data-del-src]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.delSrc;
+      if (!confirm('Remove this source from the library?')) return;
+      await storage.deleteSource(id);
+      delete SOURCE_TEXT[id];
+      await appendEventAndRefold({
+        op: 'SRC_DEL',
+        site: `source:${id}`,
+        resolution: 'Figure',
+        payload: { id },
+        author: 'human'
+      });
+      renderSources();
+      showToast('source removed');
+    });
+  });
 }
 
 /* ---- Article body: render runs, wrap claims in span with class ---- */
@@ -2400,7 +2775,62 @@ const storage = (() => {
     await w.close();
   }
 
-  return { init, append, readAll, seedMarkerExists, setSeedMarker, get available() { return available; } };
+  // ---- Source file persistence ----
+  const memSources = new Map(); // id -> text
+  async function saveSource(id, text) {
+    if (!available) { memSources.set(id, text); return; }
+    const srcDir = await getDir('sources', true);
+    const fh = await srcDir.getFileHandle(id, { create: true });
+    const w = await fh.createWritable();
+    await w.write(text);
+    await w.close();
+  }
+  async function readSource(id) {
+    if (!available) return memSources.get(id) || '';
+    try {
+      const srcDir = await getDir('sources', true);
+      const fh = await srcDir.getFileHandle(id);
+      const f = await fh.getFile();
+      return await f.text();
+    } catch {
+      return '';
+    }
+  }
+  async function deleteSource(id) {
+    if (!available) { memSources.delete(id); return; }
+    try {
+      const srcDir = await getDir('sources', true);
+      await srcDir.removeEntry(id);
+    } catch {}
+  }
+
+  // ---- Article body persistence ----
+  let memArticle = null;
+  async function saveArticle(html) {
+    if (!available) { memArticle = html; return; }
+    const fh = await getFile('article.html', true);
+    const w = await fh.createWritable();
+    await w.write(html);
+    await w.close();
+  }
+  async function readArticle() {
+    if (!available) return memArticle;
+    try {
+      const fh = await getFile('article.html', true);
+      const f = await fh.getFile();
+      const t = await f.text();
+      return t || null;
+    } catch {
+      return null;
+    }
+  }
+
+  return {
+    init, append, readAll, seedMarkerExists, setSeedMarker,
+    saveSource, readSource, deleteSource,
+    saveArticle, readArticle,
+    get available() { return available; }
+  };
 })();
 
 /* ---------- Event log adapter ---------- */
@@ -2428,18 +2858,47 @@ self.addEventListener('message', (ev) => {
   if (type !== 'fold') return;
 
   const claims = {};
+  const sources = {};
 
   for (const raw of events) {
     let evt;
     try { evt = JSON.parse(raw); } catch { continue; }
 
     // SEED — initial claim state (carries the full pre-authored shape).
-    // Phase A shortcut; Phase B replaces these with per-attribute events.
     if (evt.op === 'SEED' && evt.payload && evt.payload.claim_id) {
       claims[evt.payload.claim_id] = {
         ...evt.payload.claim,
-        status: 'pending'  // seeded claims start as pending
+        status: 'pending'
       };
+      continue;
+    }
+
+    // CITE — user-authored citation, same shape as SEED
+    if (evt.op === 'CITE' && evt.payload && evt.payload.claim_id) {
+      claims[evt.payload.claim_id] = {
+        ...evt.payload.claim,
+        status: 'pending'
+      };
+      continue;
+    }
+
+    // SRC — source added to the library
+    if (evt.op === 'SRC' && evt.payload && evt.payload.id) {
+      sources[evt.payload.id] = {
+        id: evt.payload.id,
+        name: evt.payload.name,
+        kind: evt.payload.kind,
+        meta: evt.payload.meta || '',
+        indexed: true,
+        user_added: true
+      };
+      continue;
+    }
+
+    // SRC_DEL — remove a user-added source
+    if (evt.op === 'SRC_DEL' && evt.site && evt.site.startsWith('source:')) {
+      const sid = evt.site.slice('source:'.length);
+      delete sources[sid];
       continue;
     }
 
@@ -2460,11 +2919,9 @@ self.addEventListener('message', (ev) => {
       if (s) claims[id].status = s;
       continue;
     }
-
-    // unknown op — no-op in Phase A
   }
 
-  self.postMessage({ type: 'state', claims });
+  self.postMessage({ type: 'state', claims, sources });
 });
 `;
 
@@ -2477,7 +2934,7 @@ function getFoldWorker() {
   return foldWorker;
 }
 
-/* Kicks off a fold; resolves with the new claim state. */
+/* Kicks off a fold; resolves with the new claim+source state. */
 async function fold() {
   const events = await storage.readAll();
   const worker = getFoldWorker();
@@ -2485,20 +2942,21 @@ async function fold() {
     const onMsg = (ev) => {
       if (ev.data && ev.data.type === 'state') {
         worker.removeEventListener('message', onMsg);
-        resolve(ev.data.claims);
+        resolve({ claims: ev.data.claims, sources: ev.data.sources || {} });
       }
     };
     worker.addEventListener('message', onMsg);
     worker.postMessage({ type: 'fold', events });
-    // safety
     setTimeout(() => { worker.removeEventListener('message', onMsg); reject(new Error('fold timeout')); }, 5000);
   });
 }
 
-/* Convenience: append an event then refold and install into CLAIMS */
+/* Convenience: append an event then refold and install into CLAIMS + USER_SOURCES */
 async function appendEventAndRefold(e) {
   await appendEvent(e);
-  CLAIMS = await fold();
+  const state = await fold();
+  CLAIMS = state.claims;
+  USER_SOURCES = state.sources;
 }
 
 /* ---------- Seed on first run ---------- */
@@ -2520,6 +2978,505 @@ async function seedIfNeeded() {
   console.log(`[seed] seeded ${Object.keys(SEED_CLAIMS).length} claims`);
 }
 
+/* ======================================================================
+   UPLOADS
+   ----------------------------------------------------------------------
+   Click "+ add source" or drop files onto the Sources panel.
+   Text-based formats (.txt, .csv, .md, .json, .tsv, .log, .xml, .html)
+   are read and indexed. Binary formats are rejected with a toast.
+====================================================================== */
+
+function humanSize(n) {
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+  return (n / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function detectKind(name) {
+  const m = /\.([^.]+)$/.exec(name);
+  if (!m) return 'txt';
+  const ext = m[1].toLowerCase();
+  if (ext === 'csv' || ext === 'tsv') return 'csv';
+  if (ext === 'pdf') return 'pdf';
+  return 'txt';
+}
+
+function isTextLike(name) {
+  const ext = (/\.([^.]+)$/.exec(name) || [])[1];
+  if (!ext) return true;
+  return ['txt','md','csv','tsv','json','log','xml','html','htm'].includes(ext.toLowerCase());
+}
+
+async function handleUpload(files) {
+  const list = Array.from(files || []);
+  if (!list.length) return;
+  let added = 0, skipped = 0;
+  for (const file of list) {
+    if (!isTextLike(file.name)) {
+      console.warn('[upload] skipping non-text file', file.name);
+      skipped++;
+      continue;
+    }
+    try {
+      const text = await file.text();
+      const id = 's_' + ulid().slice(-10);
+      const kind = detectKind(file.name);
+      const lineCount = (text.match(/\n/g) || []).length + 1;
+      const meta = kind === 'csv'
+        ? `${lineCount - 1} rows · ${humanSize(file.size)}`
+        : `${humanSize(file.size)} · ${lineCount} lines`;
+      await storage.saveSource(id, text);
+      SOURCE_TEXT[id] = text;
+      await appendEventAndRefold({
+        op: 'SRC',
+        site: `source:${id}`,
+        resolution: 'Figure',
+        payload: { id, name: file.name, kind, meta, size: file.size, lines: lineCount },
+        author: 'human'
+      });
+      added++;
+    } catch (err) {
+      console.error('[upload] failed for', file.name, err);
+      skipped++;
+    }
+  }
+  renderSources();
+  if (added) showToast(`added ${added} source${added === 1 ? '' : 's'}${skipped ? ` · skipped ${skipped}` : ''}`);
+  else if (skipped) showToast(`skipped ${skipped} file${skipped === 1 ? '' : 's'} (unsupported)`);
+}
+
+function wireUploads() {
+  const input = $('#file-input');
+  const addBtn = $('.sadd');
+  const panel = $('.sources');
+
+  addBtn.addEventListener('click', () => input.click());
+  input.addEventListener('change', async (e) => {
+    await handleUpload(e.target.files);
+    input.value = '';
+  });
+
+  let dragDepth = 0;
+  const hasFiles = (e) => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+
+  // Accept drops on the whole window but highlight the sources panel.
+  window.addEventListener('dragenter', (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth++;
+    panel.classList.add('is-dragover');
+  });
+  window.addEventListener('dragover', (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  });
+  window.addEventListener('dragleave', (e) => {
+    if (!hasFiles(e)) return;
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) panel.classList.remove('is-dragover');
+  });
+  window.addEventListener('drop', async (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth = 0;
+    panel.classList.remove('is-dragover');
+    await handleUpload(e.dataTransfer.files);
+  });
+}
+
+/* ======================================================================
+   CITATIONS
+   ----------------------------------------------------------------------
+   Select text in the editor → a floating "Cite source" button appears.
+   Click → modal with:
+     - source picker (user-uploaded sources available for cite)
+     - snippet search against the source's raw text
+     - pick a sentence → emit a CITE event → claim is wrapped in the
+       article as a grounded span with working provenance inspector
+====================================================================== */
+
+let pendingSelection = null;
+let citeState = { sourceId: null, snippet: null };
+
+function showToast(text) {
+  const el = $('#toast');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.add('visible');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => el.classList.remove('visible'), 2200);
+}
+
+function getArticleSelectionRange() {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return null;
+  const range = sel.getRangeAt(0);
+  const body = $('#article-body');
+  if (!body) return null;
+  // require selection to be fully inside the editable article body
+  if (!body.contains(range.startContainer) || !body.contains(range.endContainer)) return null;
+  // don't allow citing inside an already-cited span
+  const startSpan = range.startContainer.parentElement?.closest?.('[data-id]');
+  const endSpan = range.endContainer.parentElement?.closest?.('[data-id]');
+  if (startSpan || endSpan) return null;
+  const text = sel.toString().trim();
+  if (!text) return null;
+  return { range: range.cloneRange(), text };
+}
+
+function positionCiteToolbar() {
+  const info = getArticleSelectionRange();
+  const tb = $('#cite-toolbar');
+  if (!info) { tb.hidden = true; return; }
+  const rect = info.range.getBoundingClientRect();
+  if (!rect || (rect.width === 0 && rect.height === 0)) { tb.hidden = true; return; }
+  tb.hidden = false;
+  tb.style.left = (rect.left + rect.width / 2 + window.scrollX) + 'px';
+  tb.style.top = (rect.top + window.scrollY) + 'px';
+}
+
+function wireSelectionToolbar() {
+  document.addEventListener('selectionchange', () => {
+    // only show in Write mode (the editable article)
+    const writeActive = $('#mode-write').classList.contains('active');
+    if (!writeActive) { $('#cite-toolbar').hidden = true; return; }
+    positionCiteToolbar();
+  });
+  window.addEventListener('scroll', positionCiteToolbar, true);
+  window.addEventListener('resize', positionCiteToolbar);
+
+  $('#cite-btn').addEventListener('mousedown', (e) => {
+    // prevent blur stealing the selection before we capture it
+    e.preventDefault();
+  });
+  $('#cite-btn').addEventListener('click', () => {
+    const info = getArticleSelectionRange();
+    if (!info) return;
+    pendingSelection = info;
+    $('#cite-toolbar').hidden = true;
+    openCiteModal(info.text);
+  });
+}
+
+function citeableSources() {
+  // only user-uploaded (have raw text available); seed sources are demo-only.
+  return Object.values(USER_SOURCES);
+}
+
+function ensureSourceText(id) {
+  if (SOURCE_TEXT[id]) return Promise.resolve(SOURCE_TEXT[id]);
+  return storage.readSource(id).then(t => { SOURCE_TEXT[id] = t || ''; return SOURCE_TEXT[id]; });
+}
+
+function splitSentences(text) {
+  // lightweight sentence splitter with offsets
+  const out = [];
+  const re = /[^.!?\n]+[.!?]?(?=\s|$)|[^\n]+/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const raw = m[0];
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    const start = m.index + (raw.length - raw.trimStart().length);
+    out.push({ text: trimmed, start, end: start + trimmed.length });
+    if (re.lastIndex === m.index) re.lastIndex++;
+  }
+  return out;
+}
+
+function buildSnippets(text, query) {
+  // If query is nonempty, return all sentences containing the query (case-insensitive).
+  // Otherwise, return the first ~40 sentences as a preview.
+  const sentences = splitSentences(text);
+  const q = (query || '').trim().toLowerCase();
+  if (!q) return sentences.slice(0, 40).map(s => ({ ...s, match: null }));
+  const hits = [];
+  for (const s of sentences) {
+    const idx = s.text.toLowerCase().indexOf(q);
+    if (idx !== -1) hits.push({ ...s, match: { at: idx, len: q.length } });
+    if (hits.length >= 80) break;
+  }
+  return hits;
+}
+
+function locatorLabel(source, snippet, text) {
+  // compute a human-readable location for the chosen span
+  if (source.kind === 'csv') {
+    // roughly count newlines before start to infer a row number
+    const pre = text.slice(0, snippet.start);
+    const row = (pre.match(/\n/g) || []).length;
+    return `row ${row}`;
+  }
+  const pre = text.slice(0, snippet.start);
+  const line = (pre.match(/\n/g) || []).length + 1;
+  return `line ${line}`;
+}
+
+function renderCiteSourceList() {
+  const wrap = $('#cite-source-list');
+  const sources = citeableSources();
+  if (!sources.length) {
+    wrap.innerHTML = `<div class="cite-empty">No sources you can cite from yet.<br><br>Close this dialog and drop a .txt, .csv, or .md file onto the Sources panel to start.</div>`;
+    return;
+  }
+  wrap.innerHTML = sources.map(s => `
+    <div class="cite-src-item${citeState.sourceId === s.id ? ' selected' : ''}" data-cite-src="${s.id}">
+      <div>${escapeHtml(s.name)}</div>
+      <div class="cite-src-item-meta">${s.kind.toUpperCase()} · ${escapeHtml(s.meta || '')}</div>
+    </div>
+  `).join('');
+
+  $$('#cite-source-list .cite-src-item').forEach(el => {
+    el.addEventListener('click', async () => {
+      citeState.sourceId = el.dataset.citeSrc;
+      citeState.snippet = null;
+      renderCiteSourceList();
+      await renderCiteSnippets();
+      updateCiteActions();
+    });
+  });
+}
+
+function highlightMatch(text, match) {
+  if (!match) return escapeHtml(text);
+  const a = text.slice(0, match.at);
+  const b = text.slice(match.at, match.at + match.len);
+  const c = text.slice(match.at + match.len);
+  return `${escapeHtml(a)}<mark>${escapeHtml(b)}</mark>${escapeHtml(c)}`;
+}
+
+async function renderCiteSnippets() {
+  const list = $('#cite-snippet-list');
+  if (!citeState.sourceId) {
+    list.innerHTML = `<div class="cite-empty">Select a source on the left.</div>`;
+    return;
+  }
+  const source = USER_SOURCES[citeState.sourceId];
+  if (!source) { list.innerHTML = `<div class="cite-empty">Source unavailable.</div>`; return; }
+  const text = await ensureSourceText(source.id);
+  const q = $('#cite-search').value;
+  const snippets = buildSnippets(text, q);
+  if (!snippets.length) {
+    list.innerHTML = `<div class="cite-empty">No matches in this source${q ? ` for "${escapeHtml(q)}"` : ''}.</div>`;
+    return;
+  }
+  list.innerHTML = snippets.map((s, i) => {
+    const isSelected = citeState.snippet && citeState.snippet.start === s.start;
+    const loc = locatorLabel(source, s, text);
+    return `
+      <div class="cite-snippet${isSelected ? ' selected' : ''}" data-snippet-idx="${i}">
+        <div class="cite-snippet-loc">${escapeHtml(loc)}</div>
+        <div class="cite-snippet-text">${highlightMatch(s.text, s.match)}</div>
+      </div>
+    `;
+  }).join('');
+
+  $$('.cite-snippet', list).forEach(el => {
+    el.addEventListener('click', () => {
+      const idx = +el.dataset.snippetIdx;
+      citeState.snippet = { ...snippets[idx], sourceText: text };
+      $$('.cite-snippet', list).forEach(x => x.classList.remove('selected'));
+      el.classList.add('selected');
+      updateCiteActions();
+    });
+  });
+}
+
+function updateCiteActions() {
+  const ready = !!(citeState.sourceId && citeState.snippet);
+  $('#cite-confirm').disabled = !ready;
+  $('#cite-pick-note').textContent = ready
+    ? 'Ready — this claim will link to the selected span.'
+    : citeState.sourceId
+      ? 'Pick a matching span from the source.'
+      : 'Pick a source to search.';
+}
+
+function openCiteModal(selectedText) {
+  citeState = { sourceId: null, snippet: null };
+  $('#cite-sel-text').textContent = selectedText;
+  $('#cite-search').value = selectedText;
+  const modal = $('#cite-modal');
+  modal.hidden = false;
+  renderCiteSourceList();
+
+  // auto-select the only source if there's just one
+  const sources = citeableSources();
+  if (sources.length === 1) {
+    citeState.sourceId = sources[0].id;
+    renderCiteSourceList();
+  }
+  renderCiteSnippets();
+  updateCiteActions();
+
+  setTimeout(() => $('#cite-search').focus(), 0);
+}
+
+function closeCiteModal() {
+  $('#cite-modal').hidden = true;
+  pendingSelection = null;
+  citeState = { sourceId: null, snippet: null };
+}
+
+function wireCiteModal() {
+  $('#cite-modal-close').addEventListener('click', closeCiteModal);
+  $('#cite-cancel').addEventListener('click', closeCiteModal);
+  $('#cite-backdrop').addEventListener('click', closeCiteModal);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !$('#cite-modal').hidden) closeCiteModal();
+  });
+
+  let searchT = null;
+  $('#cite-search').addEventListener('input', () => {
+    clearTimeout(searchT);
+    searchT = setTimeout(renderCiteSnippets, 120);
+  });
+
+  $('#cite-confirm').addEventListener('click', confirmCitation);
+}
+
+function contextBefore(text, start) {
+  const left = text.slice(Math.max(0, start - 120), start);
+  const nl = left.lastIndexOf('\n');
+  return nl >= 0 ? left.slice(nl + 1) : left;
+}
+function contextAfter(text, end) {
+  const right = text.slice(end, Math.min(text.length, end + 120));
+  const nl = right.indexOf('\n');
+  return nl >= 0 ? right.slice(0, nl) : right;
+}
+
+async function confirmCitation() {
+  if (!pendingSelection || !citeState.sourceId || !citeState.snippet) return;
+  const source = USER_SOURCES[citeState.sourceId];
+  const snippet = citeState.snippet;
+  const text = snippet.sourceText || await ensureSourceText(source.id);
+  const claimId = 'u_' + ulid().slice(-8);
+  const spanLabel = locatorLabel(source, snippet, text);
+  const claim = {
+    type: 'grounded',
+    text: pendingSelection.text,
+    conf: 0.92,
+    status: 'pending',
+    prov: {
+      kind: 'quote',
+      src: source.name,
+      page: null,
+      before: contextBefore(text, snippet.start),
+      highlight: snippet.text,
+      after: contextAfter(text, snippet.end),
+      spanLabel
+    },
+    trace: [
+      { op: 'SIG', txt: `citation pattern matched in <strong>${escapeHtml(source.name)}</strong>` },
+      { op: 'INS', txt: `anchor minted for <strong>${escapeHtml(pendingSelection.text.slice(0,40))}</strong>` },
+      { op: 'DEF', txt: `claim bound to source span at ${escapeHtml(spanLabel)}` }
+    ]
+  };
+
+  await appendEventAndRefold({
+    op: 'CITE',
+    site: `claim:${claimId}`,
+    resolution: 'Figure',
+    payload: { claim_id: claimId, claim, source_id: source.id },
+    author: 'human'
+  });
+
+  // wrap the selection range with a grounded span
+  try {
+    const range = pendingSelection.range;
+    const span = document.createElement('span');
+    span.className = 'g';
+    span.dataset.id = claimId;
+    range.surroundContents(span);
+    span.addEventListener('click', () => showClaim(claimId));
+  } catch (e) {
+    // range may have been invalidated (e.g. content edited). Fallback: re-attach by text search.
+    console.warn('[cite] surroundContents failed, falling back to text search', e);
+    const body = $('#article-body');
+    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      const idx = node.nodeValue.indexOf(pendingSelection.text);
+      if (idx !== -1) {
+        const r = document.createRange();
+        r.setStart(node, idx);
+        r.setEnd(node, idx + pendingSelection.text.length);
+        const span = document.createElement('span');
+        span.className = 'g';
+        span.dataset.id = claimId;
+        try { r.surroundContents(span); span.addEventListener('click', () => showClaim(claimId)); } catch {}
+        break;
+      }
+    }
+  }
+
+  await saveArticleNow();
+  renderCounts();
+  closeCiteModal();
+  showToast('cited');
+  showClaim(claimId);
+}
+
+/* ======================================================================
+   ARTICLE EDITOR — contenteditable + debounced persistence
+====================================================================== */
+let saveArticleTimer = null;
+function scheduleArticleSave() {
+  clearTimeout(saveArticleTimer);
+  saveArticleTimer = setTimeout(saveArticleNow, 600);
+}
+async function saveArticleNow() {
+  const body = $('#article-body');
+  const title = $('.article-title');
+  if (!body) return;
+  const payload = JSON.stringify({
+    title: title ? title.innerText.trim() : 'Untitled draft',
+    body: body.innerHTML
+  });
+  await storage.saveArticle(payload);
+}
+
+async function loadPersistedArticle() {
+  const raw = await storage.readArticle();
+  if (!raw) return false;
+  try {
+    const data = JSON.parse(raw);
+    const body = $('#article-body');
+    const title = $('.article-title');
+    if (data.body) body.innerHTML = data.body;
+    if (data.title && title) {
+      // preserve the cursor span if present in the seed
+      const cursor = title.querySelector('.cursor');
+      title.textContent = data.title;
+      if (cursor) title.appendChild(cursor);
+    }
+    // rebind claim click handlers
+    body.querySelectorAll('[data-id]').forEach(el => {
+      el.addEventListener('click', () => showClaim(el.dataset.id));
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function wireEditor() {
+  const body = $('#article-body');
+  const title = $('.article-title');
+  body.setAttribute('contenteditable', 'true');
+  body.setAttribute('spellcheck', 'false');
+  body.addEventListener('input', scheduleArticleSave);
+  title.addEventListener('input', scheduleArticleSave);
+  // prevent pasting HTML: convert to plain text
+  body.addEventListener('paste', (e) => {
+    e.preventDefault();
+    const t = (e.clipboardData || window.clipboardData).getData('text/plain');
+    document.execCommand('insertText', false, t);
+  });
+}
+
 /* ---------- Boot status indicator ---------- */
 function setBootStatus(text, color) {
   const el = $('#boot-status');
@@ -2534,11 +3491,25 @@ async function init() {
 
   await storage.init();
   await seedIfNeeded();
-  CLAIMS = await fold();
+  const state = await fold();
+  CLAIMS = state.claims;
+  USER_SOURCES = state.sources;
 
   renderSources();
+
+  // render seeded article first; if a persisted draft exists, load it over
   renderArticleBody($('#article-body'));
+  const hadPersisted = await loadPersistedArticle();
+  if (!hadPersisted) {
+    // seed → persist baseline so future edits are tracked
+    await saveArticleNow();
+  }
+
   renderCounts();
+  wireEditor();
+  wireUploads();
+  wireSelectionToolbar();
+  wireCiteModal();
 
   $$('.mtab').forEach(b => {
     b.addEventListener('click', () => switchMode(b.dataset.mode));
@@ -2564,11 +3535,13 @@ async function init() {
 
   // Reset log — clear OPFS state + reload
   $('#reset-log').addEventListener('click', async () => {
-    if (!confirm('Clear the event log and re-seed? This wipes all review decisions.')) return;
+    if (!confirm('Clear the event log and re-seed? This wipes all review decisions and uploaded sources.')) return;
     if (storage.available) {
       const root = await navigator.storage.getDirectory();
       try { await root.removeEntry('log.ndjson'); } catch {}
       try { await root.removeEntry('state', { recursive: true }); } catch {}
+      try { await root.removeEntry('sources', { recursive: true }); } catch {}
+      try { await root.removeEntry('article.html'); } catch {}
     }
     location.reload();
   });
@@ -2581,7 +3554,13 @@ async function init() {
       events.forEach((e, i) => console.log(i, JSON.parse(e)));
     },
     CLAIMS: () => CLAIMS,
-    refold: async () => { CLAIMS = await fold(); console.log('refolded'); return CLAIMS; }
+    SOURCES: () => ({ seed: SOURCES, user: USER_SOURCES }),
+    refold: async () => {
+      const s = await fold();
+      CLAIMS = s.claims; USER_SOURCES = s.sources;
+      renderSources(); renderCounts();
+      console.log('refolded'); return s;
+    }
   };
 }
 
