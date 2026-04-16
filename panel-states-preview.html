@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NL Explorer — panel states preview</title>
+<style>
+  :root {
+    --color-background-primary: #FAF9F5;
+    --color-background-secondary: #F0EEE4;
+    --color-text-primary: #1A1915;
+    --color-text-secondary: #6B6558;
+    --color-text-tertiary: #8F8878;
+    --color-border-secondary: #C5BDA8;
+    --color-border-tertiary: #DDD6C2;
+    --amber-fill: #FAEEDA; --amber-mid: #BA7517; --amber-text: #633806;
+    --red-fill: #FCEBEB; --red-mid: #E24B4A; --red-text: #501313;
+    --blue-fill: #E6F1FB; --blue-mid: #378ADD; --blue-text: #042C53;
+    --teal-fill: #E1F5EE; --teal-mid: #1D9E75; --teal-text: #04342C;
+    --font-sans: 'Inter', -apple-system, sans-serif;
+    --font-serif: 'Tiempos Text', 'Iowan Old Style', Georgia, serif;
+    --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+    --br-md: 5px; --br-lg: 7px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{font-family:var(--font-sans);background:var(--color-background-secondary);color:var(--color-text-primary);font-size:14px;-webkit-font-smoothing:antialiased;padding:28px}
+  .page-title{font-family:var(--font-serif);font-size:18px;font-weight:500;margin-bottom:6px}
+  .page-sub{color:var(--color-text-secondary);font-size:12px;margin-bottom:22px}
+  .grid{display:grid;grid-template-columns:repeat(3,400px);gap:20px}
+  .panel{width:400px;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--br-lg);overflow:hidden;display:flex;flex-direction:column}
+  .panel-head{padding:13px 16px 10px;border-bottom:0.5px solid var(--color-border-tertiary);display:flex;align-items:center;justify-content:space-between}
+  .panel-type{font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--color-text-secondary)}
+  .panel-type.grounded{color:var(--amber-text)}
+  .panel-type.conflict{color:var(--red-text)}
+  .panel-type.absent{color:var(--blue-text)}
+  .panel-close{font-size:18px;color:var(--color-text-secondary);line-height:1}
+  .panel-body{padding:14px 16px}
+  .section{margin-bottom:15px}
+  .label{font-size:9.5px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--color-text-secondary);margin-bottom:6px}
+  .code{font-family:var(--font-mono);font-size:11px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--br-md);padding:8px 10px;line-height:1.55;word-break:break-word}
+
+  /* source chip */
+  .src-chip{display:flex;align-items:center;gap:8px;padding:9px 11px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--br-md);font-family:var(--font-mono);font-size:11.5px;margin-bottom:14px}
+  .src-chip .name{font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .src-chip .loc{color:var(--color-text-secondary);font-size:10.5px;flex-shrink:0}
+  .src-chip .open{color:var(--color-text-tertiary);font-size:13px;line-height:1}
+
+  /* quote view */
+  .quote-view{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--br-md);padding:14px 16px;font-family:var(--font-serif);font-size:13px;line-height:1.7;color:var(--color-text-secondary)}
+  .quote-view .hl{color:var(--color-text-primary);background:var(--amber-fill);padding:1px 2px;border-radius:2px;box-shadow:inset 0 -2px 0 var(--amber-mid)}
+  .quote-meta{font-family:var(--font-mono);font-size:10.5px;color:var(--color-text-secondary);margin-top:8px;padding-top:8px;border-top:0.5px solid var(--color-border-tertiary);display:flex;justify-content:space-between}
+
+  /* cell view */
+  .cell-view{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--br-md);overflow:hidden;font-family:var(--font-mono);font-size:10.5px}
+  .cell-table{width:100%;border-collapse:collapse}
+  .cell-table th,.cell-table td{padding:5px 8px;text-align:left;border-bottom:0.5px solid var(--color-border-tertiary);border-right:0.5px solid var(--color-border-tertiary);white-space:nowrap;max-width:100px;overflow:hidden;text-overflow:ellipsis}
+  .cell-table th{background:var(--color-background-secondary);font-weight:600;font-size:9.5px;letter-spacing:0.04em;text-transform:uppercase;color:var(--color-text-secondary)}
+  .cell-table th.tgt{background:var(--amber-fill);color:var(--amber-text)}
+  .cell-table td.tgt{background:var(--amber-fill);color:var(--amber-text);font-weight:600;box-shadow:inset 0 0 0 1.5px var(--amber-mid)}
+  .cell-table td.n{color:var(--color-text-secondary)}
+  .cell-table td.rl{font-size:10px;color:var(--color-text-tertiary);background:var(--color-background-secondary);font-weight:500}
+  .cell-table tr:last-child td{border-bottom:none}
+  .cell-table th:last-child,.cell-table td:last-child{border-right:none}
+
+  /* derived */
+  .expr{font-family:var(--font-mono);font-size:12px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--br-md);padding:10px 12px;line-height:1.55;word-break:break-word}
+  .expr .result{display:block;margin-top:6px;padding-top:6px;border-top:0.5px dashed var(--color-border-secondary);color:var(--color-text-primary)}
+  .expr .result::before{content:'= ';color:var(--color-text-tertiary)}
+  .inputs{display:flex;flex-direction:column;gap:4px}
+  .input{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--br-md);font-family:var(--font-mono);font-size:11px}
+  .input-k{font-size:9px;font-weight:600;padding:1.5px 5px;border-radius:3px;text-transform:uppercase;letter-spacing:0.05em}
+  .k-cell{background:var(--teal-fill);color:var(--teal-text)}
+  .k-quote{background:var(--amber-fill);color:var(--amber-text)}
+  .k-derived{background:#E8E4F5;color:#3E2F7A}
+  .input .loc{color:var(--color-text-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .input .v{font-weight:600;flex-shrink:0}
+
+  /* conflict */
+  .cflct{display:flex;flex-direction:column;border:0.5px solid #F7C1C1;border-radius:var(--br-md);overflow:hidden}
+  .cflct-side{padding:10px 12px}
+  .cflct-side.rep{background:var(--red-fill);border-bottom:0.5px solid #F7C1C1}
+  .cflct-side-lbl{font-size:9.5px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--color-text-secondary);margin-bottom:5px}
+  .cflct-side.rep .cflct-side-lbl{color:var(--red-text)}
+  .cflct-side-val{font-family:var(--font-mono);font-size:13px;font-weight:600}
+  .cflct-side-loc{font-family:var(--font-mono);font-size:10.5px;color:var(--color-text-secondary);margin-top:3px}
+  .cflct-delta{padding:8px 12px;background:var(--color-background-secondary);border-top:0.5px solid var(--color-border-tertiary);font-family:var(--font-mono);font-size:11px;color:var(--color-text-secondary);display:flex;justify-content:space-between}
+  .cflct-delta-v{color:var(--red-text);font-weight:600}
+
+  /* absence */
+  .abs-view{background:var(--color-background-primary);border:0.5px dashed var(--blue-mid);border-radius:var(--br-md);padding:14px 16px}
+  .abs-exp{font-family:var(--font-serif);font-size:13px;line-height:1.6;margin-bottom:10px}
+  .abs-exp em{font-style:italic;color:var(--blue-text)}
+  .abs-scan{font-family:var(--font-mono);font-size:10.5px;color:var(--color-text-secondary);line-height:1.6}
+  .abs-item{display:flex;align-items:center;gap:6px;padding:2px 0}
+  .abs-item::before{content:'×';color:var(--blue-mid);font-weight:600;width:10px;text-align:center}
+  .abs-window{margin-top:10px;padding-top:8px;border-top:0.5px dashed var(--color-border-tertiary);font-family:var(--font-mono);font-size:10.5px;color:var(--color-text-secondary)}
+
+  /* conf */
+  .conf-wrap{height:4px;background:var(--color-background-secondary);border-radius:2px;overflow:hidden}
+  .conf-bar{height:4px;border-radius:2px}
+  .conf-label{font-family:var(--font-mono);font-size:11px;color:var(--color-text-secondary);margin-top:5px}
+
+  /* inspect fold */
+  .inspect{margin-top:10px;font-size:10.5px;color:var(--color-text-tertiary)}
+
+  /* divider & actions */
+  .div{height:0.5px;background:var(--color-border-tertiary);margin:14px 0}
+  .actions{display:flex;gap:6px}
+  .btn{padding:5px 11px;font-size:11.5px;border-radius:var(--br-md);font-weight:500;border:0.5px solid var(--color-border-secondary);background:transparent}
+  .btn-d{border-color:#F09595;color:var(--red-text);background:var(--red-fill)}
+
+  h2{font-family:var(--font-serif);font-size:13px;font-weight:500;color:var(--color-text-secondary);margin-bottom:8px;margin-top:4px}
+</style>
+</head>
+<body>
+
+<div class="page-title">NL Explorer — provenance panel states</div>
+<div class="page-sub">Five kinds of "where did this come from?" Each appears when you click a claim in the article body.</div>
+
+<div class="grid">
+
+  <!-- ==== QUOTE ==== -->
+  <div>
+    <h2>Quote · text source with context</h2>
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-type grounded">Grounded</span>
+        <span class="panel-close">×</span>
+      </div>
+      <div class="panel-body">
+        <div class="section">
+          <div class="label">Claim</div>
+          <div class="code">"Councilmember Torres"</div>
+        </div>
+        <div class="section">
+          <div class="label">Source quote</div>
+          <div class="src-chip">
+            <span class="name">council_minutes_mar7.pdf</span>
+            <span class="loc">p.4</span>
+            <span class="open">↗</span>
+          </div>
+          <div class="quote-view">
+            <span>The meeting resumed at 2:47 p.m. following the public comment period. </span><span class="hl">Councilmember Torres</span><span> introduced an amendment to the public safety appropriation, moving that $500,000 be redirected from the general fund reserve to the Downtown Partnership's security operations line.</span>
+            <div class="quote-meta">
+              <span>p.4 · span[1204:1220]</span>
+              <span>open in source →</span>
+            </div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="label">Confidence</div>
+          <div class="conf-wrap"><div class="conf-bar" style="width:97%;background:var(--amber-mid)"></div></div>
+          <div class="conf-label">0.97 · probabilistic</div>
+        </div>
+        <div class="inspect">▸ inspect fold events (3)</div>
+        <div class="div"></div>
+        <div class="actions"><button class="btn">Correct</button><button class="btn btn-d">Release</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==== CELL ==== -->
+  <div>
+    <h2>Cell · CSV row · column tuple with neighbors</h2>
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-type grounded">Grounded</span>
+        <span class="panel-close">×</span>
+      </div>
+      <div class="panel-body">
+        <div class="section">
+          <div class="label">Claim</div>
+          <div class="code">"$312,000"</div>
+        </div>
+        <div class="section">
+          <div class="label">Source cell</div>
+          <div class="src-chip">
+            <span class="name">ndp_budget_fy25.csv</span>
+            <span class="loc">row 201 · overtime_actual</span>
+            <span class="open">↗</span>
+          </div>
+          <div class="cell-view">
+            <table class="cell-table">
+              <thead><tr>
+                <th>row</th><th>vendor_id</th><th>vendor</th><th>line</th><th>budget</th><th class="tgt">actual</th><th>var</th>
+              </tr></thead>
+              <tbody>
+                <tr><td class="rl">199</td><td class="n">V-0447</td><td class="n">Brightway</td><td class="n">janitorial</td><td class="n">$18,000</td><td class="n">$19,240</td><td class="n">+$1,240</td></tr>
+                <tr><td class="rl">200</td><td class="n">V-0519</td><td class="n">Metro Signs</td><td class="n">wayfinding</td><td class="n">$4,200</td><td class="n">$4,200</td><td class="n">$0</td></tr>
+                <tr><td class="rl">201</td><td class="n">V-0088</td><td class="n">Solaren Intl.</td><td class="n">sec_ovt</td><td class="n">$280,000</td><td class="tgt">$312,000</td><td class="n">+$32,000</td></tr>
+                <tr><td class="rl">202</td><td class="n">V-0088</td><td class="n">Solaren Intl.</td><td class="n">sec_base</td><td class="n">$520,000</td><td class="n">$520,000</td><td class="n">$0</td></tr>
+                <tr><td class="rl">203</td><td class="n">V-0612</td><td class="n">Pressure Wash</td><td class="n">sidewalk</td><td class="n">$14,000</td><td class="n">$13,880</td><td class="n">−$120</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="section">
+          <div class="label">Confidence</div>
+          <div class="conf-wrap"><div class="conf-bar" style="width:100%;background:var(--teal-mid)"></div></div>
+          <div class="conf-label">1.00 · mechanical</div>
+        </div>
+        <div class="inspect">▸ inspect fold events (2)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==== DERIVED ==== -->
+  <div>
+    <h2>Derived · expression over 5 cell inputs</h2>
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-type grounded">Grounded</span>
+        <span class="panel-close">×</span>
+      </div>
+      <div class="panel-body">
+        <div class="section">
+          <div class="label">Claim</div>
+          <div class="code">"$4.2 million"</div>
+        </div>
+        <div class="section">
+          <div class="label">Operation</div>
+          <div class="expr">
+            SUM(amount) WHERE dept = public_safety AND fy = 2025
+            <span class="result">$4,231,440</span>
+          </div>
+        </div>
+        <div class="section">
+          <div class="label">Inputs · 5</div>
+          <div class="inputs">
+            <div class="input"><span class="input-k k-cell">cell</span><span class="loc">ndp_budget_fy25.csv · row 112 · amount</span><span class="v">$823,400</span></div>
+            <div class="input"><span class="input-k k-cell">cell</span><span class="loc">ndp_budget_fy25.csv · row 113 · amount</span><span class="v">$1,104,200</span></div>
+            <div class="input"><span class="input-k k-cell">cell</span><span class="loc">ndp_budget_fy25.csv · row 114 · amount</span><span class="v">$890,000</span></div>
+            <div class="input"><span class="input-k k-cell">cell</span><span class="loc">ndp_budget_fy25.csv · row 115 · amount</span><span class="v">$712,840</span></div>
+            <div class="input"><span class="input-k k-cell">cell</span><span class="loc">ndp_budget_fy25.csv · row 116 · amount</span><span class="v">$701,000</span></div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="label">Confidence</div>
+          <div class="conf-wrap"><div class="conf-bar" style="width:100%;background:var(--teal-mid)"></div></div>
+          <div class="conf-label">1.00 · mechanical</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==== NESTED DERIVED ==== -->
+  <div>
+    <h2>Nested derived · operation over two operations</h2>
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-type grounded">Grounded</span>
+        <span class="panel-close">×</span>
+      </div>
+      <div class="panel-body">
+        <div class="section">
+          <div class="label">Claim</div>
+          <div class="code">"14.3 percent increase"</div>
+        </div>
+        <div class="section">
+          <div class="label">Operation</div>
+          <div class="expr">
+            (SUM_2025 − SUM_2024) / SUM_2024 × 100
+            <span class="result">14.26%</span>
+          </div>
+        </div>
+        <div class="section">
+          <div class="label">Inputs · 2</div>
+          <div class="inputs">
+            <div class="input"><span class="input-k k-derived">derived</span><span class="loc">FY2025 public safety total</span><span class="v">$4,231,440</span></div>
+            <div class="input"><span class="input-k k-derived">derived</span><span class="loc">FY2024 public safety total</span><span class="v">$3,702,260</span></div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="label">Confidence</div>
+          <div class="conf-wrap"><div class="conf-bar" style="width:100%;background:var(--teal-mid)"></div></div>
+          <div class="conf-label">1.00 · mechanical · drill any input ↓</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==== CONFLICT ==== -->
+  <div>
+    <h2>Conflict · two sources disagree</h2>
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-type conflict">Conflict</span>
+        <span class="panel-close">×</span>
+      </div>
+      <div class="panel-body">
+        <div class="section">
+          <div class="label">Claim</div>
+          <div class="code">"$280,000 annually"</div>
+        </div>
+        <div class="section">
+          <div class="label">Two sources disagree</div>
+          <div class="cflct">
+            <div class="cflct-side rep">
+              <div class="cflct-side-lbl">Reported</div>
+              <div class="cflct-side-val">"$280,000 annually"</div>
+              <div class="cflct-side-loc">council_minutes_mar7.pdf · p.4 · testimony</div>
+            </div>
+            <div class="cflct-side">
+              <div class="cflct-side-lbl">Source of record</div>
+              <div class="cflct-side-val">$312,000</div>
+              <div class="cflct-side-loc">ndp_budget_fy25.csv · row 201 · overtime_actual</div>
+            </div>
+            <div class="cflct-delta">
+              <span>Δ</span>
+              <span class="cflct-delta-v">+$32,000 · +11.4%</span>
+            </div>
+          </div>
+          <div class="quote-view" style="margin-top:8px">
+            <span>Partnership President David Ellwood, speaking in support of the amendment, stated that the organization's contract with its private security provider </span><span class="hl">"represents an ongoing cost of approximately $280,000 annually"</span><span> and that the proposed increase would cover expanded coverage in the Gulch and SoBro districts.</span>
+          </div>
+        </div>
+        <div class="section">
+          <div class="label">Confidence</div>
+          <div class="conf-wrap"><div class="conf-bar" style="width:90%;background:var(--amber-mid)"></div></div>
+          <div class="conf-label">0.90 · probabilistic</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==== ABSENCE ==== -->
+  <div>
+    <h2>Absence · the hole made visible</h2>
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-type absent">Absent · NUL event</span>
+        <span class="panel-close">×</span>
+      </div>
+      <div class="panel-body">
+        <div class="section">
+          <div class="label">Claim</div>
+          <div class="code">"did not respond to requests for comment"</div>
+        </div>
+        <div class="section">
+          <div class="label">Expected</div>
+          <div class="abs-view">
+            <div class="abs-exp">A response from <em>Office of Homeless Services</em> press contact, within a 14-day window of three contact attempts.</div>
+            <div class="abs-scan">
+              <div class="abs-item"><span>inbox.mbox</span><span style="color:var(--color-text-tertiary);margin-left:6px">— three outbound, zero reply</span></div>
+              <div class="abs-item"><span>ohs_press_releases.xml</span><span style="color:var(--color-text-tertiary);margin-left:6px">— no press release mentioning NDP coordination</span></div>
+              <div class="abs-item"><span>ohs_quarterly_q4.pdf</span><span style="color:var(--color-text-tertiary);margin-left:6px">— no relevant section</span></div>
+            </div>
+            <div class="abs-window">window: Feb 18 – Mar 4, 2026</div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="label">Confidence</div>
+          <div class="conf-wrap"><div class="conf-bar" style="width:85%;background:var(--amber-mid)"></div></div>
+          <div class="conf-label">0.85 · probabilistic</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1813,17 +1813,22 @@ function showClaim(id, opts = {}) {
   // Provenance — dispatch on kind
   body += renderProvenance(claim.prov, { topLevel: true });
 
-  // Confidence
+  // Confidence — append a "drill any input ↓" hint when this is a nested
+  // derivation (a derived prov whose inputs are themselves derived), since
+  // each input row is itself drillable provenance, not a leaf.
+  const confKind =
+    claim.conf >= 0.97 ? 'mechanical' :
+    claim.conf >= 0.85 ? 'probabilistic' : 'weak';
+  const isNestedDerived = claim.prov && claim.prov.kind === 'derived'
+    && (claim.prov.inputs || []).some(i => i.kind === 'derived');
+  const drillHint = isNestedDerived ? ' · drill any input ↓' : '';
   body += `
     <div class="prov-section">
       <div class="prov-label">Confidence</div>
       <div class="conf-bar-wrap">
         <div class="conf-bar" style="width: ${Math.round(claim.conf * 100)}%; background: ${confColor};"></div>
       </div>
-      <div class="conf-label">${claim.conf.toFixed(2)} · ${
-        claim.conf >= 0.97 ? 'mechanical' :
-        claim.conf >= 0.85 ? 'probabilistic' : 'weak'
-      }</div>
+      <div class="conf-label">${claim.conf.toFixed(2)} · ${confKind}${drillHint}</div>
     </div>
   `;
 
