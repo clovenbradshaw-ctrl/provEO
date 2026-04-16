@@ -1930,11 +1930,7 @@
       </div>
       <div class="ws-section">
         <div class="ws-section-title">PROVeo endpoint</div>
-        <div class="ws-section-sub">Backend webhook that handles redaction, Archive.org upload, and Matrix media sync. Leave blank to keep uploads local-only.</div>
-        <div class="ws-form-row">
-          <label for="proveo-url">Webhook URL</label>
-          <input id="proveo-url" class="ws-input" type="text" placeholder="https://n8n.example.com/webhook/PROVeo">
-        </div>
+        <div class="ws-section-sub">Backend webhook handles redaction, Archive.org upload, and Matrix media sync.</div>
         <div class="ws-form-row">
           <label>Default destination for new uploads</label>
           <div class="ws-btn-row" style="gap:14px">
@@ -3937,33 +3933,26 @@ function wireSourceViewer() {
    matrix mxc + hashes. Storing those on the source lets later exports
    carry the provenance forward.
 ====================================================================== */
-const LS_PROVEO_URL = 'nl.proveoUrl.v1';
+const PROVEO_URL = 'https://n8n.intelechia.com/webhook/PROVeo';
 const LS_UPLOAD_DEST = 'nl.uploadDest.v1';
 
-let PROVEO_URL = (() => { try { return localStorage.getItem(LS_PROVEO_URL) || ''; } catch { return ''; } })();
 let UPLOAD_DEST_DEFAULT = (() => { try { return localStorage.getItem(LS_UPLOAD_DEST) || 'local'; } catch { return 'local'; } })();
 
 function saveProveoSettings() {
-  const url = $('#proveo-url').value.trim();
   const radio = document.querySelector('input[name="upload-dest"]:checked');
   const dest = radio ? radio.value : 'local';
-  PROVEO_URL = url;
   UPLOAD_DEST_DEFAULT = dest;
-  try { localStorage.setItem(LS_PROVEO_URL, url); } catch {}
   try { localStorage.setItem(LS_UPLOAD_DEST, dest); } catch {}
   showToast('upload settings saved');
 }
 
 function loadProveoSettingsIntoModal() {
-  const urlEl = $('#proveo-url');
-  if (urlEl) urlEl.value = PROVEO_URL;
   const radios = $$('input[name="upload-dest"]');
   radios.forEach(r => { r.checked = (r.value === UPLOAD_DEST_DEFAULT); });
 }
 
 /* Sends a source to the PROVeo webhook. Returns the parsed JSON response. */
 async function uploadViaProveo(file, visibility, { title, description, redactions } = {}) {
-  if (!PROVEO_URL) throw new Error('PROVeo webhook URL not configured. Open Workspace settings to set it.');
   const fd = new FormData();
   fd.append('data', file, file.name);
   fd.append('visibility', visibility);
@@ -4032,11 +4021,6 @@ function promptUploadDestination(file) {
       const visibility = radio ? radio.value : 'local';
       const err = $('#updest-err');
       err.hidden = true;
-      if (visibility !== 'local' && !PROVEO_URL) {
-        err.hidden = false;
-        err.textContent = 'Set a PROVeo webhook URL in Workspace settings first, or choose Local only.';
-        return;
-      }
       if (visibility === 'gated' && !matrix.activeRoomId) {
         err.hidden = false;
         err.textContent = 'Pick a Matrix workspace room (click the workspace button in the topbar).';
@@ -4076,7 +4060,7 @@ function syncUpdestVisibility() {
   const note = $('#updest-note');
   if (v === 'local') note.textContent = 'Stays in this browser only.';
   else if (v === 'gated') note.textContent = matrix.activeRoomId ? 'Will POST to PROVeo → Matrix room.' : 'Pick a Matrix room first.';
-  else note.textContent = PROVEO_URL ? 'Will POST to PROVeo → Archive.org.' : 'Set the PROVeo webhook URL first.';
+  else note.textContent = 'Will POST to PROVeo → Archive.org.';
 }
 
 /* ======================================================================
