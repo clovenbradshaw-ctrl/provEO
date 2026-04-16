@@ -1295,6 +1295,7 @@
       <button class="mtab" data-mode="chat">Chat</button>
     </div>
     <div class="topright">
+      <span id="boot-status" style="font-family: var(--font-mono); font-size: 10.5px; color: var(--color-text-secondary); margin-right: 4px;">booting…</span>
       <div class="srcbadge"><div class="statdot statdot-green"></div>3 indexed</div>
       <div class="srcbadge"><div class="statdot statdot-amber"></div>1 indexing</div>
     </div>
@@ -1325,7 +1326,8 @@
           <div class="sstat"><div class="sstat-dot" style="background: var(--amber-mid)"></div><span class="sstat-n" id="stat-g">0</span> grounded</div>
           <div class="sstat"><div class="sstat-dot" style="background: var(--red-mid)"></div><span class="sstat-n" id="stat-c">0</span> conflict</div>
           <div class="sstat"><div class="sstat-dot" style="background: var(--blue-mid)"></div><span class="sstat-n" id="stat-a">0</span> absent</div>
-          <div class="sstat" style="margin-left: auto">
+          <div class="sstat" style="margin-left: auto; gap: 10px">
+            <button id="reset-log" style="background:transparent;border:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary);font-family:var(--font-mono);font-size:10px;padding:3px 8px;border-radius:3px;cursor:pointer">reset log</button>
             <span style="color: var(--color-text-secondary)">fold:</span>
             <span class="sstat-n" style="color: var(--teal-mid)">live</span>
             <span class="sstat-dot" style="background: var(--teal-mid); animation: pulse 1.8s ease-in-out infinite;"></span>
@@ -1439,7 +1441,10 @@ const ARTICLE = [
   ]}
 ];
 
-/* ---------- CLAIMS (fold output — what the nine-case dispatch produced) */
+/* ---------- LIVE CLAIMS — populated by fold ---------- */
+let CLAIMS = {};
+
+/* ---------- SEED_CLAIMS (fold output — what the nine-case dispatch produced) */
 /* Each claim has a typed `prov` field describing HOW it came from its source.
    The panel renders based on prov.kind:
      quote    → PDF sentence in context, span highlighted
@@ -1447,7 +1452,7 @@ const ARTICLE = [
      derived  → expression + drillable list of input provenances (recursive)
      conflict → two stacked provenances + delta
      absence  → what was expected, where we scanned, what's missing          */
-const CLAIMS = {
+const SEED_CLAIMS = {
   m1: {
     type: 'grounded',
     text: '$4.2 million',
@@ -1813,22 +1818,17 @@ function showClaim(id, opts = {}) {
   // Provenance — dispatch on kind
   body += renderProvenance(claim.prov, { topLevel: true });
 
-  // Confidence — append a "drill any input ↓" hint when this is a nested
-  // derivation (a derived prov whose inputs are themselves derived), since
-  // each input row is itself drillable provenance, not a leaf.
-  const confKind =
-    claim.conf >= 0.97 ? 'mechanical' :
-    claim.conf >= 0.85 ? 'probabilistic' : 'weak';
-  const isNestedDerived = claim.prov && claim.prov.kind === 'derived'
-    && (claim.prov.inputs || []).some(i => i.kind === 'derived');
-  const drillHint = isNestedDerived ? ' · drill any input ↓' : '';
+  // Confidence
   body += `
     <div class="prov-section">
       <div class="prov-label">Confidence</div>
       <div class="conf-bar-wrap">
         <div class="conf-bar" style="width: ${Math.round(claim.conf * 100)}%; background: ${confColor};"></div>
       </div>
-      <div class="conf-label">${claim.conf.toFixed(2)} · ${confKind}${drillHint}</div>
+      <div class="conf-label">${claim.conf.toFixed(2)} · ${
+        claim.conf >= 0.97 ? 'mechanical' :
+        claim.conf >= 0.85 ? 'probabilistic' : 'weak'
+      }</div>
     </div>
   `;
 
@@ -2159,14 +2159,27 @@ function renderReview() {
   }).join('') || `<div class="qempty">queue clear<br><span style="opacity:0.7">all claims resolved</span></div>`;
 
   $$('.qa', $('#qlist')).forEach(btn => {
-    btn.addEventListener('click', e => {
+    btn.addEventListener('click', async e => {
       e.stopPropagation();
       const id = btn.dataset.id;
       const action = btn.dataset.action;
-      if (action === 'confirm') { CLAIMS[id].status = 'confirmed'; }
-      else if (action === 'release') { CLAIMS[id].status = 'released'; }
-      else if (action === 'correct') { CLAIMS[id].status = 'corrected'; }
+      // Mutations become log events; the fold recomputes CLAIMS.
+      // Confirm/release = EVA (evaluation); correct = REC (reframe).
+      const op = action === 'correct' ? 'REC' : 'EVA';
+      await appendEventAndRefold({
+        op,
+        site: `claim:${id}`,
+        resolution: 'Figure',
+        payload: {
+          action,
+          new_status: action === 'confirm' ? 'confirmed'
+                    : action === 'release' ? 'released'
+                    : 'corrected'
+        },
+        author: 'human'
+      });
       renderReview();
+      renderCounts();
     });
   });
 
@@ -2283,8 +2296,246 @@ function switchMode(mode) {
   if (mode === 'chat') renderChat();
 }
 
+/* ======================================================================
+   PHASE A — PERSISTENCE LAYER
+   ----------------------------------------------------------------------
+   Replaces the static CLAIMS object with a log-backed projection.
+   
+   Storage (OPFS):
+     /log.ndjson          append-only event log
+     /state/.seeded       marker file (prevents double-seed on reload)
+   
+   Pipeline:
+     UI action → appendEvent(e) → worker folds log → postMessage state → CLAIMS
+   
+   The fold runs in a worker (via blob URL — keeps this file single-file).
+   Log reads happen on the main thread; events are posted to the worker
+   for projection. On a real multi-thousand-event log we'd read in the
+   worker too; not today.
+   
+   If OPFS isn't available (file:// open, older browsers), falls back to
+   an in-memory log. Everything still works in-session — nothing persists.
+====================================================================== */
+
+/* ---------- ULID-ish ids (sortable-by-time, no deps) ---------- */
+function ulid() {
+  // simplified — not spec-strict ULID but lexicographically time-sortable
+  const t = Date.now().toString(36).padStart(10, '0');
+  const r = [...crypto.getRandomValues(new Uint8Array(10))]
+    .map(b => b.toString(36).padStart(2, '0')).join('').slice(0, 16);
+  return `${t}${r}`;
+}
+
+/* ---------- OPFS module ---------- */
+const storage = (() => {
+  let rootP = null;
+  let available = false;
+  let memLog = [];
+
+  async function init() {
+    if (navigator.storage && navigator.storage.getDirectory) {
+      try {
+        rootP = await navigator.storage.getDirectory();
+        available = true;
+        console.log('[storage] OPFS available');
+      } catch (e) {
+        console.warn('[storage] OPFS init failed, using in-memory', e);
+        available = false;
+      }
+    } else {
+      console.warn('[storage] OPFS not available, using in-memory');
+      available = false;
+    }
+  }
+
+  async function getFile(name, create = false) {
+    if (!available) return null;
+    return rootP.getFileHandle(name, { create });
+  }
+
+  async function getDir(name, create = false) {
+    if (!available) return null;
+    return rootP.getDirectoryHandle(name, { create });
+  }
+
+  async function append(line) {
+    if (!available) {
+      memLog.push(line);
+      return;
+    }
+    const fh = await getFile('log.ndjson', true);
+    const file = await fh.getFile();
+    const existing = await file.text();
+    const w = await fh.createWritable();
+    await w.write(existing + line + '\n');
+    await w.close();
+  }
+
+  async function readAll() {
+    if (!available) return memLog.slice();
+    const fh = await getFile('log.ndjson', true);
+    const file = await fh.getFile();
+    const text = await file.text();
+    if (!text) return [];
+    return text.split('\n').filter(Boolean);
+  }
+
+  async function seedMarkerExists() {
+    if (!available) return memLog.length > 0;
+    try {
+      const stateDir = await getDir('state', true);
+      await stateDir.getFileHandle('.seeded');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function setSeedMarker() {
+    if (!available) return;
+    const stateDir = await getDir('state', true);
+    const fh = await stateDir.getFileHandle('.seeded', { create: true });
+    const w = await fh.createWritable();
+    await w.write(new Date().toISOString());
+    await w.close();
+  }
+
+  return { init, append, readAll, seedMarkerExists, setSeedMarker, get available() { return available; } };
+})();
+
+/* ---------- Event log adapter ---------- */
+async function appendEvent(e) {
+  const full = {
+    id: ulid(),
+    ts: new Date().toISOString(),
+    ...e
+  };
+  await storage.append(JSON.stringify(full));
+  return full;
+}
+
+/* ---------- Fold worker — runs on a blob URL ---------- */
+/* The fold here is Phase A: it only handles claim-status mutations.
+   All the provenance-producing events (SIG/INS/CON/DEF for source
+   claims) are still represented by SEED events that carry the full
+   pre-authored claim structure. The fold reads those out and applies
+   later EVA/REC events to mutate status fields. Phase B replaces the
+   SEED events with per-cell SIG events etc. and builds the provenance
+   from parts. */
+const FOLD_WORKER_SRC = `
+self.addEventListener('message', (ev) => {
+  const { type, events } = ev.data;
+  if (type !== 'fold') return;
+
+  const claims = {};
+
+  for (const raw of events) {
+    let evt;
+    try { evt = JSON.parse(raw); } catch { continue; }
+
+    // SEED — initial claim state (carries the full pre-authored shape).
+    // Phase A shortcut; Phase B replaces these with per-attribute events.
+    if (evt.op === 'SEED' && evt.payload && evt.payload.claim_id) {
+      claims[evt.payload.claim_id] = {
+        ...evt.payload.claim,
+        status: 'pending'  // seeded claims start as pending
+      };
+      continue;
+    }
+
+    // EVA on a claim: confirm or release
+    if (evt.op === 'EVA' && evt.site && evt.site.startsWith('claim:')) {
+      const id = evt.site.slice('claim:'.length);
+      if (!claims[id]) continue;
+      const s = evt.payload && evt.payload.new_status;
+      if (s) claims[id].status = s;
+      continue;
+    }
+
+    // REC on a claim: reclassification / correction
+    if (evt.op === 'REC' && evt.site && evt.site.startsWith('claim:')) {
+      const id = evt.site.slice('claim:'.length);
+      if (!claims[id]) continue;
+      const s = evt.payload && evt.payload.new_status;
+      if (s) claims[id].status = s;
+      continue;
+    }
+
+    // unknown op — no-op in Phase A
+  }
+
+  self.postMessage({ type: 'state', claims });
+});
+`;
+
+let foldWorker = null;
+function getFoldWorker() {
+  if (foldWorker) return foldWorker;
+  const blob = new Blob([FOLD_WORKER_SRC], { type: 'application/javascript' });
+  const url = URL.createObjectURL(blob);
+  foldWorker = new Worker(url);
+  return foldWorker;
+}
+
+/* Kicks off a fold; resolves with the new claim state. */
+async function fold() {
+  const events = await storage.readAll();
+  const worker = getFoldWorker();
+  return new Promise((resolve, reject) => {
+    const onMsg = (ev) => {
+      if (ev.data && ev.data.type === 'state') {
+        worker.removeEventListener('message', onMsg);
+        resolve(ev.data.claims);
+      }
+    };
+    worker.addEventListener('message', onMsg);
+    worker.postMessage({ type: 'fold', events });
+    // safety
+    setTimeout(() => { worker.removeEventListener('message', onMsg); reject(new Error('fold timeout')); }, 5000);
+  });
+}
+
+/* Convenience: append an event then refold and install into CLAIMS */
+async function appendEventAndRefold(e) {
+  await appendEvent(e);
+  CLAIMS = await fold();
+}
+
+/* ---------- Seed on first run ---------- */
+async function seedIfNeeded() {
+  if (await storage.seedMarkerExists()) return;
+  console.log('[seed] seeding log with initial claims');
+  const seededAt = new Date().toISOString();
+  for (const [id, claim] of Object.entries(SEED_CLAIMS)) {
+    await appendEvent({
+      op: 'SEED',
+      site: `claim:${id}`,
+      resolution: 'Figure',
+      payload: { claim_id: id, claim },
+      author: 'system',
+      seeded_at: seededAt
+    });
+  }
+  await storage.setSeedMarker();
+  console.log(`[seed] seeded ${Object.keys(SEED_CLAIMS).length} claims`);
+}
+
+/* ---------- Boot status indicator ---------- */
+function setBootStatus(text, color) {
+  const el = $('#boot-status');
+  if (!el) return;
+  el.textContent = text;
+  if (color) el.style.color = color;
+}
+
 /* ---- Boot ---- */
-function init() {
+async function init() {
+  setBootStatus('booting…', 'var(--color-text-secondary)');
+
+  await storage.init();
+  await seedIfNeeded();
+  CLAIMS = await fold();
+
   renderSources();
   renderArticleBody($('#article-body'));
   renderCounts();
@@ -2306,9 +2557,39 @@ function init() {
     e.target.style.height = 'auto';
     e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
   });
+
+  const tier = storage.available ? 'OPFS' : 'in-memory only';
+  const tierColor = storage.available ? 'var(--teal-mid)' : 'var(--red-mid)';
+  setBootStatus(`log · ${tier}`, tierColor);
+
+  // Reset log — clear OPFS state + reload
+  $('#reset-log').addEventListener('click', async () => {
+    if (!confirm('Clear the event log and re-seed? This wipes all review decisions.')) return;
+    if (storage.available) {
+      const root = await navigator.storage.getDirectory();
+      try { await root.removeEntry('log.ndjson'); } catch {}
+      try { await root.removeEntry('state', { recursive: true }); } catch {}
+    }
+    location.reload();
+  });
+
+  // Dev helpers — inspect the log in the console
+  window.__nlExplorer = {
+    dumpLog: async () => {
+      const events = await storage.readAll();
+      console.log(`log has ${events.length} events:`);
+      events.forEach((e, i) => console.log(i, JSON.parse(e)));
+    },
+    CLAIMS: () => CLAIMS,
+    refold: async () => { CLAIMS = await fold(); console.log('refolded'); return CLAIMS; }
+  };
 }
 
-init();
+init().catch(err => {
+  console.error('boot failed:', err);
+  setBootStatus('boot failed — see console', 'var(--red-mid)');
+});
+
 </script>
 </body>
 </html>
