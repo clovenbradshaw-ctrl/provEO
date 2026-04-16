@@ -1,438 +1,1645 @@
-
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NL Explorer</title>
 <style>
-  h2.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
-  *{box-sizing:border-box;margin:0;padding:0}
-  :root{
-    --amber-fill:#FAEEDA;--amber-mid:#BA7517;--amber-text:#633806;
-    --red-fill:#FCEBEB;--red-mid:#E24B4A;--red-text:#501313;
-    --blue-fill:#E6F1FB;--blue-mid:#378ADD;--blue-text:#042C53;
-    --teal-fill:#E1F5EE;--teal-mid:#1D9E75;--teal-text:#04342C;
+  /* Claude.ai-adjacent token system — refined, editorial */
+  :root {
+    --color-background-primary: #FAF9F5;
+    --color-background-secondary: #F0EEE4;
+    --color-background-tertiary: #E8E5D6;
+    --color-text-primary: #1A1915;
+    --color-text-secondary: #6B6558;
+    --color-text-tertiary: #8F8878;
+    --color-border-primary: #1A1915;
+    --color-border-secondary: #C5BDA8;
+    --color-border-tertiary: #DDD6C2;
+
+    --amber-fill: #FAEEDA;
+    --amber-mid: #BA7517;
+    --amber-text: #633806;
+    --red-fill: #FCEBEB;
+    --red-mid: #E24B4A;
+    --red-text: #501313;
+    --blue-fill: #E6F1FB;
+    --blue-mid: #378ADD;
+    --blue-text: #042C53;
+    --teal-fill: #E1F5EE;
+    --teal-mid: #1D9E75;
+    --teal-text: #04342C;
+
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-serif: 'Tiempos Text', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+    --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+
+    --border-radius-sm: 3px;
+    --border-radius-md: 5px;
+    --border-radius-lg: 7px;
   }
-  .shell{display:flex;flex-direction:column;height:740px;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden;font-family:var(--font-sans);font-size:14px}
-  .topbar{display:flex;align-items:center;gap:0;padding:0 16px;border-bottom:0.5px solid var(--color-border-tertiary);height:44px;flex-shrink:0;background:var(--color-background-primary)}
-  .appname{font-size:13px;font-weight:500;color:var(--color-text-primary);margin-right:20px;letter-spacing:-0.01em}
-  .modetabs{display:flex;gap:2px}
-  .mtab{padding:5px 14px;border-radius:var(--border-radius-md);font-size:13px;font-weight:400;color:var(--color-text-secondary);cursor:pointer;border:none;background:transparent}
-  .mtab.active{background:var(--color-background-secondary);color:var(--color-text-primary);font-weight:500}
-  .topright{margin-left:auto;display:flex;align-items:center;gap:12px}
-  .srcbadge{font-size:12px;color:var(--color-text-secondary);display:flex;align-items:center;gap:5px}
-  .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
-  .dot-green{background:#1D9E75}.dot-amber{background:#BA7517}
-  .body{display:flex;flex:1;overflow:hidden}
-  .sources{width:168px;flex-shrink:0;border-right:0.5px solid var(--color-border-tertiary);display:flex;flex-direction:column;background:var(--color-background-secondary)}
-  .spanel-head{padding:10px 12px 6px;font-size:11px;font-weight:500;color:var(--color-text-secondary);letter-spacing:0.04em;text-transform:uppercase}
-  .slist{flex:1;overflow-y:auto;padding:4px 8px}
-  .sitem{padding:7px 8px;border-radius:var(--border-radius-md);cursor:pointer;border:0.5px solid transparent;margin-bottom:2px}
-  .sitem:hover{background:var(--color-background-primary);border-color:var(--color-border-tertiary)}
-  .sitem-name{font-size:12px;font-weight:500;color:var(--color-text-primary);line-height:1.3}
-  .sitem-meta{font-size:11px;color:var(--color-text-secondary);margin-top:1px;display:flex;align-items:center;gap:4px}
-  .stag{font-size:10px;font-weight:500;padding:1px 5px;border-radius:3px}
-  .stag-csv{background:var(--teal-fill);color:var(--teal-text)}.stag-pdf{background:var(--amber-fill);color:var(--amber-text)}.stag-txt{background:var(--blue-fill);color:var(--blue-text)}
-  .sadd{margin:8px 8px 8px;padding:7px;border:0.5px dashed var(--color-border-tertiary);border-radius:var(--border-radius-md);text-align:center;font-size:12px;color:var(--color-text-secondary);cursor:pointer}
-  .sadd:hover{border-color:var(--color-border-secondary);color:var(--color-text-primary)}
-  .center{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
-  .editor-wrap{flex:1;overflow-y:auto;padding:28px 36px}
-  .article-meta{font-size:12px;color:var(--color-text-secondary);margin-bottom:20px;display:flex;gap:12px;align-items:center}
-  .article-title{font-family:var(--font-serif);font-size:22px;font-weight:500;line-height:1.25;color:var(--color-text-primary);margin-bottom:14px}
-  .article-body{font-family:var(--font-serif);font-size:15px;line-height:1.75;color:var(--color-text-primary)}
-  .article-body p{margin-bottom:14px}
-  .g{border-bottom:2px solid var(--amber-mid);cursor:pointer;position:relative}
-  .g:hover{background:var(--amber-fill);border-radius:2px}
-  .g.active{background:var(--amber-fill);border-radius:2px}
-  .conflict{border-bottom:2px dashed var(--red-mid);cursor:pointer}
-  .conflict:hover{background:var(--red-fill);border-radius:2px}
-  .conflict.active{background:var(--red-fill);border-radius:2px}
-  .absent{border-bottom:2px dotted var(--blue-mid);cursor:pointer}
-  .absent:hover{background:var(--blue-fill);border-radius:2px}
-  .statusbar{height:32px;border-top:0.5px solid var(--color-border-tertiary);padding:0 36px;display:flex;align-items:center;gap:20px;flex-shrink:0;background:var(--color-background-secondary)}
-  .sstat{font-size:11px;color:var(--color-text-secondary);display:flex;align-items:center;gap:5px}
-  .sstat-n{font-weight:500;color:var(--color-text-primary)}
-  .sstat-dot{width:7px;height:7px;border-radius:50%}
-  .right-panel{width:280px;flex-shrink:0;border-left:0.5px solid var(--color-border-tertiary);display:flex;flex-direction:column;background:var(--color-background-primary)}
-  .rphead{padding:12px 14px 8px;border-bottom:0.5px solid var(--color-border-tertiary);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
-  .rphead-title{font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:var(--color-text-secondary)}
-  .rphead-close{font-size:18px;color:var(--color-text-secondary);cursor:pointer;line-height:1;border:none;background:transparent}
-  .rpbody{flex:1;overflow-y:auto;padding:12px 14px}
-  .rp-empty{flex:1;display:flex;align-items:center;justify-content:center;padding:24px}
-  .rp-empty-inner{text-align:center}
-  .rp-empty-icon{font-size:28px;opacity:0.2;margin-bottom:10px;font-family:var(--font-mono)}
-  .rp-empty-text{font-size:12px;color:var(--color-text-secondary);line-height:1.5}
-  .prov-section{margin-bottom:14px}
-  .prov-label{font-size:10px;font-weight:500;letter-spacing:0.06em;text-transform:uppercase;color:var(--color-text-secondary);margin-bottom:5px}
-  .prov-value{font-size:12px;color:var(--color-text-primary);line-height:1.4}
-  .prov-code{font-family:var(--font-mono);font-size:11px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:7px 9px;color:var(--color-text-primary);line-height:1.5}
-  .prov-tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 8px;border-radius:var(--border-radius-md);border:0.5px solid transparent}
-  .prov-tag-amber{background:var(--amber-fill);color:var(--amber-text);border-color:#FAC775}
-  .prov-tag-red{background:var(--red-fill);color:var(--red-text);border-color:#F7C1C1}
-  .prov-tag-blue{background:var(--blue-fill);color:var(--blue-text);border-color:#B5D4F4}
-  .conf-bar-wrap{height:4px;background:var(--color-background-secondary);border-radius:2px;margin-top:4px;overflow:hidden}
-  .conf-bar{height:4px;border-radius:2px}
-  .divider{height:0.5px;background:var(--color-border-tertiary);margin:12px 0}
-  .prov-actions{display:flex;gap:6px;margin-top:4px}
-  .btn-sm{padding:4px 10px;font-size:11px;border-radius:var(--border-radius-md);cursor:pointer;font-weight:500;border:0.5px solid var(--color-border-secondary);background:transparent;color:var(--color-text-primary)}
-  .btn-sm:hover{background:var(--color-background-secondary)}
-  .btn-sm-danger{border-color:#F09595;color:var(--red-text);background:var(--red-fill)}
-  .btn-sm-danger:hover{background:#F7C1C1}
-  .traverse-step{display:flex;align-items:flex-start;gap:7px;margin-bottom:5px}
-  .traverse-step-dot{width:5px;height:5px;border-radius:50%;background:var(--color-border-secondary);flex-shrink:0;margin-top:5px}
-  .traverse-step-text{font-family:var(--font-mono);font-size:10px;color:var(--color-text-secondary);line-height:1.45}
-  .review-layout{display:flex;flex:1;overflow:hidden}
-  .review-article{flex:1;overflow-y:auto;padding:28px 32px;min-width:0}
-  .review-queue{width:296px;flex-shrink:0;border-left:0.5px solid var(--color-border-tertiary);overflow-y:auto;padding:12px}
-  .qhead{font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:var(--color-text-secondary);margin-bottom:10px;padding:0 2px}
-  .qcard{border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:11px 13px;margin-bottom:8px;cursor:pointer;background:var(--color-background-primary)}
-  .qcard:hover{border-color:var(--color-border-secondary)}
-  .qcard.selected{border-color:var(--color-border-primary)}
-  .qcard-type{display:flex;align-items:center;gap:6px;margin-bottom:6px}
-  .qcard-text{font-size:12px;color:var(--color-text-primary);line-height:1.45;margin-bottom:7px}
-  .qcard-source{font-size:11px;font-family:var(--font-mono);color:var(--color-text-secondary);margin-bottom:8px}
-  .qcard-actions{display:flex;gap:5px}
-  .qa{padding:4px 10px;font-size:11px;border-radius:var(--border-radius-md);cursor:pointer;border:0.5px solid var(--color-border-secondary);background:transparent;color:var(--color-text-primary);font-weight:500}
-  .qa:hover{background:var(--color-background-secondary)}
-  .qa-confirm{border-color:#5DCAA5;color:var(--teal-text);background:var(--teal-fill)}
-  .qa-confirm:hover{background:#9FE1CB}
-  .qa-release{border-color:#F09595;color:var(--red-text)}
-  .chat-layout{display:flex;flex:1;overflow:hidden}
-  .chat-main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
-  .chat-msgs{flex:1;overflow-y:auto;padding:20px 28px;display:flex;flex-direction:column;gap:16px}
-  .chat-msg{display:flex;gap:10px;align-items:flex-start}
-  .chat-msg-user{flex-direction:row-reverse}
-  .chat-avatar{width:28px;height:28px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500}
-  .av-sys{background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary)}
-  .av-user{background:var(--blue-fill);color:var(--blue-text)}
-  .chat-bubble{max-width:540px;font-size:13px;line-height:1.65;color:var(--color-text-primary);background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:11px 14px}
-  .chat-bubble-user{background:var(--color-background-primary)}
-  .evidence-toggle{margin-top:9px;border-top:0.5px solid var(--color-border-tertiary);padding-top:7px;display:flex;align-items:center;justify-content:space-between;cursor:pointer}
-  .ev-toggle-label{font-size:11px;color:var(--color-text-secondary);font-weight:500}
-  .ev-toggle-count{font-size:11px;font-family:var(--font-mono);color:var(--color-text-secondary)}
-  .ev-cards{margin-top:8px;display:flex;flex-direction:column;gap:6px}
-  .ev-card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:8px 10px}
-  .ev-card-claim{font-family:var(--font-mono);font-size:11px;font-weight:500;color:var(--color-text-primary);margin-bottom:4px}
-  .ev-card-path{font-size:11px;color:var(--color-text-secondary);line-height:1.4}
-  .ev-card-footer{display:flex;align-items:center;justify-content:space-between;margin-top:6px}
-  .ev-rederive{font-size:11px;padding:3px 8px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary);background:transparent;cursor:pointer;color:var(--color-text-secondary);font-weight:500}
-  .ev-rederive:hover{background:var(--color-background-secondary)}
-  .chat-input-wrap{padding:12px 28px;border-top:0.5px solid var(--color-border-tertiary);display:flex;gap:8px;align-items:flex-end;flex-shrink:0}
-  .chat-textarea{flex:1;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:9px 12px;font-size:13px;font-family:var(--font-sans);color:var(--color-text-primary);background:var(--color-background-primary);resize:none;outline:none;min-height:40px}
-  .chat-send{padding:9px 16px;background:var(--color-text-primary);color:var(--color-background-primary);border:none;border-radius:var(--border-radius-lg);font-size:13px;font-weight:500;cursor:pointer}
-  .chat-right{width:240px;flex-shrink:0;border-left:0.5px solid var(--color-border-tertiary);display:flex;flex-direction:column;background:var(--color-background-secondary)}
-  .cr-head{padding:10px 12px 8px;font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:var(--color-text-secondary);border-bottom:0.5px solid var(--color-border-tertiary)}
-  .cr-body{flex:1;overflow-y:auto;padding:10px 12px}
-  .iset-rule{border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:9px 10px;margin-bottom:7px;background:var(--color-background-primary)}
-  .iset-rule-head{display:flex;align-items:center;gap:6px;margin-bottom:4px}
-  .iset-type{font-size:10px;font-weight:500;padding:1px 6px;border-radius:3px}
-  .iset-trigger{font-size:10px;color:var(--color-text-secondary)}
-  .iset-text{font-size:11px;color:var(--color-text-primary);line-height:1.45}
-  .mode-panel{display:none;flex:1;overflow:hidden;flex-direction:column}
-  .mode-panel.active{display:flex}
-  .cursor{display:inline-block;width:2px;height:15px;background:var(--color-text-primary);vertical-align:text-bottom;animation:blink 1s step-end infinite}
-  @keyframes blink{50%{opacity:0}}
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--color-background-secondary);
+    font-family: var(--font-sans);
+    color: var(--color-text-primary);
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+
+  .shell {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 1440px;
+    height: min(840px, calc(100vh - 32px));
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-lg);
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(26,25,21,0.04), 0 8px 32px rgba(26,25,21,0.05);
+  }
+
+  /* ---------- TOPBAR ---------- */
+  .topbar {
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    height: 46px;
+    flex-shrink: 0;
+  }
+  .appname {
+    font-family: var(--font-serif);
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: -0.015em;
+    margin-right: 24px;
+  }
+  .appname .dot {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--color-text-primary);
+    margin-right: 7px;
+    vertical-align: 2px;
+  }
+  .modetabs { display: flex; gap: 2px; }
+  .mtab {
+    padding: 6px 14px;
+    border-radius: var(--border-radius-md);
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    transition: background 0.12s, color 0.12s;
+  }
+  .mtab:hover { color: var(--color-text-primary); }
+  .mtab.active {
+    background: var(--color-background-secondary);
+    color: var(--color-text-primary);
+    font-weight: 500;
+  }
+  .topright {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .srcbadge {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .srcbadge .statdot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .statdot-green { background: var(--teal-mid); }
+  .statdot-amber {
+    background: var(--amber-mid);
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+
+  /* ---------- BODY ---------- */
+  .body { display: flex; flex: 1; overflow: hidden; }
+
+  /* ---------- SOURCES PANEL ---------- */
+  .sources {
+    width: 184px;
+    flex-shrink: 0;
+    border-right: 0.5px solid var(--color-border-tertiary);
+    display: flex;
+    flex-direction: column;
+    background: var(--color-background-secondary);
+  }
+  .spanel-head {
+    padding: 12px 14px 8px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .slist {
+    flex: 1;
+    overflow-y: auto;
+    padding: 2px 8px;
+  }
+  .sitem {
+    padding: 8px 10px;
+    border-radius: var(--border-radius-md);
+    cursor: pointer;
+    border: 0.5px solid transparent;
+    margin-bottom: 2px;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .sitem:hover {
+    background: var(--color-background-primary);
+    border-color: var(--color-border-tertiary);
+  }
+  .sitem.pending { opacity: 0.55; cursor: default; }
+  .sitem-name {
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.3;
+    font-family: var(--font-mono);
+  }
+  .sitem-meta {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    margin-top: 3px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .stag {
+    font-size: 9.5px;
+    font-weight: 600;
+    padding: 1.5px 5px;
+    border-radius: 3px;
+    letter-spacing: 0.04em;
+  }
+  .stag-csv { background: var(--teal-fill); color: var(--teal-text); }
+  .stag-pdf { background: var(--amber-fill); color: var(--amber-text); }
+  .stag-txt { background: var(--blue-fill); color: var(--blue-text); }
+  .sadd {
+    margin: 8px 10px 10px;
+    padding: 9px;
+    border: 0.5px dashed var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    text-align: center;
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: border-color 0.12s, color 0.12s;
+  }
+  .sadd:hover {
+    border-color: var(--color-text-primary);
+    color: var(--color-text-primary);
+  }
+
+  /* ---------- CENTER AREA ---------- */
+  .mode-panel {
+    display: none;
+    flex: 1;
+    overflow: hidden;
+    flex-direction: row;
+  }
+  .mode-panel.active { display: flex; }
+
+  .center {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  /* ---------- EDITOR ---------- */
+  .editor-wrap {
+    flex: 1;
+    overflow-y: auto;
+    padding: 32px 44px 24px;
+  }
+  .article-meta {
+    font-size: 11.5px;
+    color: var(--color-text-secondary);
+    margin-bottom: 20px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    letter-spacing: 0.01em;
+  }
+  .article-meta .sep {
+    color: var(--color-border-secondary);
+  }
+  .counts {
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+  .counts .c-g { color: var(--amber-mid); }
+  .counts .c-c { color: var(--red-mid); }
+  .counts .c-a { color: var(--blue-mid); }
+
+  .article-title {
+    font-family: var(--font-serif);
+    font-size: 26px;
+    font-weight: 500;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    margin-bottom: 20px;
+    outline: none;
+  }
+  .article-title:focus {
+    outline: none;
+  }
+  .article-body {
+    font-family: var(--font-serif);
+    font-size: 16px;
+    line-height: 1.72;
+    letter-spacing: -0.003em;
+  }
+  .article-body p { margin-bottom: 16px; }
+  .article-body p:last-child { margin-bottom: 0; }
+
+  /* Claim annotations */
+  .g, .conflict, .absent {
+    cursor: pointer;
+    position: relative;
+    transition: background 0.1s;
+    border-radius: 2px;
+    padding: 0 1px;
+  }
+  .g {
+    border-bottom: 2px solid var(--amber-mid);
+  }
+  .g:hover, .g.active {
+    background: var(--amber-fill);
+  }
+  .conflict {
+    border-bottom: 2px dashed var(--red-mid);
+  }
+  .conflict:hover, .conflict.active {
+    background: var(--red-fill);
+  }
+  .absent {
+    border-bottom: 2px dotted var(--blue-mid);
+  }
+  .absent:hover, .absent.active {
+    background: var(--blue-fill);
+  }
+
+  /* ---------- STATUS BAR ---------- */
+  .statusbar {
+    height: 34px;
+    border-top: 0.5px solid var(--color-border-tertiary);
+    padding: 0 44px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-shrink: 0;
+    background: var(--color-background-secondary);
+  }
+  .sstat {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+  }
+  .sstat-n {
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
+  .sstat-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+  }
+
+  /* ---------- RIGHT PANEL (PROVENANCE) ---------- */
+  .right-panel {
+    width: 296px;
+    flex-shrink: 0;
+    border-left: 0.5px solid var(--color-border-tertiary);
+    display: flex;
+    flex-direction: column;
+    background: var(--color-background-primary);
+  }
+  .rp-empty {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 28px;
+  }
+  .rp-empty-inner { text-align: center; }
+  .rp-empty-glyph {
+    font-size: 32px;
+    opacity: 0.18;
+    margin-bottom: 12px;
+    font-family: var(--font-mono);
+    line-height: 1;
+  }
+  .rp-empty-text {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    line-height: 1.55;
+  }
+  .rp-content {
+    display: none;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+  }
+  .rp-content.visible { display: flex; }
+  .rphead {
+    padding: 13px 16px 10px;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .rphead-title {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+  }
+  .rphead-title.type-grounded { color: var(--amber-text); }
+  .rphead-title.type-conflict { color: var(--red-text); }
+  .rphead-title.type-absent { color: var(--blue-text); }
+  .rphead-close {
+    font-size: 18px;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    line-height: 1;
+    border: none;
+    background: transparent;
+    padding: 0 4px;
+    transition: color 0.12s;
+  }
+  .rphead-close:hover { color: var(--color-text-primary); }
+  .rpbody {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 16px;
+  }
+  .prov-section { margin-bottom: 15px; }
+  .prov-label {
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    margin-bottom: 6px;
+  }
+  .prov-value {
+    font-size: 12px;
+    line-height: 1.5;
+    font-family: var(--font-mono);
+  }
+  .prov-value.plain { font-family: var(--font-sans); }
+  .prov-code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: var(--color-background-secondary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    padding: 8px 10px;
+    line-height: 1.55;
+    word-break: break-word;
+  }
+  .prov-code.conflict-block {
+    background: var(--red-fill);
+    border-color: #F7C1C1;
+    white-space: pre-line;
+  }
+  .conf-bar-wrap {
+    height: 4px;
+    background: var(--color-background-secondary);
+    border-radius: 2px;
+    margin-top: 4px;
+    overflow: hidden;
+  }
+  .conf-bar {
+    height: 4px;
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
+  .conf-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    margin-top: 5px;
+  }
+  .divider {
+    height: 0.5px;
+    background: var(--color-border-tertiary);
+    margin: 14px 0;
+  }
+
+  /* Traversal trace */
+  .traverse {
+    background: var(--color-background-secondary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    padding: 10px 12px;
+  }
+  .traverse-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 3px 0;
+  }
+  .traverse-step-rail {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0;
+    padding-top: 4px;
+  }
+  .traverse-step-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-border-secondary);
+  }
+  .traverse-step-dot.fired {
+    background: var(--color-text-primary);
+  }
+  .traverse-step-line {
+    width: 1px;
+    background: var(--color-border-tertiary);
+    flex: 1;
+    margin-top: 2px;
+    min-height: 6px;
+  }
+  .traverse-step:last-child .traverse-step-line { display: none; }
+  .traverse-step-text {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--color-text-secondary);
+    line-height: 1.45;
+    flex: 1;
+    padding-bottom: 4px;
+  }
+  .traverse-step-text strong {
+    color: var(--color-text-primary);
+    font-weight: 600;
+  }
+  .traverse-step-text .op {
+    display: inline-block;
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.02em;
+    padding: 0.5px 4px;
+    border-radius: 2px;
+    margin-right: 4px;
+  }
+  .op-sig { background: #EDE9DA; color: var(--color-text-primary); }
+  .op-ins { background: var(--teal-fill); color: var(--teal-text); }
+  .op-con { background: #E8E4F5; color: #3E2F7A; }
+  .op-eva { background: var(--amber-fill); color: var(--amber-text); }
+  .op-nul { background: var(--blue-fill); color: var(--blue-text); }
+  .op-def { background: #F5EDE0; color: var(--amber-text); }
+
+  .prov-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .btn-sm {
+    padding: 5px 11px;
+    font-size: 11.5px;
+    border-radius: var(--border-radius-md);
+    cursor: pointer;
+    font-weight: 500;
+    border: 0.5px solid var(--color-border-secondary);
+    background: transparent;
+    color: var(--color-text-primary);
+    font-family: inherit;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .btn-sm:hover {
+    background: var(--color-background-secondary);
+    border-color: var(--color-text-primary);
+  }
+  .btn-sm-danger {
+    border-color: #F09595;
+    color: var(--red-text);
+    background: var(--red-fill);
+  }
+  .btn-sm-danger:hover { background: #F7C1C1; }
+
+  /* Provenance tag chips */
+  .prov-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 10px;
+    border: 0.5px solid transparent;
+    letter-spacing: 0.01em;
+  }
+  .prov-tag-amber { background: var(--amber-fill); color: var(--amber-text); border-color: #EDC89A; }
+  .prov-tag-red { background: var(--red-fill); color: var(--red-text); border-color: #F7C1C1; }
+  .prov-tag-blue { background: var(--blue-fill); color: var(--blue-text); border-color: #B5D4F4; }
+  .prov-tag-teal { background: var(--teal-fill); color: var(--teal-text); border-color: #9FE1CB; }
+
+  /* ---------- REVIEW MODE ---------- */
+  .review-article {
+    flex: 1;
+    overflow-y: auto;
+    padding: 32px 40px;
+    min-width: 0;
+  }
+  .review-queue {
+    width: 320px;
+    flex-shrink: 0;
+    border-left: 0.5px solid var(--color-border-tertiary);
+    overflow-y: auto;
+    padding: 14px;
+    background: var(--color-background-primary);
+  }
+  .qhead {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    margin-bottom: 12px;
+    padding: 0 2px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .qhead-count {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-primary);
+  }
+  .qcard {
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-lg);
+    padding: 12px 13px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    background: var(--color-background-primary);
+    transition: border-color 0.12s, box-shadow 0.12s;
+  }
+  .qcard:hover {
+    border-color: var(--color-border-secondary);
+  }
+  .qcard.selected {
+    border-color: var(--color-text-primary);
+    box-shadow: 0 0 0 2px rgba(26,25,21,0.04);
+  }
+  .qcard.resolved {
+    opacity: 0.45;
+  }
+  .qcard-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 7px;
+  }
+  .qcard-text {
+    font-size: 12.5px;
+    line-height: 1.5;
+    margin-bottom: 7px;
+    font-family: var(--font-serif);
+  }
+  .qcard-source {
+    font-size: 10.5px;
+    font-family: var(--font-mono);
+    color: var(--color-text-secondary);
+    margin-bottom: 9px;
+    line-height: 1.4;
+    word-break: break-all;
+  }
+  .qcard-actions {
+    display: flex;
+    gap: 5px;
+  }
+  .qa {
+    padding: 4px 9px;
+    font-size: 11px;
+    border-radius: var(--border-radius-md);
+    cursor: pointer;
+    border: 0.5px solid var(--color-border-secondary);
+    background: transparent;
+    color: var(--color-text-primary);
+    font-weight: 500;
+    font-family: inherit;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .qa:hover { background: var(--color-background-secondary); }
+  .qa-confirm {
+    border-color: #5DCAA5;
+    color: var(--teal-text);
+    background: var(--teal-fill);
+  }
+  .qa-confirm:hover { background: #9FE1CB; }
+  .qa-release {
+    border-color: #F09595;
+    color: var(--red-text);
+  }
+  .qa-release:hover { background: var(--red-fill); }
+  .qempty {
+    padding: 32px 12px;
+    text-align: center;
+    color: var(--color-text-secondary);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  /* ---------- CHAT MODE ---------- */
+  .chat-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+  }
+  .chat-msgs {
+    flex: 1;
+    overflow-y: auto;
+    padding: 22px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .chat-msg {
+    display: flex;
+    gap: 11px;
+    align-items: flex-start;
+  }
+  .chat-msg-user { flex-direction: row-reverse; }
+  .chat-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .av-sys {
+    background: var(--color-background-secondary);
+    border: 0.5px solid var(--color-border-tertiary);
+    color: var(--color-text-secondary);
+    font-family: var(--font-mono);
+    font-size: 10px;
+  }
+  .av-user {
+    background: var(--blue-fill);
+    color: var(--blue-text);
+  }
+  .chat-bubble {
+    max-width: 580px;
+    font-size: 13.5px;
+    line-height: 1.65;
+    background: var(--color-background-secondary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-lg);
+    padding: 12px 14px;
+    font-family: var(--font-serif);
+  }
+  .chat-bubble-user {
+    background: var(--color-background-primary);
+    border-color: var(--color-border-secondary);
+  }
+  .chat-bubble p { margin-bottom: 10px; }
+  .chat-bubble p:last-child { margin-bottom: 0; }
+  .chat-meta-note {
+    font-family: var(--font-sans);
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .fold-badge {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: var(--amber-fill);
+    color: var(--amber-text);
+    letter-spacing: 0.02em;
+  }
+  .evidence-toggle {
+    margin-top: 10px;
+    border-top: 0.5px solid var(--color-border-tertiary);
+    padding-top: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    user-select: none;
+  }
+  .ev-toggle-label {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    font-weight: 500;
+  }
+  .ev-toggle-count {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--color-text-secondary);
+  }
+  .ev-cards {
+    margin-top: 9px;
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .ev-cards.open { display: flex; }
+  .ev-card {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    padding: 9px 11px;
+    font-family: var(--font-sans);
+  }
+  .ev-card-claim {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    margin-bottom: 5px;
+  }
+  .ev-card-path {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--color-text-secondary);
+    line-height: 1.45;
+  }
+  .ev-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 7px;
+  }
+  .ev-rederive {
+    font-size: 10.5px;
+    padding: 3px 9px;
+    border-radius: var(--border-radius-md);
+    border: 0.5px solid var(--color-border-secondary);
+    background: transparent;
+    cursor: pointer;
+    color: var(--color-text-secondary);
+    font-weight: 500;
+    font-family: inherit;
+    transition: background 0.12s;
+  }
+  .ev-rederive:hover { background: var(--color-background-secondary); }
+
+  .chat-input-wrap {
+    padding: 14px 28px 16px;
+    border-top: 0.5px solid var(--color-border-tertiary);
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    flex-shrink: 0;
+  }
+  .chat-textarea {
+    flex: 1;
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: var(--border-radius-lg);
+    padding: 10px 13px;
+    font-size: 13px;
+    font-family: var(--font-sans);
+    color: var(--color-text-primary);
+    background: var(--color-background-primary);
+    resize: none;
+    outline: none;
+    min-height: 40px;
+    max-height: 120px;
+    transition: border-color 0.12s;
+  }
+  .chat-textarea:focus { border-color: var(--color-text-primary); }
+  .chat-send {
+    padding: 10px 18px;
+    background: var(--color-text-primary);
+    color: var(--color-background-primary);
+    border: none;
+    border-radius: var(--border-radius-lg);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+    transition: opacity 0.12s;
+  }
+  .chat-send:hover { opacity: 0.88; }
+  .chat-send:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .chat-right {
+    width: 256px;
+    flex-shrink: 0;
+    border-left: 0.5px solid var(--color-border-tertiary);
+    display: flex;
+    flex-direction: column;
+    background: var(--color-background-secondary);
+  }
+  .cr-head {
+    padding: 12px 14px 10px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+  }
+  .cr-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 14px;
+  }
+  .iset-rule {
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    padding: 10px 11px;
+    margin-bottom: 8px;
+    background: var(--color-background-primary);
+  }
+  .iset-rule-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 5px;
+  }
+  .iset-type {
+    font-size: 9px;
+    font-weight: 600;
+    padding: 1.5px 5px;
+    border-radius: 2px;
+    letter-spacing: 0.04em;
+  }
+  .iset-trigger {
+    font-size: 10px;
+    color: var(--color-text-secondary);
+    font-family: var(--font-mono);
+  }
+  .iset-text {
+    font-size: 11.5px;
+    line-height: 1.5;
+  }
+  .iset-footer {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 0.5px solid var(--color-border-tertiary);
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    line-height: 1.55;
+    font-family: var(--font-mono);
+  }
+
+  /* --- utilities --- */
+  .cursor {
+    display: inline-block;
+    width: 2px;
+    height: 15px;
+    background: var(--color-text-primary);
+    vertical-align: text-bottom;
+    animation: blink 1.1s step-end infinite;
+    margin-left: 1px;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* scrollbar taming */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border-tertiary);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-border-secondary); }
+
+  /* small-screen fallback */
+  @media (max-width: 1100px) {
+    .sources { width: 160px; }
+    .right-panel, .chat-right { width: 248px; }
+    .review-queue { width: 280px; }
+    .editor-wrap, .review-article { padding: 24px 28px; }
+  }
 </style>
+</head>
+<body>
 
-<h2 class="sr-only">NL Explorer — three-mode UX mockup showing Write, Review, and Chat interfaces with provenance annotations</h2>
+<div class="shell" id="app">
 
-<div class="shell">
+  <!-- ===== TOPBAR ===== -->
   <div class="topbar">
-    <span class="appname">NL Explorer</span>
-    <div class="modetabs">
-      <button class="mtab active" onclick="switchMode('write')">Write</button>
-      <button class="mtab" onclick="switchMode('review')">Review</button>
-      <button class="mtab" onclick="switchMode('chat')">Chat</button>
+    <span class="appname"><span class="dot"></span>NL Explorer</span>
+    <div class="modetabs" id="modetabs">
+      <button class="mtab active" data-mode="write">Write</button>
+      <button class="mtab" data-mode="review">Review</button>
+      <button class="mtab" data-mode="chat">Chat</button>
     </div>
     <div class="topright">
-      <div class="srcbadge"><div class="dot dot-green"></div>3 indexed</div>
-      <div class="srcbadge"><div class="dot dot-amber"></div>1 indexing</div>
+      <div class="srcbadge"><div class="statdot statdot-green"></div>3 indexed</div>
+      <div class="srcbadge"><div class="statdot statdot-amber"></div>1 indexing</div>
     </div>
   </div>
 
   <div class="body">
-    <div class="sources">
-      <div class="spanel-head">Sources</div>
-      <div class="slist">
-        <div class="sitem">
-          <div class="sitem-name">ndp_budget_fy25.csv</div>
-          <div class="sitem-meta"><span class="stag stag-csv">CSV</span>847 rows</div>
-        </div>
-        <div class="sitem">
-          <div class="sitem-name">council_minutes_mar7.pdf</div>
-          <div class="sitem-meta"><span class="stag stag-pdf">PDF</span>12 pp</div>
-        </div>
-        <div class="sitem">
-          <div class="sitem-name">ohs_quarterly_q4.pdf</div>
-          <div class="sitem-meta"><span class="stag stag-pdf">PDF</span>31 pp</div>
-        </div>
-        <div class="sitem" style="opacity:0.5">
-          <div class="sitem-name">vendor_contracts.txt</div>
-          <div class="sitem-meta"><span class="stag stag-txt">TXT</span>indexing…</div>
-        </div>
-      </div>
-      <div class="sadd">+ add source</div>
-    </div>
 
-    <div class="mode-panel active" id="mode-write" style="flex-direction:row;overflow:hidden">
+    <!-- ===== SOURCES ===== -->
+    <aside class="sources">
+      <div class="spanel-head">Sources</div>
+      <div class="slist" id="slist"></div>
+      <div class="sadd">+ add source</div>
+    </aside>
+
+    <!-- ===== WRITE MODE ===== -->
+    <section class="mode-panel active" id="mode-write">
       <div class="center">
-        <div class="editor-wrap" id="editor-area">
+        <div class="editor-wrap">
           <div class="article-meta">
             <span>Untitled draft</span>
-            <span style="color:var(--color-border-secondary)">·</span>
-            <span style="color:var(--amber-mid);font-size:11px">14 grounded · 1 conflict · 2 absent</span>
+            <span class="sep">·</span>
+            <span class="counts" id="counts-meta"></span>
           </div>
-          <div class="article-title" contenteditable="true">The Private Police and the Public Budget<span class="cursor"></span></div>
-          <div class="article-body">
-            <p>The Nashville Downtown Partnership received <span class="g" data-id="m1" onclick="showClaim('m1')">$4.2 million</span> in public funds during fiscal year 2025, a <span class="g" data-id="m2" onclick="showClaim('m2')">14.3 percent increase</span> over the prior year, according to budget documents obtained from Metro Finance. The increase followed a motion by <span class="g" data-id="m3" onclick="showClaim('m3')">Councilmember Torres</span> on <span class="g" data-id="m4" onclick="showClaim('m4')">March 7</span> to amend the public safety allocation.</p>
-            <p>The Partnership has contracted with <span class="g" data-id="m5" onclick="showClaim('m5')">Solaren International</span> for private security services since <span class="g" data-id="m6" onclick="showClaim('m6')">2019</span>, at a cost the organization describes as <span class="conflict" data-id="c1" onclick="showClaim('c1')">$280,000 annually</span>. Internal documents reviewed by this reporter put the figure at <span class="g" data-id="m7" onclick="showClaim('m7')">$312,000</span>, a discrepancy the Partnership has not publicly explained.</p>
-            <p>Metro's Office of Homeless Services <span class="absent" data-id="a1" onclick="showClaim('a1')">did not respond to requests for comment</span> about the overlap between the Partnership's security footprint and OHS encampment clearance operations. <span class="absent" data-id="a2" onclick="showClaim('a2')">No disclosure of the Solaren contract</span> appears in the Partnership's public filings for the period.</p>
-          </div>
+          <div class="article-title" contenteditable="true" spellcheck="false">The Private Police and the Public Budget<span class="cursor"></span></div>
+          <div class="article-body" id="article-body"></div>
         </div>
         <div class="statusbar">
-          <div class="sstat"><div class="sstat-dot" style="background:var(--amber-mid)"></div><span class="sstat-n">14</span> grounded</div>
-          <div class="sstat"><div class="sstat-dot" style="background:#E24B4A"></div><span class="sstat-n">1</span> conflict</div>
-          <div class="sstat"><div class="sstat-dot" style="background:var(--blue-mid)"></div><span class="sstat-n">2</span> absent</div>
-          <div class="sstat" style="margin-left:auto"><span style="color:var(--color-text-secondary)">pipeline: </span><span class="sstat-n" style="color:#1D9E75">live</span></div>
+          <div class="sstat"><div class="sstat-dot" style="background: var(--amber-mid)"></div><span class="sstat-n" id="stat-g">0</span> grounded</div>
+          <div class="sstat"><div class="sstat-dot" style="background: var(--red-mid)"></div><span class="sstat-n" id="stat-c">0</span> conflict</div>
+          <div class="sstat"><div class="sstat-dot" style="background: var(--blue-mid)"></div><span class="sstat-n" id="stat-a">0</span> absent</div>
+          <div class="sstat" style="margin-left: auto">
+            <span style="color: var(--color-text-secondary)">fold:</span>
+            <span class="sstat-n" style="color: var(--teal-mid)">live</span>
+            <span class="sstat-dot" style="background: var(--teal-mid); animation: pulse 1.8s ease-in-out infinite;"></span>
+          </div>
         </div>
       </div>
 
-      <div class="right-panel" id="rp-write">
+      <aside class="right-panel">
         <div class="rp-empty" id="rp-empty">
           <div class="rp-empty-inner">
-            <div class="rp-empty-icon">⊨</div>
-            <div class="rp-empty-text">Click any underlined<br>claim to inspect its<br>provenance path</div>
+            <div class="rp-empty-glyph">⊨</div>
+            <div class="rp-empty-text">Click any underlined claim<br>to inspect its provenance path</div>
           </div>
         </div>
-        <div id="rp-content" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+        <div class="rp-content" id="rp-content">
           <div class="rphead">
             <span class="rphead-title" id="rp-type-label">Grounded</span>
-            <button class="rphead-close" onclick="closeClaim()">×</button>
+            <button class="rphead-close" id="rp-close">×</button>
           </div>
-          <div class="rpbody">
-            <div class="prov-section">
-              <div class="prov-label">Claim</div>
-              <div id="rp-claim-text" class="prov-code"></div>
-            </div>
-            <div class="prov-section" id="rp-source-section">
-              <div class="prov-label">Source</div>
-              <div id="rp-source" class="prov-value"></div>
-            </div>
-            <div class="prov-section" id="rp-op-section">
-              <div class="prov-label">Operation</div>
-              <div id="rp-op" class="prov-code"></div>
-            </div>
-            <div class="prov-section" id="rp-conflict-section" style="display:none">
-              <div class="prov-label">Conflict</div>
-              <div id="rp-conflict" class="prov-value"></div>
-            </div>
-            <div class="prov-section">
-              <div class="prov-label">Traversal</div>
-              <div id="rp-traversal"></div>
-            </div>
-            <div class="prov-section" id="rp-conf-section">
-              <div class="prov-label">Confidence</div>
-              <div class="conf-bar-wrap"><div class="conf-bar" id="rp-conf-bar"></div></div>
-            </div>
-            <div class="divider"></div>
-            <div class="prov-actions">
-              <button class="btn-sm">Correct</button>
-              <button class="btn-sm btn-sm-danger">Release</button>
-            </div>
-          </div>
+          <div class="rpbody" id="rp-body"></div>
+        </div>
+      </aside>
+    </section>
+
+    <!-- ===== REVIEW MODE ===== -->
+    <section class="mode-panel" id="mode-review">
+      <div class="review-article" id="review-article"></div>
+      <aside class="review-queue">
+        <div class="qhead">
+          <span>Review queue</span>
+          <span class="qhead-count" id="qhead-count">7 remaining</span>
+        </div>
+        <div id="qlist"></div>
+      </aside>
+    </section>
+
+    <!-- ===== CHAT MODE ===== -->
+    <section class="mode-panel" id="mode-chat">
+      <div class="chat-main">
+        <div class="chat-msgs" id="chat-msgs"></div>
+        <div class="chat-input-wrap">
+          <textarea class="chat-textarea" id="chat-input" rows="1" placeholder="Ask about the sources…"></textarea>
+          <button class="chat-send" id="chat-send">Send</button>
         </div>
       </div>
-    </div>
+      <aside class="chat-right">
+        <div class="cr-head">Instruction set</div>
+        <div class="cr-body" id="iset-body"></div>
+      </aside>
+    </section>
 
-    <div class="mode-panel" id="mode-review">
-      <div class="review-layout">
-        <div class="review-article">
-          <div class="article-meta"><span style="color:var(--color-text-secondary)">Review mode — read only</span></div>
-          <div class="article-title" style="font-family:var(--font-serif)">The Private Police and the Public Budget</div>
-          <div class="article-body">
-            <p>The Nashville Downtown Partnership received <span class="g">$4.2 million</span> in public funds during fiscal year 2025, a <span class="g">14.3 percent increase</span> over the prior year, according to budget documents obtained from Metro Finance. The increase followed a motion by <span class="g">Councilmember Torres</span> on <span class="g">March 7</span> to amend the public safety allocation.</p>
-            <p>The Partnership has contracted with <span class="g">Solaren International</span> for private security services since <span class="g">2019</span>, at a cost the organization describes as <span class="conflict">$280,000 annually</span>. Internal documents reviewed by this reporter put the figure at <span class="g">$312,000</span>, a discrepancy the Partnership has not publicly explained.</p>
-            <p>Metro's Office of Homeless Services <span class="absent">did not respond to requests for comment</span> about the overlap between the Partnership's security footprint and OHS encampment clearance operations. <span class="absent">No disclosure of the Solaren contract</span> appears in the Partnership's public filings for the period.</p>
-          </div>
-        </div>
-        <div class="review-queue">
-          <div class="qhead">Review queue — 7 remaining</div>
-
-          <div class="qcard selected">
-            <div class="qcard-type"><span class="prov-tag prov-tag-red">conflict</span></div>
-            <div class="qcard-text">"$280,000 annually" — source says $312,000</div>
-            <div class="qcard-source">ndp_budget_fy25.csv:row 201 vs council_minutes_mar7.pdf:p.4</div>
-            <div class="qcard-actions">
-              <button class="qa qa-confirm">Confirm</button>
-              <button class="qa">Correct</button>
-              <button class="qa qa-release">Release</button>
-            </div>
-          </div>
-
-          <div class="qcard">
-            <div class="qcard-type"><span class="prov-tag prov-tag-blue">absent</span></div>
-            <div class="qcard-text">"No disclosure of Solaren contract" — expected in public filings period</div>
-            <div class="qcard-source">stageNUL · ohs_quarterly_q4.pdf</div>
-            <div class="qcard-actions">
-              <button class="qa qa-confirm">Confirm</button>
-              <button class="qa">Correct</button>
-              <button class="qa qa-release">Release</button>
-            </div>
-          </div>
-
-          <div class="qcard">
-            <div class="qcard-type"><span class="prov-tag prov-tag-amber">grounded</span></div>
-            <div class="qcard-text">"$4.2 million" — SUM(amount) WHERE dept=public_safety AND fy=2025</div>
-            <div class="qcard-source">ndp_budget_fy25.csv · rows 112–116</div>
-            <div class="qcard-actions">
-              <button class="qa qa-confirm">Confirm</button>
-              <button class="qa">Correct</button>
-              <button class="qa qa-release">Release</button>
-            </div>
-          </div>
-
-          <div class="qcard">
-            <div class="qcard-type"><span class="prov-tag prov-tag-amber">grounded</span></div>
-            <div class="qcard-text">"Councilmember Torres" — NER:PERSON, coref chain resolved</div>
-            <div class="qcard-source">council_minutes_mar7.pdf · p.4 · span[1204:1220]</div>
-            <div class="qcard-actions">
-              <button class="qa qa-confirm">Confirm</button>
-              <button class="qa">Correct</button>
-              <button class="qa qa-release">Release</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="mode-panel" id="mode-chat">
-      <div class="chat-layout">
-        <div class="chat-main">
-          <div class="chat-msgs">
-            <div class="chat-msg chat-msg-user">
-              <div class="chat-avatar av-user">M</div>
-              <div class="chat-bubble chat-bubble-user">What is NDP's financial relationship to OHS?</div>
-            </div>
-            <div class="chat-msg">
-              <div class="chat-avatar av-sys" style="font-family:var(--font-mono);font-size:9px">NL</div>
-              <div class="chat-bubble">
-                <div>This answer is fold-computable — traversing the CON graph directly.</div>
-                <br>
-                <div>The Nashville Downtown Partnership received <span class="g" style="cursor:default">$4.2M in public safety funds</span> in FY2025, routed through Metro Finance. The Partnership's <span class="g" style="cursor:default">Solaren contract ($312K)</span> operates in the same geographic zones as <span class="g" style="cursor:default">OHS encampment clearance operations</span>, with <span class="absent" style="cursor:default">no formal coordination agreement disclosed</span> in public filings.</div>
-                <div class="evidence-toggle" onclick="toggleEvidence(this)">
-                  <span class="ev-toggle-label">Evidence — 4 grounded claims</span>
-                  <span class="ev-toggle-count">show ↓</span>
-                </div>
-                <div class="ev-cards" style="display:none">
-                  <div class="ev-card">
-                    <div class="ev-card-claim">$4.2M public safety funds</div>
-                    <div class="ev-card-path">ndp_budget_fy25.csv · SUM(amount) · rows 112–116</div>
-                    <div class="ev-card-footer"><span class="prov-tag prov-tag-amber" style="font-size:10px">mechanical</span><button class="ev-rederive">re-derive</button></div>
-                  </div>
-                  <div class="ev-card">
-                    <div class="ev-card-claim">Solaren contract $312K</div>
-                    <div class="ev-card-path">ndp_budget_fy25.csv · row 201 · LOOKUP(overtime_actual)</div>
-                    <div class="ev-card-footer"><span class="prov-tag prov-tag-amber" style="font-size:10px">mechanical</span><button class="ev-rederive">re-derive</button></div>
-                  </div>
-                  <div class="ev-card">
-                    <div class="ev-card-claim">No coordination agreement disclosed</div>
-                    <div class="ev-card-path">stageNUL · ohs_quarterly_q4.pdf · expected disclosure pattern</div>
-                    <div class="ev-card-footer"><span class="prov-tag prov-tag-blue" style="font-size:10px">absent</span><button class="ev-rederive">re-derive</button></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="chat-input-wrap">
-            <textarea class="chat-textarea" rows="1" placeholder="Ask about the sources…"></textarea>
-            <button class="chat-send">Send</button>
-          </div>
-        </div>
-
-        <div class="chat-right">
-          <div class="cr-head">Instruction set</div>
-          <div class="cr-body">
-            <div class="iset-rule">
-              <div class="iset-rule-head">
-                <span class="iset-type stag stag-pdf">COREF</span>
-                <span class="iset-trigger">human correction</span>
-              </div>
-              <div class="iset-text">Torres → resolve "she" within same paragraph scope</div>
-            </div>
-            <div class="iset-rule">
-              <div class="iset-rule-head">
-                <span class="iset-type stag stag-csv">XREF</span>
-                <span class="iset-trigger">recursive</span>
-              </div>
-              <div class="iset-text">Budget line items co-occurring with minutes concept nodes → attempt cross-source link</div>
-            </div>
-            <div class="iset-rule">
-              <div class="iset-rule-head">
-                <span class="iset-type stag stag-txt">NUL</span>
-                <span class="iset-trigger">llm reflection</span>
-              </div>
-              <div class="iset-text">Absence of contract disclosure in quarterly filing = NUL event, not silence</div>
-            </div>
-            <div style="margin-top:10px;padding-top:10px;border-top:0.5px solid var(--color-border-tertiary)">
-              <div style="font-size:11px;color:var(--color-text-secondary);line-height:1.5">3 rules · 2 firings today · 1 candidate refinement pending review</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
 </div>
 
 <script>
-const claims = {
-  m1:{type:'grounded',text:'$4.2 million',source:'ndp_budget_fy25.csv · rows 112–116',op:'SUM(amount) WHERE dept=public_safety AND fy=2025',traversal:['stageINS → doc anchor minted','stageSIG → value recurrence detected','stageCON → linked to NDP entity','stageEVA → value confirmed'],conf:1.0,confColor:'#1D9E75'},
-  m2:{type:'grounded',text:'14.3 percent increase',source:'ndp_budget_fy25.csv · rows 88–91, 112–116',op:'(SUM_2025 - SUM_2024) / SUM_2024 × 100',traversal:['stageINS → anchors minted','stageCON → SUM_2024 / SUM_2025 linked','stageDEF → delta computed'],conf:1.0,confColor:'#1D9E75'},
-  m3:{type:'grounded',text:'Councilmember Torres',source:'council_minutes_mar7.pdf · p.4 · span[1204:1220]',op:'NER:PERSON + COREF_RESOLVE',traversal:['stageSIG → person pattern hit','stageINS → anchor minted','stageCON → coref chain resolved'],conf:0.97,confColor:'#BA7517'},
-  m4:{type:'grounded',text:'March 7',source:'council_minutes_mar7.pdf · p.1',op:'NER:DATE + temporal anchor',traversal:['stageSIG → date hit','stageCON → linked to Torres entity'],conf:0.99,confColor:'#1D9E75'},
-  m5:{type:'grounded',text:'Solaren International',source:'vendor_contracts.txt · line 88',op:'NER:ORG',traversal:['stageSIG → org pattern','stageINS → anchor minted'],conf:0.94,confColor:'#BA7517'},
-  m6:{type:'grounded',text:'2019',source:'vendor_contracts.txt · line 88',op:'NER:DATE',traversal:['stageSIG → year pattern','stageCON → linked to Solaren anchor'],conf:0.93,confColor:'#BA7517'},
-  m7:{type:'grounded',text:'$312,000',source:'ndp_budget_fy25.csv · row 201',op:'LOOKUP(overtime_actual)',traversal:['stageSIG → value hit','stageEVA → conflict with reported figure'],conf:1.0,confColor:'#1D9E75'},
-  c1:{type:'conflict',text:'$280,000 annually',source:'council_minutes_mar7.pdf:p.4 vs ndp_budget_fy25.csv:row 201',op:'stageEVA CONFLICT: reported=$280K, source=$312K',traversal:['stageSIG → value in both sources','stageEVA → value mismatch → DEF conflict emitted'],conf:0.9,confColor:'#BA7517',conflict:'Reported: $280,000 (NDP statement)\nSource log: $312,000 (budget row 201)\nDelta: $32,000 — resolution: null'},
-  a1:{type:'absent',text:'did not respond to requests for comment',source:'stageNUL · ohs_quarterly_q4.pdf',op:'NUL: expected OHS response entity not found in source log',traversal:['stageNUL → absence pattern matched','no OHS response anchor in indexed sources'],conf:0.85,confColor:'#378ADD'},
-  a2:{type:'absent',text:'No disclosure of the Solaren contract',source:'stageNUL · vendor_contracts.txt + ohs_quarterly_q4.pdf',op:'NUL: contract disclosure pattern expected, not found',traversal:['stageNUL → disclosure syntax scan','no matching entry in filing period'],conf:0.88,confColor:'#378ADD'},
+/* ===========================================================================
+   NL EXPLORER
+   ---------------------------------------------------------------------------
+   A prototype newsroom tool where every written claim is an event dispatched
+   through the EO-DB nine-case fold. The fold classifies each claim as
+   grounded / conflict / absent by walking the operator stages:
+     SIG → recognize signal (pattern hit in source)
+     INS → mint anchor (entity/value identity established)
+     CON → link to graph (cross-source edges)
+     DEF → establish term (assignment of value)
+     EVA → evaluate against definitions (confirm / conflict)
+     NUL → record absence (expected pattern not found)
+   Provenance is the traversal trace itself — nothing to reconstruct after
+   the fact because nothing was thrown away.
+============================================================================ */
+
+/* ---------- SOURCES ---------- */
+const SOURCES = [
+  { id: 'ndp', name: 'ndp_budget_fy25.csv', kind: 'csv', meta: '847 rows', indexed: true },
+  { id: 'min', name: 'council_minutes_mar7.pdf', kind: 'pdf', meta: '12 pp', indexed: true },
+  { id: 'ohs', name: 'ohs_quarterly_q4.pdf', kind: 'pdf', meta: '31 pp', indexed: true },
+  { id: 'ven', name: 'vendor_contracts.txt', kind: 'txt', meta: 'indexing…', indexed: false }
+];
+
+/* ---------- ARTICLE (claims are events in the given-log) ---------- */
+/* Each run is a text fragment; claims have .id and a :claim marker.       */
+const ARTICLE = [
+  { p: [
+    { t: 'The Nashville Downtown Partnership received ' },
+    { t: '$4.2 million', c: 'm1' },
+    { t: ' in public funds during fiscal year 2025, a ' },
+    { t: '14.3 percent increase', c: 'm2' },
+    { t: ' over the prior year, according to budget documents obtained from Metro Finance. The increase followed a motion by ' },
+    { t: 'Councilmember Torres', c: 'm3' },
+    { t: ' on ' },
+    { t: 'March 7', c: 'm4' },
+    { t: ' to amend the public safety allocation.' }
+  ]},
+  { p: [
+    { t: 'The Partnership has contracted with ' },
+    { t: 'Solaren International', c: 'm5' },
+    { t: ' for private security services since ' },
+    { t: '2019', c: 'm6' },
+    { t: ', at a cost the organization describes as ' },
+    { t: '$280,000 annually', c: 'c1' },
+    { t: '. Internal documents reviewed by this reporter put the figure at ' },
+    { t: '$312,000', c: 'm7' },
+    { t: ', a discrepancy the Partnership has not publicly explained.' }
+  ]},
+  { p: [
+    { t: "Metro's Office of Homeless Services " },
+    { t: 'did not respond to requests for comment', c: 'a1' },
+    { t: " about the overlap between the Partnership's security footprint and OHS encampment clearance operations. " },
+    { t: 'No disclosure of the Solaren contract', c: 'a2' },
+    { t: " appears in the Partnership's public filings for the period." }
+  ]}
+];
+
+/* ---------- CLAIMS (fold output — what the nine-case dispatch produced) */
+const CLAIMS = {
+  m1: {
+    type: 'grounded',
+    text: '$4.2 million',
+    source: 'ndp_budget_fy25.csv · rows 112–116',
+    op: 'SUM(amount) WHERE dept=public_safety AND fy=2025',
+    conf: 1.00,
+    trace: [
+      { op: 'SIG', txt: 'value pattern <code>\\$[\\d.]+M</code> hit — six occurrences aggregated' },
+      { op: 'INS', txt: 'document anchor minted for <strong>public_safety_2025</strong> line set' },
+      { op: 'CON', txt: 'linked to NDP entity via <strong>recipient_id</strong> column' },
+      { op: 'DEF', txt: '<strong>SUM</strong> evaluated: $4,231,440 → rounded presentation $4.2M' },
+      { op: 'EVA', txt: 'value confirmed against cross-check total; no conflict' }
+    ],
+    status: 'pending'
+  },
+  m2: {
+    type: 'grounded',
+    text: '14.3 percent increase',
+    source: 'ndp_budget_fy25.csv · rows 88–91 (2024), 112–116 (2025)',
+    op: '(SUM_2025 − SUM_2024) / SUM_2024 × 100',
+    conf: 1.00,
+    trace: [
+      { op: 'SIG', txt: 'year field populated on two disjoint row ranges' },
+      { op: 'INS', txt: 'two anchors minted: <strong>ps_2024</strong>, <strong>ps_2025</strong>' },
+      { op: 'CON', txt: 'anchors linked by <strong>dept=public_safety</strong> predicate' },
+      { op: 'DEF', txt: 'delta computed: (4,231,440 − 3,703,250) / 3,703,250 = 0.1426' },
+      { op: 'EVA', txt: 'result within plausibility bounds — no reconciliation needed' }
+    ],
+    status: 'pending'
+  },
+  m3: {
+    type: 'grounded',
+    text: 'Councilmember Torres',
+    source: 'council_minutes_mar7.pdf · p.4 · span[1204:1220]',
+    op: 'NER:PERSON + COREF_RESOLVE',
+    conf: 0.97,
+    trace: [
+      { op: 'SIG', txt: 'PERSON pattern hit; surface form "Councilmember Torres"' },
+      { op: 'INS', txt: 'anchor minted for <strong>person:torres_v</strong>' },
+      { op: 'CON', txt: 'coref chain resolved — three downstream "she" mentions linked' },
+      { op: 'EVA', txt: 'disambiguation score 0.97 vs. <strong>Torres, L.</strong> (sports page)' }
+    ],
+    status: 'pending'
+  },
+  m4: {
+    type: 'grounded',
+    text: 'March 7',
+    source: 'council_minutes_mar7.pdf · p.1 header',
+    op: 'NER:DATE + temporal_anchor',
+    conf: 0.99,
+    trace: [
+      { op: 'SIG', txt: 'DATE pattern on meeting header' },
+      { op: 'INS', txt: 'temporal anchor minted: <strong>2026-03-07</strong>' },
+      { op: 'CON', txt: 'linked to Torres motion record within same session' }
+    ],
+    status: 'pending'
+  },
+  m5: {
+    type: 'grounded',
+    text: 'Solaren International',
+    source: 'vendor_contracts.txt · line 88',
+    op: 'NER:ORG',
+    conf: 0.94,
+    trace: [
+      { op: 'SIG', txt: 'ORG pattern hit' },
+      { op: 'INS', txt: 'anchor minted: <strong>org:solaren_intl</strong>' },
+      { op: 'CON', txt: 'linked to NDP via <strong>vendor_of</strong> edge' }
+    ],
+    status: 'pending'
+  },
+  m6: {
+    type: 'grounded',
+    text: '2019',
+    source: 'vendor_contracts.txt · line 88',
+    op: 'NER:DATE (year-only)',
+    conf: 0.93,
+    trace: [
+      { op: 'SIG', txt: 'year pattern; no month/day' },
+      { op: 'CON', txt: 'linked to Solaren anchor as <strong>contract_since</strong>' }
+    ],
+    status: 'pending'
+  },
+  m7: {
+    type: 'grounded',
+    text: '$312,000',
+    source: 'ndp_budget_fy25.csv · row 201',
+    op: 'LOOKUP(vendor=solaren, fy=2025)',
+    conf: 1.00,
+    trace: [
+      { op: 'SIG', txt: 'value pattern hit on row 201' },
+      { op: 'INS', txt: 'anchor minted: <strong>contract_line_201</strong>' },
+      { op: 'CON', txt: 'linked to org:solaren_intl' },
+      { op: 'EVA', txt: 'value recorded; triggers conflict check against c1' }
+    ],
+    status: 'pending'
+  },
+  c1: {
+    type: 'conflict',
+    text: '$280,000 annually',
+    source: 'council_minutes_mar7.pdf · p.4 ⟷ ndp_budget_fy25.csv · row 201',
+    op: 'EVA: reported ≠ source-of-record',
+    conf: 0.90,
+    conflict: 'Reported value: $280,000 (NDP public statement, minutes p.4)\nSource value: $312,000 (budget row 201, overtime_actual column)\nDelta: $32,000 (+11.4%) — resolution: null',
+    trace: [
+      { op: 'SIG', txt: 'value pattern matched in both sources' },
+      { op: 'CON', txt: 'both anchors route to org:solaren_intl' },
+      { op: 'EVA', txt: 'value mismatch detected → <strong>conflict event emitted</strong>' },
+      { op: 'DEF', txt: 'neither value preferred — both held in superposition' }
+    ],
+    status: 'pending'
+  },
+  a1: {
+    type: 'absent',
+    text: 'did not respond to requests for comment',
+    source: 'stageNUL · expected OHS response entity not found',
+    op: 'NUL: expected_response_pattern ∉ indexed_sources',
+    conf: 0.85,
+    trace: [
+      { op: 'NUL', txt: 'absence pattern probed: <strong>OHS response</strong> in 14-day window' },
+      { op: 'SIG', txt: 'no matching anchor in ohs_quarterly_q4 or related threads' },
+      { op: 'EVA', txt: 'absence stands — three contact attempts logged, zero replies' }
+    ],
+    status: 'pending'
+  },
+  a2: {
+    type: 'absent',
+    text: 'No disclosure of the Solaren contract',
+    source: 'stageNUL · vendor_contracts.txt ∩ ohs_quarterly_q4.pdf',
+    op: 'NUL: disclosure_pattern ∉ filing_period',
+    conf: 0.88,
+    trace: [
+      { op: 'NUL', txt: 'disclosure pattern probed against Q4 filing schema' },
+      { op: 'SIG', txt: 'no "material contracts" section references Solaren' },
+      { op: 'EVA', txt: 'absence stands across Q1–Q4 2025 filings' }
+    ],
+    status: 'pending'
+  }
 };
 
-const typeLabels = {grounded:'Grounded · mechanical',conflict:'Conflict · EVA fired',absent:'Absent · NUL event'};
-const tagClass = {grounded:'prov-tag-amber',conflict:'prov-tag-red',absent:'prov-tag-blue'};
+/* ---------- CHAT ---------- */
+const CHAT_HISTORY = [
+  {
+    role: 'user',
+    text: "What is NDP's financial relationship to OHS?"
+  },
+  {
+    role: 'system',
+    meta: 'Fold-computable · CON-graph traversal',
+    html: `This answer traverses the CON graph directly — no LLM generation in the load-bearing claims.<br><br>
+The Nashville Downtown Partnership received <span class="g">$4.2M in public safety funds</span> in FY2025, routed through Metro Finance. The Partnership's <span class="g">Solaren contract ($312K)</span> operates in the same geographic zones as <span class="g">OHS encampment clearance operations</span>, with <span class="absent">no formal coordination agreement disclosed</span> in public filings.`,
+    evidence: [
+      { claim: '$4.2M public safety funds', path: 'ndp_budget_fy25.csv · SUM(amount) · rows 112–116', tag: 'mechanical', tagColor: 'amber' },
+      { claim: 'Solaren contract $312K', path: 'ndp_budget_fy25.csv · row 201 · LOOKUP(overtime_actual)', tag: 'mechanical', tagColor: 'amber' },
+      { claim: 'Same geographic zones', path: 'geo_polygon_overlap · ndp_security_zones ∩ ohs_sweep_logs', tag: 'mechanical', tagColor: 'amber' },
+      { claim: 'No coordination agreement', path: 'stageNUL · ohs_quarterly_q4.pdf · expected disclosure pattern', tag: 'absent', tagColor: 'blue' }
+    ]
+  }
+];
 
-function switchMode(m){
-  document.querySelectorAll('.mtab').forEach((t,i)=>{t.classList.toggle('active',['write','review','chat'][i]===m)});
-  document.querySelectorAll('.mode-panel').forEach(p=>p.classList.remove('active'));
-  document.getElementById('mode-'+m).classList.add('active');
+/* ---------- INSTRUCTION SET (learned refinement rules) ---------- */
+const ISET = [
+  { type: 'COREF', color: 'stag-pdf', trigger: 'human correction', text: 'Torres → resolve "she" within same paragraph scope' },
+  { type: 'XREF', color: 'stag-csv', trigger: 'recursive', text: 'Budget line items co-occurring with minutes concept nodes → attempt cross-source link' },
+  { type: 'NUL', color: 'stag-txt', trigger: 'llm reflection', text: 'Absence of contract disclosure in quarterly filing = NUL event, not silence' }
+];
+
+/* ============================================================ */
+/* ========== RENDERING ====================================== */
+/* ============================================================ */
+
+const $ = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => [...r.querySelectorAll(s)];
+
+let selectedClaimId = null;
+let selectedReviewId = null;
+
+/* ---- Sources ---- */
+function renderSources() {
+  $('#slist').innerHTML = SOURCES.map(s => `
+    <div class="sitem${s.indexed ? '' : ' pending'}">
+      <div class="sitem-name">${s.name}</div>
+      <div class="sitem-meta">
+        <span class="stag stag-${s.kind}">${s.kind.toUpperCase()}</span>${s.meta}
+      </div>
+    </div>
+  `).join('');
 }
 
-function showClaim(id){
-  const c = claims[id];
-  document.querySelectorAll('.g,.conflict,.absent').forEach(el=>el.classList.remove('active'));
-  const el = document.querySelector('[data-id="'+id+'"]');
-  if(el) el.classList.add('active');
-  document.getElementById('rp-empty').style.display='none';
-  const rc = document.getElementById('rp-content');
-  rc.style.display='flex';
-  document.getElementById('rp-type-label').textContent = typeLabels[c.type]||c.type;
-  document.getElementById('rp-claim-text').textContent = '"'+c.text+'"';
-  document.getElementById('rp-source').textContent = c.source;
-  document.getElementById('rp-op').textContent = c.op;
-  const cs = document.getElementById('rp-conflict-section');
-  if(c.conflict){cs.style.display='block';document.getElementById('rp-conflict').textContent=c.conflict;}
-  else{cs.style.display='none';}
-  const tv = document.getElementById('rp-traversal');
-  tv.innerHTML = c.traversal.map(s=>`<div class="traverse-step"><div class="traverse-step-dot"></div><div class="traverse-step-text">${s}</div></div>`).join('');
-  const cb = document.getElementById('rp-conf-bar');
-  cb.style.width=(c.conf*100)+'%';
-  cb.style.background=c.confColor;
+/* ---- Article body: render runs, wrap claims in span with class ---- */
+function articleHtml({interactive = true} = {}) {
+  return ARTICLE.map(para => {
+    const inner = para.p.map(r => {
+      if (!r.c) return escapeHtml(r.t);
+      const claim = CLAIMS[r.c];
+      const cls = claim.type === 'grounded' ? 'g' : claim.type === 'conflict' ? 'conflict' : 'absent';
+      const attrs = interactive
+        ? `class="${cls}" data-id="${r.c}"`
+        : `class="${cls}"`;
+      return `<span ${attrs}>${escapeHtml(r.t)}</span>`;
+    }).join('');
+    return `<p>${inner}</p>`;
+  }).join('');
 }
 
-function closeClaim(){
-  document.querySelectorAll('.g,.conflict,.absent').forEach(el=>el.classList.remove('active'));
-  document.getElementById('rp-empty').style.display='flex';
-  document.getElementById('rp-content').style.display='none';
+function renderArticleBody(container, {interactive = true} = {}) {
+  container.innerHTML = articleHtml({interactive});
+  if (interactive) {
+    container.querySelectorAll('[data-id]').forEach(el => {
+      el.addEventListener('click', () => showClaim(el.dataset.id));
+    });
+  }
 }
 
-function toggleEvidence(el){
-  const cards = el.nextElementSibling;
-  const open = cards.style.display!=='none';
-  cards.style.display = open?'none':'flex';
-  el.querySelector('.ev-toggle-count').textContent = open?'show ↓':'hide ↑';
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
+/* ---- Counts ---- */
+function renderCounts() {
+  const all = Object.values(CLAIMS);
+  const g = all.filter(c => c.type === 'grounded').length;
+  const c = all.filter(c => c.type === 'conflict').length;
+  const a = all.filter(c => c.type === 'absent').length;
+  $('#stat-g').textContent = g;
+  $('#stat-c').textContent = c;
+  $('#stat-a').textContent = a;
+  $('#counts-meta').innerHTML =
+    `<span class="c-g">${g} grounded</span> · <span class="c-c">${c} conflict</span> · <span class="c-a">${a} absent</span>`;
+}
+
+/* ---- Claim detail panel ---- */
+function showClaim(id) {
+  const claim = CLAIMS[id];
+  if (!claim) return;
+  selectedClaimId = id;
+
+  $$('.g, .conflict, .absent', $('#article-body')).forEach(el => el.classList.remove('active'));
+  const el = $(`[data-id="${id}"]`, $('#article-body'));
+  if (el) el.classList.add('active');
+
+  $('#rp-empty').style.display = 'none';
+  $('#rp-content').classList.add('visible');
+
+  const typeLabels = {
+    grounded: 'Grounded · mechanical',
+    conflict: 'Conflict · EVA fired',
+    absent: 'Absent · NUL event'
+  };
+  const typeLabel = $('#rp-type-label');
+  typeLabel.textContent = typeLabels[claim.type];
+  typeLabel.className = 'rphead-title type-' + claim.type;
+
+  const confColor =
+    claim.conf >= 0.97 ? 'var(--teal-mid)' :
+    claim.conf >= 0.85 ? 'var(--amber-mid)' : 'var(--red-mid)';
+
+  let body = `
+    <div class="prov-section">
+      <div class="prov-label">Claim</div>
+      <div class="prov-code">"${escapeHtml(claim.text)}"</div>
+    </div>
+    <div class="prov-section">
+      <div class="prov-label">Source</div>
+      <div class="prov-value">${escapeHtml(claim.source)}</div>
+    </div>
+    <div class="prov-section">
+      <div class="prov-label">Operation</div>
+      <div class="prov-code">${escapeHtml(claim.op)}</div>
+    </div>
+  `;
+
+  if (claim.conflict) {
+    body += `
+      <div class="prov-section">
+        <div class="prov-label">Conflict</div>
+        <div class="prov-code conflict-block">${escapeHtml(claim.conflict)}</div>
+      </div>
+    `;
+  }
+
+  body += `
+    <div class="prov-section">
+      <div class="prov-label">Fold traversal</div>
+      <div class="traverse">
+        ${claim.trace.map((step, i) => `
+          <div class="traverse-step">
+            <div class="traverse-step-rail">
+              <div class="traverse-step-dot fired"></div>
+              <div class="traverse-step-line"></div>
+            </div>
+            <div class="traverse-step-text">
+              <span class="op op-${step.op.toLowerCase()}">${step.op}</span>${step.txt}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <div class="prov-section">
+      <div class="prov-label">Confidence</div>
+      <div class="conf-bar-wrap">
+        <div class="conf-bar" style="width: ${Math.round(claim.conf * 100)}%; background: ${confColor};"></div>
+      </div>
+      <div class="conf-label">${claim.conf.toFixed(2)} · ${
+        claim.conf >= 0.97 ? 'mechanical' :
+        claim.conf >= 0.85 ? 'probabilistic' : 'weak'
+      }</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="prov-actions">
+      <button class="btn-sm">Correct</button>
+      <button class="btn-sm btn-sm-danger">Release</button>
+    </div>
+  `;
+
+  $('#rp-body').innerHTML = body;
+}
+
+function closeClaim() {
+  selectedClaimId = null;
+  $$('.g, .conflict, .absent', $('#article-body')).forEach(el => el.classList.remove('active'));
+  $('#rp-empty').style.display = 'flex';
+  $('#rp-content').classList.remove('visible');
+}
+
+/* ---- Review queue ---- */
+function renderReview() {
+  $('#review-article').innerHTML = `
+    <div class="article-meta">
+      <span style="color: var(--color-text-secondary)">Review mode · read only</span>
+    </div>
+    <h1 class="article-title" style="font-family: var(--font-serif)">The Private Police and the Public Budget</h1>
+    <div class="article-body">${articleHtml({interactive: false})}</div>
+  `;
+
+  const pending = Object.entries(CLAIMS).filter(([, c]) => c.status === 'pending');
+  $('#qhead-count').textContent = `${pending.length} remaining`;
+
+  const queue = Object.entries(CLAIMS)
+    .sort(([, a], [, b]) => {
+      const order = {conflict: 0, absent: 1, grounded: 2};
+      if (a.status !== b.status) return a.status === 'pending' ? -1 : 1;
+      return order[a.type] - order[b.type];
+    });
+
+  $('#qlist').innerHTML = queue.map(([id, c]) => {
+    if (c.status !== 'pending') return '';
+    const tagMap = {grounded: 'prov-tag-amber', conflict: 'prov-tag-red', absent: 'prov-tag-blue'};
+    const label = {grounded: 'grounded', conflict: 'conflict', absent: 'absent'}[c.type];
+    const selected = selectedReviewId === id ? ' selected' : '';
+    const opLine = c.type === 'conflict'
+      ? `"${escapeHtml(c.text)}" · source says ${escapeHtml(c.op.replace('EVA: ', ''))}`
+      : `"${escapeHtml(c.text)}" · ${escapeHtml(c.op)}`;
+    return `
+      <div class="qcard${selected}" data-id="${id}">
+        <div class="qcard-head">
+          <span class="prov-tag ${tagMap[c.type]}">${label}</span>
+        </div>
+        <div class="qcard-text">${opLine}</div>
+        <div class="qcard-source">${escapeHtml(c.source)}</div>
+        <div class="qcard-actions">
+          <button class="qa qa-confirm" data-action="confirm" data-id="${id}">Confirm</button>
+          <button class="qa" data-action="correct" data-id="${id}">Correct</button>
+          <button class="qa qa-release" data-action="release" data-id="${id}">Release</button>
+        </div>
+      </div>
+    `;
+  }).join('') || `<div class="qempty">queue clear<br><span style="opacity:0.7">all claims resolved</span></div>`;
+
+  $$('.qa', $('#qlist')).forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      const action = btn.dataset.action;
+      if (action === 'confirm') { CLAIMS[id].status = 'confirmed'; }
+      else if (action === 'release') { CLAIMS[id].status = 'released'; }
+      else if (action === 'correct') { CLAIMS[id].status = 'corrected'; }
+      renderReview();
+    });
+  });
+
+  $$('.qcard', $('#qlist')).forEach(card => {
+    card.addEventListener('click', () => {
+      selectedReviewId = card.dataset.id;
+      renderReview();
+    });
+  });
+}
+
+/* ---- Chat ---- */
+function renderChat() {
+  $('#chat-msgs').innerHTML = CHAT_HISTORY.map((m, i) => {
+    if (m.role === 'user') {
+      return `
+        <div class="chat-msg chat-msg-user">
+          <div class="chat-avatar av-user">M</div>
+          <div class="chat-bubble chat-bubble-user">${escapeHtml(m.text)}</div>
+        </div>
+      `;
+    }
+    // system
+    const evBlock = m.evidence ? `
+      <div class="evidence-toggle" data-ev="${i}">
+        <span class="ev-toggle-label">Evidence — ${m.evidence.length} claims</span>
+        <span class="ev-toggle-count">show ↓</span>
+      </div>
+      <div class="ev-cards" id="ev-cards-${i}">
+        ${m.evidence.map(e => `
+          <div class="ev-card">
+            <div class="ev-card-claim">${escapeHtml(e.claim)}</div>
+            <div class="ev-card-path">${escapeHtml(e.path)}</div>
+            <div class="ev-card-footer">
+              <span class="prov-tag prov-tag-${e.tagColor}">${e.tag}</span>
+              <button class="ev-rederive">re-derive</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    ` : '';
+
+    const metaNote = m.meta ? `
+      <div class="chat-meta-note">
+        <span class="fold-badge">fold</span>${escapeHtml(m.meta)}
+      </div>
+    ` : '';
+
+    return `
+      <div class="chat-msg">
+        <div class="chat-avatar av-sys">NL</div>
+        <div class="chat-bubble">
+          ${metaNote}
+          <div>${m.html}</div>
+          ${evBlock}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  $$('.evidence-toggle').forEach(el => {
+    el.addEventListener('click', () => {
+      const i = el.dataset.ev;
+      const cards = $('#ev-cards-' + i);
+      const open = cards.classList.toggle('open');
+      el.querySelector('.ev-toggle-count').textContent = open ? 'hide ↑' : 'show ↓';
+    });
+  });
+
+  // instruction set
+  $('#iset-body').innerHTML = ISET.map(r => `
+    <div class="iset-rule">
+      <div class="iset-rule-head">
+        <span class="iset-type stag ${r.color}">${r.type}</span>
+        <span class="iset-trigger">${r.trigger}</span>
+      </div>
+      <div class="iset-text">${escapeHtml(r.text)}</div>
+    </div>
+  `).join('') + `
+    <div class="iset-footer">
+      3 rules · 2 firings today · 1 candidate refinement pending review
+    </div>
+  `;
+}
+
+function sendChatMessage() {
+  const input = $('#chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+  CHAT_HISTORY.push({ role: 'user', text });
+  // stub response — in a real build this is the fold applied to the question
+  CHAT_HISTORY.push({
+    role: 'system',
+    meta: 'LLM synthesis · grounded in fold state',
+    html: `Indexed sources don't yet answer that directly. The fold has ${
+      Object.values(CLAIMS).filter(c => c.type === 'grounded').length
+    } grounded claims and ${
+      Object.values(CLAIMS).filter(c => c.type === 'absent').length
+    } NUL events against the corpus as loaded. Would you like me to register this as a new query intent, so future ingested sources are scanned for it?`,
+    evidence: null
+  });
+  input.value = '';
+  input.style.height = 'auto';
+  renderChat();
+  $('#chat-msgs').scrollTop = $('#chat-msgs').scrollHeight;
+}
+
+/* ---- Mode switching ---- */
+function switchMode(mode) {
+  $$('.mtab').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  $$('.mode-panel').forEach(p => p.classList.toggle('active', p.id === 'mode-' + mode));
+
+  if (mode === 'review') renderReview();
+  if (mode === 'chat') renderChat();
+}
+
+/* ---- Boot ---- */
+function init() {
+  renderSources();
+  renderArticleBody($('#article-body'));
+  renderCounts();
+
+  $$('.mtab').forEach(b => {
+    b.addEventListener('click', () => switchMode(b.dataset.mode));
+  });
+
+  $('#rp-close').addEventListener('click', closeClaim);
+
+  $('#chat-send').addEventListener('click', sendChatMessage);
+  $('#chat-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendChatMessage();
+    }
+  });
+  $('#chat-input').addEventListener('input', e => {
+    e.target.style.height = 'auto';
+    e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+  });
+}
+
+init();
 </script>
+</body>
+</html>
