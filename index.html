@@ -344,7 +344,7 @@
 
   /* ---------- RIGHT PANEL (PROVENANCE) ---------- */
   .right-panel {
-    width: 296px;
+    width: 400px;
     flex-shrink: 0;
     border-left: 0.5px solid var(--color-border-tertiary);
     display: flex;
@@ -536,6 +536,328 @@
     gap: 6px;
     margin-top: 8px;
   }
+
+  /* ---------- PROVENANCE VIEWS (new) ---------- */
+
+  /* Source chip — always at top of panel, anchors "this came from" */
+  .source-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 11px;
+    background: var(--color-background-secondary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    margin-bottom: 14px;
+    cursor: pointer;
+    transition: border-color 0.12s;
+  }
+  .source-chip:hover { border-color: var(--color-text-primary); }
+  .source-chip-name {
+    font-weight: 500;
+    color: var(--color-text-primary);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .source-chip-loc {
+    color: var(--color-text-secondary);
+    font-size: 10.5px;
+    flex-shrink: 0;
+  }
+  .source-chip-open {
+    color: var(--color-text-tertiary);
+    font-size: 13px;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+
+  /* Quote view — PDF sentence in context, with the claim span highlighted */
+  .quote-view {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    padding: 14px 16px;
+    font-family: var(--font-serif);
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--color-text-secondary);
+  }
+  .quote-view .highlight {
+    color: var(--color-text-primary);
+    background: var(--amber-fill);
+    padding: 1px 2px;
+    border-radius: 2px;
+    box-shadow: inset 0 -2px 0 var(--amber-mid);
+  }
+  .quote-view .ellipsis {
+    color: var(--color-text-tertiary);
+    font-style: italic;
+    letter-spacing: 0.05em;
+  }
+  .quote-meta {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--color-text-secondary);
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 0.5px solid var(--color-border-tertiary);
+    display: flex;
+    justify-content: space-between;
+  }
+
+  /* Cell view — CSV row/col tuple with neighbors */
+  .cell-view {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    overflow: hidden;
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+  .cell-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .cell-table th,
+  .cell-table td {
+    padding: 6px 10px;
+    text-align: left;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    border-right: 0.5px solid var(--color-border-tertiary);
+    white-space: nowrap;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cell-table th {
+    background: var(--color-background-secondary);
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    position: sticky;
+    top: 0;
+  }
+  .cell-table th.target-col {
+    background: var(--amber-fill);
+    color: var(--amber-text);
+  }
+  .cell-table td.target-cell {
+    background: var(--amber-fill);
+    color: var(--amber-text);
+    font-weight: 600;
+    box-shadow: inset 0 0 0 1.5px var(--amber-mid);
+  }
+  .cell-table td.neighbor { color: var(--color-text-secondary); }
+  .cell-table td.row-label {
+    font-size: 10px;
+    color: var(--color-text-tertiary);
+    background: var(--color-background-secondary);
+    font-weight: 500;
+  }
+  .cell-table tr:last-child td { border-bottom: none; }
+  .cell-table th:last-child,
+  .cell-table td:last-child { border-right: none; }
+  .cell-scroll {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  /* Derived view — expression box with drillable input list */
+  .derived-expr {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    background: var(--color-background-secondary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    padding: 10px 12px;
+    line-height: 1.55;
+    word-break: break-word;
+  }
+  .derived-expr .expr-op {
+    color: var(--amber-text);
+    font-weight: 600;
+  }
+  .derived-expr .expr-result {
+    display: block;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 0.5px dashed var(--color-border-secondary);
+    color: var(--color-text-primary);
+  }
+  .derived-expr .expr-result::before {
+    content: '= ';
+    color: var(--color-text-tertiary);
+    font-weight: normal;
+  }
+
+  .input-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .input-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    transition: border-color 0.12s, background 0.12s;
+  }
+  .input-item:hover {
+    border-color: var(--color-text-primary);
+    background: var(--color-background-secondary);
+  }
+  .input-kind {
+    font-size: 9px;
+    font-weight: 600;
+    padding: 1.5px 5px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    flex-shrink: 0;
+  }
+  .input-kind-cell { background: var(--teal-fill); color: var(--teal-text); }
+  .input-kind-quote { background: var(--amber-fill); color: var(--amber-text); }
+  .input-kind-derived { background: #E8E4F5; color: #3E2F7A; }
+  .input-loc {
+    color: var(--color-text-secondary);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .input-value {
+    color: var(--color-text-primary);
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+
+  /* Conflict view — two stacked provenances with delta */
+  .conflict-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 0.5px solid #F7C1C1;
+    border-radius: var(--border-radius-md);
+    overflow: hidden;
+  }
+  .conflict-side {
+    padding: 10px 12px;
+    background: var(--color-background-primary);
+  }
+  .conflict-side.reported {
+    background: var(--red-fill);
+    border-bottom: 0.5px solid #F7C1C1;
+  }
+  .conflict-side.source {
+    background: var(--color-background-primary);
+  }
+  .conflict-side-label {
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    margin-bottom: 5px;
+  }
+  .conflict-side.reported .conflict-side-label { color: var(--red-text); }
+  .conflict-side-value {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
+  .conflict-side-loc {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--color-text-secondary);
+    margin-top: 3px;
+  }
+  .conflict-delta {
+    padding: 8px 12px;
+    background: var(--color-background-secondary);
+    border-top: 0.5px solid var(--color-border-tertiary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    display: flex;
+    justify-content: space-between;
+  }
+  .conflict-delta-val {
+    color: var(--red-text);
+    font-weight: 600;
+  }
+
+  /* Absence view — the hole made visible */
+  .absence-view {
+    background: var(--color-background-primary);
+    border: 0.5px dashed var(--blue-mid);
+    border-radius: var(--border-radius-md);
+    padding: 14px 16px;
+  }
+  .absence-expected {
+    font-family: var(--font-serif);
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--color-text-primary);
+    margin-bottom: 10px;
+  }
+  .absence-expected em {
+    font-style: italic;
+    color: var(--blue-text);
+  }
+  .absence-scan {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--color-text-secondary);
+    line-height: 1.6;
+  }
+  .absence-scan-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 0;
+  }
+  .absence-scan-item::before {
+    content: '×';
+    color: var(--blue-mid);
+    font-weight: 600;
+    width: 10px;
+    text-align: center;
+  }
+
+  /* Subtle "inspect fold events" affordance — collapsed by default */
+  .inspect-fold {
+    margin-top: 10px;
+    font-size: 10.5px;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: color 0.12s;
+  }
+  .inspect-fold:hover { color: var(--color-text-secondary); }
+  .inspect-fold-body {
+    display: none;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 0.5px dashed var(--color-border-tertiary);
+  }
+  .inspect-fold-body.open { display: block; }
+
   .btn-sm {
     padding: 5px 11px;
     font-size: 11.5px;
@@ -953,7 +1275,8 @@
   /* small-screen fallback */
   @media (max-width: 1100px) {
     .sources { width: 160px; }
-    .right-panel, .chat-right { width: 248px; }
+    .right-panel { width: 320px; }
+    .chat-right { width: 248px; }
     .review-queue { width: 280px; }
     .editor-wrap, .review-article { padding: 24px 28px; }
   }
@@ -1117,143 +1440,248 @@ const ARTICLE = [
 ];
 
 /* ---------- CLAIMS (fold output — what the nine-case dispatch produced) */
+/* Each claim has a typed `prov` field describing HOW it came from its source.
+   The panel renders based on prov.kind:
+     quote    → PDF sentence in context, span highlighted
+     cell     → CSV row/col tuple with neighboring cells
+     derived  → expression + drillable list of input provenances (recursive)
+     conflict → two stacked provenances + delta
+     absence  → what was expected, where we scanned, what's missing          */
 const CLAIMS = {
   m1: {
     type: 'grounded',
     text: '$4.2 million',
-    source: 'ndp_budget_fy25.csv · rows 112–116',
-    op: 'SUM(amount) WHERE dept=public_safety AND fy=2025',
     conf: 1.00,
+    status: 'pending',
+    prov: {
+      kind: 'derived',
+      expr: 'SUM(amount) WHERE dept = public_safety AND fy = 2025',
+      op: 'SUM',
+      result: '$4,231,440',
+      display: '$4.2 million',
+      inputs: [
+        { kind: 'cell', src: 'ndp_budget_fy25.csv', row: 112, col: 'amount', value: '$823,400' },
+        { kind: 'cell', src: 'ndp_budget_fy25.csv', row: 113, col: 'amount', value: '$1,104,200' },
+        { kind: 'cell', src: 'ndp_budget_fy25.csv', row: 114, col: 'amount', value: '$890,000' },
+        { kind: 'cell', src: 'ndp_budget_fy25.csv', row: 115, col: 'amount', value: '$712,840' },
+        { kind: 'cell', src: 'ndp_budget_fy25.csv', row: 116, col: 'amount', value: '$701,000' }
+      ]
+    },
     trace: [
       { op: 'SIG', txt: 'value pattern <code>\\$[\\d.]+M</code> hit — six occurrences aggregated' },
       { op: 'INS', txt: 'document anchor minted for <strong>public_safety_2025</strong> line set' },
       { op: 'CON', txt: 'linked to NDP entity via <strong>recipient_id</strong> column' },
-      { op: 'DEF', txt: '<strong>SUM</strong> evaluated: $4,231,440 → rounded presentation $4.2M' },
-      { op: 'EVA', txt: 'value confirmed against cross-check total; no conflict' }
-    ],
-    status: 'pending'
+      { op: 'DEF', txt: '<strong>SUM</strong> evaluated: $4,231,440 → rounded presentation $4.2M' }
+    ]
   },
   m2: {
     type: 'grounded',
     text: '14.3 percent increase',
-    source: 'ndp_budget_fy25.csv · rows 88–91 (2024), 112–116 (2025)',
-    op: '(SUM_2025 − SUM_2024) / SUM_2024 × 100',
     conf: 1.00,
+    status: 'pending',
+    prov: {
+      kind: 'derived',
+      expr: '(SUM_2025 − SUM_2024) / SUM_2024 × 100',
+      op: 'PCT_DELTA',
+      result: '14.26%',
+      display: '14.3%',
+      inputs: [
+        {
+          kind: 'derived',
+          expr: 'SUM(amount) WHERE fy=2025',
+          op: 'SUM',
+          result: '$4,231,440',
+          label: 'FY2025 public safety total'
+        },
+        {
+          kind: 'derived',
+          expr: 'SUM(amount) WHERE fy=2024',
+          op: 'SUM',
+          result: '$3,702,260',
+          label: 'FY2024 public safety total'
+        }
+      ]
+    },
     trace: [
       { op: 'SIG', txt: 'year field populated on two disjoint row ranges' },
-      { op: 'INS', txt: 'two anchors minted: <strong>ps_2024</strong>, <strong>ps_2025</strong>' },
-      { op: 'CON', txt: 'anchors linked by <strong>dept=public_safety</strong> predicate' },
-      { op: 'DEF', txt: 'delta computed: (4,231,440 − 3,703,250) / 3,703,250 = 0.1426' },
-      { op: 'EVA', txt: 'result within plausibility bounds — no reconciliation needed' }
-    ],
-    status: 'pending'
+      { op: 'DEF', txt: 'delta computed: (4,231,440 − 3,702,260) / 3,702,260 = 0.1426' }
+    ]
   },
   m3: {
     type: 'grounded',
     text: 'Councilmember Torres',
-    source: 'council_minutes_mar7.pdf · p.4 · span[1204:1220]',
-    op: 'NER:PERSON + COREF_RESOLVE',
     conf: 0.97,
+    status: 'pending',
+    prov: {
+      kind: 'quote',
+      src: 'council_minutes_mar7.pdf',
+      page: 4,
+      before: "The meeting resumed at 2:47 p.m. following the public comment period. ",
+      highlight: "Councilmember Torres",
+      after: " introduced an amendment to the public safety appropriation, moving that $500,000 be redirected from the general fund reserve to the Downtown Partnership's security operations line.",
+      spanLabel: 'p.4 · span[1204:1220]'
+    },
     trace: [
       { op: 'SIG', txt: 'PERSON pattern hit; surface form "Councilmember Torres"' },
       { op: 'INS', txt: 'anchor minted for <strong>person:torres_v</strong>' },
-      { op: 'CON', txt: 'coref chain resolved — three downstream "she" mentions linked' },
-      { op: 'EVA', txt: 'disambiguation score 0.97 vs. <strong>Torres, L.</strong> (sports page)' }
-    ],
-    status: 'pending'
+      { op: 'CON', txt: 'coref chain resolved — three downstream "she" mentions linked' }
+    ]
   },
   m4: {
     type: 'grounded',
     text: 'March 7',
-    source: 'council_minutes_mar7.pdf · p.1 header',
-    op: 'NER:DATE + temporal_anchor',
     conf: 0.99,
+    status: 'pending',
+    prov: {
+      kind: 'quote',
+      src: 'council_minutes_mar7.pdf',
+      page: 1,
+      before: "Metropolitan Council of Nashville and Davidson County\nRegular Session · ",
+      highlight: "March 7, 2026",
+      after: "\nCouncil Chamber · 1:00 p.m.",
+      spanLabel: 'p.1 · header'
+    },
     trace: [
-      { op: 'SIG', txt: 'DATE pattern on meeting header' },
-      { op: 'INS', txt: 'temporal anchor minted: <strong>2026-03-07</strong>' },
-      { op: 'CON', txt: 'linked to Torres motion record within same session' }
-    ],
-    status: 'pending'
+      { op: 'SIG', txt: 'DATE pattern on meeting header' }
+    ]
   },
   m5: {
     type: 'grounded',
     text: 'Solaren International',
-    source: 'vendor_contracts.txt · line 88',
-    op: 'NER:ORG',
     conf: 0.94,
+    status: 'pending',
+    prov: {
+      kind: 'quote',
+      src: 'vendor_contracts.txt',
+      page: null,
+      before: "Line 88 — Vendor: ",
+      highlight: "Solaren International",
+      after: " (Solaren Intl., LLC) · Contract type: Private security services · Effective: 2019-04-01 · Current term expires: 2027-03-31",
+      spanLabel: 'line 88'
+    },
     trace: [
       { op: 'SIG', txt: 'ORG pattern hit' },
-      { op: 'INS', txt: 'anchor minted: <strong>org:solaren_intl</strong>' },
-      { op: 'CON', txt: 'linked to NDP via <strong>vendor_of</strong> edge' }
-    ],
-    status: 'pending'
+      { op: 'INS', txt: 'anchor minted: <strong>org:solaren_intl</strong>' }
+    ]
   },
   m6: {
     type: 'grounded',
     text: '2019',
-    source: 'vendor_contracts.txt · line 88',
-    op: 'NER:DATE (year-only)',
     conf: 0.93,
+    status: 'pending',
+    prov: {
+      kind: 'quote',
+      src: 'vendor_contracts.txt',
+      page: null,
+      before: "Line 88 — Vendor: Solaren International · Contract type: Private security services · Effective: ",
+      highlight: "2019-04-01",
+      after: " · Current term expires: 2027-03-31",
+      spanLabel: 'line 88 · effective date'
+    },
     trace: [
-      { op: 'SIG', txt: 'year pattern; no month/day' },
-      { op: 'CON', txt: 'linked to Solaren anchor as <strong>contract_since</strong>' }
-    ],
-    status: 'pending'
+      { op: 'SIG', txt: 'year pattern; full date 2019-04-01 captured, year-only surface form' }
+    ]
   },
   m7: {
     type: 'grounded',
     text: '$312,000',
-    source: 'ndp_budget_fy25.csv · row 201',
-    op: 'LOOKUP(vendor=solaren, fy=2025)',
     conf: 1.00,
+    status: 'pending',
+    prov: {
+      kind: 'cell',
+      src: 'ndp_budget_fy25.csv',
+      row: 201,
+      col: 'overtime_actual',
+      value: '$312,000',
+      // neighboring context: a few columns around the target, a few rows above and below
+      headers: ['row', 'vendor_id', 'vendor_name', 'line_item', 'overtime_budget', 'overtime_actual', 'variance'],
+      rows: [
+        [199, 'V-0447', 'Brightway Cleaning',    'janitorial',          '$18,000',  '$19,240',  '+$1,240'],
+        [200, 'V-0519', 'Metro Signs LLC',       'wayfinding',          '$4,200',   '$4,200',   '$0'],
+        [201, 'V-0088', 'Solaren International', 'security_overtime',   '$280,000', '$312,000', '+$32,000'],
+        [202, 'V-0088', 'Solaren International', 'security_base',       '$520,000', '$520,000', '$0'],
+        [203, 'V-0612', 'Nashville Pressure Wash','sidewalk_cleaning',  '$14,000',  '$13,880',  '−$120']
+      ]
+    },
     trace: [
       { op: 'SIG', txt: 'value pattern hit on row 201' },
-      { op: 'INS', txt: 'anchor minted: <strong>contract_line_201</strong>' },
-      { op: 'CON', txt: 'linked to org:solaren_intl' },
-      { op: 'EVA', txt: 'value recorded; triggers conflict check against c1' }
-    ],
-    status: 'pending'
+      { op: 'INS', txt: 'anchor minted: <strong>contract_line_201</strong>' }
+    ]
   },
   c1: {
     type: 'conflict',
     text: '$280,000 annually',
-    source: 'council_minutes_mar7.pdf · p.4 ⟷ ndp_budget_fy25.csv · row 201',
-    op: 'EVA: reported ≠ source-of-record',
     conf: 0.90,
-    conflict: 'Reported value: $280,000 (NDP public statement, minutes p.4)\nSource value: $312,000 (budget row 201, overtime_actual column)\nDelta: $32,000 (+11.4%) — resolution: null',
+    status: 'pending',
+    prov: {
+      kind: 'conflict',
+      reported: {
+        kind: 'quote',
+        src: 'council_minutes_mar7.pdf',
+        page: 4,
+        before: "Partnership President David Ellwood, speaking in support of the amendment, stated that the organization's contract with its private security provider ",
+        highlight: "\"represents an ongoing cost of approximately $280,000 annually\"",
+        after: " and that the proposed increase would cover expanded coverage in the Gulch and SoBro districts.",
+        spanLabel: 'p.4 · testimony span'
+      },
+      source: {
+        kind: 'cell',
+        src: 'ndp_budget_fy25.csv',
+        row: 201,
+        col: 'overtime_actual',
+        value: '$312,000'
+      },
+      delta: '+$32,000',
+      deltaPct: '+11.4%'
+    },
     trace: [
       { op: 'SIG', txt: 'value pattern matched in both sources' },
       { op: 'CON', txt: 'both anchors route to org:solaren_intl' },
       { op: 'EVA', txt: 'value mismatch detected → <strong>conflict event emitted</strong>' },
       { op: 'DEF', txt: 'neither value preferred — both held in superposition' }
-    ],
-    status: 'pending'
+    ]
   },
   a1: {
     type: 'absent',
     text: 'did not respond to requests for comment',
-    source: 'stageNUL · expected OHS response entity not found',
-    op: 'NUL: expected_response_pattern ∉ indexed_sources',
     conf: 0.85,
+    status: 'pending',
+    prov: {
+      kind: 'absence',
+      expected: 'A response from <em>Office of Homeless Services</em> press contact, within a 14-day window of three contact attempts.',
+      scanned: [
+        { src: 'inbox.mbox', note: 'three outbound, zero reply' },
+        { src: 'ohs_press_releases.xml', note: 'no press release mentioning NDP coordination' },
+        { src: 'ohs_quarterly_q4.pdf', note: 'no relevant section' }
+      ],
+      window: 'Feb 18 – Mar 4, 2026'
+    },
     trace: [
       { op: 'NUL', txt: 'absence pattern probed: <strong>OHS response</strong> in 14-day window' },
       { op: 'SIG', txt: 'no matching anchor in ohs_quarterly_q4 or related threads' },
       { op: 'EVA', txt: 'absence stands — three contact attempts logged, zero replies' }
-    ],
-    status: 'pending'
+    ]
   },
   a2: {
     type: 'absent',
     text: 'No disclosure of the Solaren contract',
-    source: 'stageNUL · vendor_contracts.txt ∩ ohs_quarterly_q4.pdf',
-    op: 'NUL: disclosure_pattern ∉ filing_period',
     conf: 0.88,
+    status: 'pending',
+    prov: {
+      kind: 'absence',
+      expected: 'A <em>material contracts</em> or <em>related-party transactions</em> disclosure naming Solaren International, expected in Q1–Q4 2025 Partnership filings.',
+      scanned: [
+        { src: 'ohs_quarterly_q4.pdf', note: '§ "material contracts" — no Solaren mention' },
+        { src: 'ndp_annual_990.pdf',   note: 'Schedule O — no vendor disclosed above threshold' },
+        { src: 'tn_sos_filings/',       note: 'no amendment filings referencing Solaren' }
+      ],
+      window: 'Jan 1 – Dec 31, 2025'
+    },
     trace: [
       { op: 'NUL', txt: 'disclosure pattern probed against Q4 filing schema' },
       { op: 'SIG', txt: 'no "material contracts" section references Solaren' },
       { op: 'EVA', txt: 'absence stands across Q1–Q4 2025 filings' }
-    ],
-    status: 'pending'
+    ]
   }
 };
 
@@ -1349,7 +1777,7 @@ function renderCounts() {
 }
 
 /* ---- Claim detail panel ---- */
-function showClaim(id) {
+function showClaim(id, opts = {}) {
   const claim = CLAIMS[id];
   if (!claim) return;
   selectedClaimId = id;
@@ -1362,9 +1790,9 @@ function showClaim(id) {
   $('#rp-content').classList.add('visible');
 
   const typeLabels = {
-    grounded: 'Grounded · mechanical',
-    conflict: 'Conflict · EVA fired',
-    absent: 'Absent · NUL event'
+    grounded: 'Grounded',
+    conflict: 'Conflict',
+    absent:   'Absent · NUL event'
   };
   const typeLabel = $('#rp-type-label');
   typeLabel.textContent = typeLabels[claim.type];
@@ -1374,48 +1802,19 @@ function showClaim(id) {
     claim.conf >= 0.97 ? 'var(--teal-mid)' :
     claim.conf >= 0.85 ? 'var(--amber-mid)' : 'var(--red-mid)';
 
+  // Claim statement (always shown)
   let body = `
     <div class="prov-section">
       <div class="prov-label">Claim</div>
       <div class="prov-code">"${escapeHtml(claim.text)}"</div>
     </div>
-    <div class="prov-section">
-      <div class="prov-label">Source</div>
-      <div class="prov-value">${escapeHtml(claim.source)}</div>
-    </div>
-    <div class="prov-section">
-      <div class="prov-label">Operation</div>
-      <div class="prov-code">${escapeHtml(claim.op)}</div>
-    </div>
   `;
 
-  if (claim.conflict) {
-    body += `
-      <div class="prov-section">
-        <div class="prov-label">Conflict</div>
-        <div class="prov-code conflict-block">${escapeHtml(claim.conflict)}</div>
-      </div>
-    `;
-  }
+  // Provenance — dispatch on kind
+  body += renderProvenance(claim.prov, { topLevel: true });
 
+  // Confidence
   body += `
-    <div class="prov-section">
-      <div class="prov-label">Fold traversal</div>
-      <div class="traverse">
-        ${claim.trace.map((step, i) => `
-          <div class="traverse-step">
-            <div class="traverse-step-rail">
-              <div class="traverse-step-dot fired"></div>
-              <div class="traverse-step-line"></div>
-            </div>
-            <div class="traverse-step-text">
-              <span class="op op-${step.op.toLowerCase()}">${step.op}</span>${step.txt}
-            </div>
-          </div>
-        `).join('')}
-      </div>
-    </div>
-
     <div class="prov-section">
       <div class="prov-label">Confidence</div>
       <div class="conf-bar-wrap">
@@ -1426,9 +1825,34 @@ function showClaim(id) {
         claim.conf >= 0.85 ? 'probabilistic' : 'weak'
       }</div>
     </div>
+  `;
 
+  // Inspect fold events — collapsed affordance, the old traversal lives here
+  if (claim.trace && claim.trace.length) {
+    body += `
+      <div class="inspect-fold" data-toggle="fold">
+        <span id="fold-caret">▸</span> inspect fold events (${claim.trace.length})
+      </div>
+      <div class="inspect-fold-body" id="fold-body">
+        <div class="traverse">
+          ${claim.trace.map(step => `
+            <div class="traverse-step">
+              <div class="traverse-step-rail">
+                <div class="traverse-step-dot fired"></div>
+                <div class="traverse-step-line"></div>
+              </div>
+              <div class="traverse-step-text">
+                <span class="op op-${step.op.toLowerCase()}">${step.op}</span>${step.txt}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  body += `
     <div class="divider"></div>
-
     <div class="prov-actions">
       <button class="btn-sm">Correct</button>
       <button class="btn-sm btn-sm-danger">Release</button>
@@ -1436,6 +1860,211 @@ function showClaim(id) {
   `;
 
   $('#rp-body').innerHTML = body;
+
+  // wire up the fold-events toggle
+  const foldToggle = $('[data-toggle="fold"]', $('#rp-body'));
+  if (foldToggle) {
+    foldToggle.addEventListener('click', () => {
+      const b = $('#fold-body');
+      const caret = $('#fold-caret');
+      const open = b.classList.toggle('open');
+      caret.textContent = open ? '▾' : '▸';
+    });
+  }
+
+  // wire up input-item drill-down (for derived prov)
+  $$('.input-item', $('#rp-body')).forEach(item => {
+    item.addEventListener('click', () => {
+      // Drill into nested derivation — in a real app this would navigate
+      // to a sub-panel; here we flash it to show the intent
+      item.style.transition = 'background 0.2s';
+      item.style.background = 'var(--amber-fill)';
+      setTimeout(() => item.style.background = '', 400);
+    });
+  });
+}
+
+/* Render a provenance object. Returns HTML string. */
+function renderProvenance(prov, { topLevel = false } = {}) {
+  if (!prov) return '';
+
+  switch (prov.kind) {
+    case 'quote':      return renderQuoteProv(prov, topLevel);
+    case 'cell':       return renderCellProv(prov, topLevel);
+    case 'derived':    return renderDerivedProv(prov, topLevel);
+    case 'conflict':   return renderConflictProv(prov, topLevel);
+    case 'absence':    return renderAbsenceProv(prov, topLevel);
+    default: return `<div class="prov-section"><div class="prov-code">${escapeHtml(JSON.stringify(prov))}</div></div>`;
+  }
+}
+
+function renderQuoteProv(p, topLevel) {
+  const loc = p.page ? `${p.src} · p.${p.page}` : p.src;
+  return `
+    <div class="prov-section">
+      <div class="prov-label">Source quote</div>
+      <div class="source-chip">
+        <span class="source-chip-name">${escapeHtml(p.src)}</span>
+        <span class="source-chip-loc">${p.page ? 'p.' + p.page : p.spanLabel}</span>
+        <span class="source-chip-open">↗</span>
+      </div>
+      <div class="quote-view">
+        <span>${escapeHtml(p.before)}</span><span class="highlight">${escapeHtml(p.highlight)}</span><span>${escapeHtml(p.after)}</span>
+        <div class="quote-meta">
+          <span>${escapeHtml(p.spanLabel)}</span>
+          <span>open in source →</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderCellProv(p, topLevel) {
+  const targetColIdx = p.headers.indexOf(p.col);
+  const rowsHtml = p.rows.map(row => {
+    const isTarget = row[0] === p.row;
+    const cells = row.map((v, i) => {
+      if (i === 0) return `<td class="row-label">${escapeHtml(String(v))}</td>`;
+      const isTargetCell = isTarget && i === targetColIdx;
+      const cls = isTargetCell ? 'target-cell' : 'neighbor';
+      return `<td class="${cls}">${escapeHtml(String(v))}</td>`;
+    }).join('');
+    return `<tr>${cells}</tr>`;
+  }).join('');
+
+  const headersHtml = p.headers.map((h, i) => {
+    const cls = i === targetColIdx ? 'target-col' : '';
+    return `<th class="${cls}">${escapeHtml(h)}</th>`;
+  }).join('');
+
+  return `
+    <div class="prov-section">
+      <div class="prov-label">Source cell</div>
+      <div class="source-chip">
+        <span class="source-chip-name">${escapeHtml(p.src)}</span>
+        <span class="source-chip-loc">row ${p.row} · ${escapeHtml(p.col)}</span>
+        <span class="source-chip-open">↗</span>
+      </div>
+      <div class="cell-view">
+        <div class="cell-scroll">
+          <table class="cell-table">
+            <thead><tr>${headersHtml}</tr></thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderDerivedProv(p, topLevel) {
+  // nested derivations: show the expression, then list inputs.
+  // inputs are clickable; leaves (quote/cell) open the leaf view, nested
+  // derived inputs drill one level deeper.
+  const inputsHtml = (p.inputs || []).map((inp, i) => {
+    let loc, value, kindClass;
+    if (inp.kind === 'cell') {
+      loc = `${inp.src} · row ${inp.row} · ${inp.col}`;
+      value = inp.value;
+      kindClass = 'input-kind-cell';
+    } else if (inp.kind === 'quote') {
+      loc = `${inp.src}${inp.page ? ' · p.' + inp.page : ''}`;
+      value = '"' + (inp.highlight.length > 30 ? inp.highlight.slice(0,28) + '…' : inp.highlight) + '"';
+      kindClass = 'input-kind-quote';
+    } else if (inp.kind === 'derived') {
+      loc = inp.label || inp.expr;
+      value = inp.result;
+      kindClass = 'input-kind-derived';
+    }
+    return `
+      <div class="input-item" data-input-idx="${i}">
+        <span class="input-kind ${kindClass}">${inp.kind}</span>
+        <span class="input-loc">${escapeHtml(loc)}</span>
+        <span class="input-value">${escapeHtml(value)}</span>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="prov-section">
+      <div class="prov-label">Operation</div>
+      <div class="derived-expr">
+        ${escapeHtml(p.expr)}
+        <span class="expr-result">${escapeHtml(p.result)}</span>
+      </div>
+    </div>
+    <div class="prov-section">
+      <div class="prov-label">Inputs · ${(p.inputs || []).length}</div>
+      <div class="input-list">${inputsHtml}</div>
+    </div>
+  `;
+}
+
+function renderConflictProv(p, topLevel) {
+  const reportedLoc = p.reported.kind === 'quote'
+    ? `${p.reported.src} · p.${p.reported.page}`
+    : `${p.reported.src} · row ${p.reported.row}`;
+  const sourceLoc = p.source.kind === 'cell'
+    ? `${p.source.src} · row ${p.source.row} · ${p.source.col}`
+    : `${p.source.src} · p.${p.source.page}`;
+
+  const reportedValue = p.reported.kind === 'quote' ? p.reported.highlight : p.reported.value;
+  const sourceValue = p.source.kind === 'cell' ? p.source.value : p.source.highlight;
+
+  // Render the quote-in-context for the reported side, since the human voice matters
+  let reportedBody = '';
+  if (p.reported.kind === 'quote') {
+    reportedBody = `
+      <div class="quote-view" style="margin-top: 8px;">
+        <span>${escapeHtml(p.reported.before)}</span><span class="highlight">${escapeHtml(p.reported.highlight)}</span><span>${escapeHtml(p.reported.after)}</span>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="prov-section">
+      <div class="prov-label">Two sources disagree</div>
+      <div class="conflict-stack">
+        <div class="conflict-side reported">
+          <div class="conflict-side-label">Reported</div>
+          <div class="conflict-side-value">${escapeHtml(reportedValue)}</div>
+          <div class="conflict-side-loc">${escapeHtml(reportedLoc)}</div>
+        </div>
+        <div class="conflict-side source">
+          <div class="conflict-side-label">Source of record</div>
+          <div class="conflict-side-value">${escapeHtml(sourceValue)}</div>
+          <div class="conflict-side-loc">${escapeHtml(sourceLoc)}</div>
+        </div>
+        <div class="conflict-delta">
+          <span>Δ</span>
+          <span class="conflict-delta-val">${escapeHtml(p.delta)} · ${escapeHtml(p.deltaPct)}</span>
+        </div>
+      </div>
+      ${reportedBody}
+    </div>
+  `;
+}
+
+function renderAbsenceProv(p, topLevel) {
+  return `
+    <div class="prov-section">
+      <div class="prov-label">Expected</div>
+      <div class="absence-view">
+        <div class="absence-expected">${p.expected}</div>
+        <div class="absence-scan">
+          ${p.scanned.map(s => `
+            <div class="absence-scan-item">
+              <span>${escapeHtml(s.src)}</span>
+              <span style="color: var(--color-text-tertiary); margin-left: 6px;">— ${escapeHtml(s.note)}</span>
+            </div>
+          `).join('')}
+        </div>
+        <div style="margin-top: 10px; padding-top: 8px; border-top: 0.5px dashed var(--color-border-tertiary); font-family: var(--font-mono); font-size: 10.5px; color: var(--color-text-secondary);">
+          window: ${escapeHtml(p.window)}
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function closeClaim() {
@@ -1446,6 +2075,39 @@ function closeClaim() {
 }
 
 /* ---- Review queue ---- */
+
+/* Short human-readable summary of a claim's provenance, for list rendering */
+function provSummary(claim) {
+  const p = claim.prov;
+  if (!p) return '';
+  switch (p.kind) {
+    case 'quote':    return 'direct quote';
+    case 'cell':     return `cell value · ${p.col}`;
+    case 'derived':  return p.op + '(' + (p.inputs || []).length + ' inputs)';
+    case 'conflict': return 'two sources disagree';
+    case 'absence':  return 'expected pattern not found';
+    default: return '';
+  }
+}
+
+/* Short locator string (source filename + position) */
+function provLocator(claim) {
+  const p = claim.prov;
+  if (!p) return '';
+  switch (p.kind) {
+    case 'quote':    return `${p.src}${p.page ? ' · p.' + p.page : ''}`;
+    case 'cell':     return `${p.src} · row ${p.row} · ${p.col}`;
+    case 'derived':  return `derived · ${(p.inputs || []).length} inputs`;
+    case 'conflict': {
+      const r = p.reported.kind === 'quote' ? `${p.reported.src}:p.${p.reported.page}` : `${p.reported.src}:row ${p.reported.row}`;
+      const s = p.source.kind === 'cell' ? `${p.source.src}:row ${p.source.row}` : `${p.source.src}:p.${p.source.page}`;
+      return `${r} ⟷ ${s}`;
+    }
+    case 'absence':  return `scanned ${p.scanned.length} sources · window ${p.window}`;
+    default: return '';
+  }
+}
+
 function renderReview() {
   $('#review-article').innerHTML = `
     <div class="article-meta">
@@ -1470,16 +2132,18 @@ function renderReview() {
     const tagMap = {grounded: 'prov-tag-amber', conflict: 'prov-tag-red', absent: 'prov-tag-blue'};
     const label = {grounded: 'grounded', conflict: 'conflict', absent: 'absent'}[c.type];
     const selected = selectedReviewId === id ? ' selected' : '';
-    const opLine = c.type === 'conflict'
-      ? `"${escapeHtml(c.text)}" · source says ${escapeHtml(c.op.replace('EVA: ', ''))}`
-      : `"${escapeHtml(c.text)}" · ${escapeHtml(c.op)}`;
+
+    // Derive a short summary line and source locator from the provenance shape
+    const summary = provSummary(c);
+    const locator = provLocator(c);
+
     return `
       <div class="qcard${selected}" data-id="${id}">
         <div class="qcard-head">
           <span class="prov-tag ${tagMap[c.type]}">${label}</span>
         </div>
-        <div class="qcard-text">${opLine}</div>
-        <div class="qcard-source">${escapeHtml(c.source)}</div>
+        <div class="qcard-text">"${escapeHtml(c.text)}" · ${escapeHtml(summary)}</div>
+        <div class="qcard-source">${escapeHtml(locator)}</div>
         <div class="qcard-actions">
           <button class="qa qa-confirm" data-action="confirm" data-id="${id}">Confirm</button>
           <button class="qa" data-action="correct" data-id="${id}">Correct</button>
