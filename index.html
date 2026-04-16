@@ -206,6 +206,9 @@
   .stag-csv { background: var(--teal-fill); color: var(--teal-text); }
   .stag-pdf { background: var(--amber-fill); color: var(--amber-text); }
   .stag-txt { background: var(--blue-fill); color: var(--blue-text); }
+  .dest-local { background: var(--color-background-tertiary); color: var(--color-text-secondary); }
+  .dest-gated { background: var(--blue-fill); color: var(--blue-text); }
+  .dest-public { background: var(--teal-fill); color: var(--teal-text); }
   .sadd {
     margin: 8px 10px 10px;
     padding: 9px;
@@ -1926,6 +1929,26 @@
         <div id="mx-err" class="ws-err" hidden></div>
       </div>
       <div class="ws-section">
+        <div class="ws-section-title">PROVeo endpoint</div>
+        <div class="ws-section-sub">Backend webhook that handles redaction, Archive.org upload, and Matrix media sync. Leave blank to keep uploads local-only.</div>
+        <div class="ws-form-row">
+          <label for="proveo-url">Webhook URL</label>
+          <input id="proveo-url" class="ws-input" type="text" placeholder="https://n8n.example.com/webhook/PROVeo">
+        </div>
+        <div class="ws-form-row">
+          <label>Default destination for new uploads</label>
+          <div class="ws-btn-row" style="gap:14px">
+            <label class="ws-toggle"><input type="radio" name="upload-dest" value="local"> Local only</label>
+            <label class="ws-toggle"><input type="radio" name="upload-dest" value="public"> Public · Archive.org</label>
+            <label class="ws-toggle"><input type="radio" name="upload-dest" value="gated"> Gated · Matrix room</label>
+          </div>
+        </div>
+        <div class="ws-btn-row">
+          <button class="btn-sm btn-sm-primary" id="proveo-save">Save settings</button>
+          <span class="cite-pick-note">You'll be asked per-upload; this just sets the default.</span>
+        </div>
+      </div>
+      <div class="ws-section">
         <div class="ws-section-title">Offline / local only</div>
         <div class="ws-section-sub">Keep working without Matrix. Log and sources stay in this browser.</div>
         <label class="ws-toggle">
@@ -1959,6 +1982,50 @@
           <input type="checkbox" id="toggle-sample-in"> Show built-in sample article &amp; sources
         </label>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== UPLOAD DESTINATION MODAL ===== -->
+<div id="updest-modal" class="cite-modal" hidden>
+  <div class="cite-modal-backdrop" id="updest-backdrop"></div>
+  <div class="ws-modal-body">
+    <div class="cite-modal-head">
+      <div>
+        <div class="cite-modal-title">Where should this source live?</div>
+        <div class="cite-modal-sub" id="updest-sub">Pick a destination for this file.</div>
+      </div>
+      <button class="rphead-close" id="updest-close">×</button>
+    </div>
+    <div class="ws-section">
+      <div class="ws-form-row">
+        <label>Destination</label>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <label class="ws-toggle"><input type="radio" name="updest" value="local"> <div><strong>Local only</strong><div class="ws-section-sub" style="margin:0">Stays in this browser. No one else can see it.</div></div></label>
+          <label class="ws-toggle"><input type="radio" name="updest" value="gated"> <div><strong>Gated — Matrix room</strong><div class="ws-section-sub" style="margin:0">Uploaded to the active workspace room. Visible only to room members.</div></div></label>
+          <label class="ws-toggle"><input type="radio" name="updest" value="public"> <div><strong>Public — Archive.org</strong><div class="ws-section-sub" style="margin:0">Permanent public record. Redacted copy goes to Archive.org; original stays in the Matrix room if there are redactions.</div></div></label>
+        </div>
+      </div>
+      <div class="ws-form-row" id="updest-title-row" hidden>
+        <label for="updest-title">Title</label>
+        <input id="updest-title" class="ws-input" type="text">
+      </div>
+      <div class="ws-form-row" id="updest-desc-row" hidden>
+        <label for="updest-desc">Description (optional)</label>
+        <input id="updest-desc" class="ws-input" type="text">
+      </div>
+      <div class="ws-form-row" id="updest-consent-row" hidden>
+        <label>Consent (required for public)</label>
+        <label class="ws-toggle"><input type="checkbox" id="consent-permanence"> <span>I understand this upload is <strong>permanent</strong> on Archive.org.</span></label>
+        <label class="ws-toggle"><input type="checkbox" id="consent-privacy"> <span>No <strong>private information</strong> remains in the copy I'm publishing.</span></label>
+        <label class="ws-toggle"><input type="checkbox" id="consent-rights"> <span>I have the <strong>rights</strong> to publish this content.</span></label>
+      </div>
+      <div id="updest-err" class="ws-err" hidden></div>
+    </div>
+    <div class="cite-modal-actions">
+      <span id="updest-note" class="cite-pick-note"></span>
+      <button class="btn-sm" id="updest-cancel">Skip</button>
+      <button class="btn-sm btn-sm-primary" id="updest-confirm">Upload</button>
     </div>
   </div>
 </div>
@@ -2337,11 +2404,18 @@ function renderSources() {
     const delBtn = s.user_added
       ? `<button class="sitem-del" data-del-src="${s.id}" title="Remove source">×</button>`
       : '';
+    const destTag = s.user_added
+      ? (s.destination === 'public'
+          ? `<span class="stag dest-public" title="${escapeHtml(s.archive_url || '')}">ARCHIVE</span>`
+          : s.destination === 'gated'
+            ? `<span class="stag dest-gated" title="${escapeHtml(s.matrix_room_id || '')}">MATRIX</span>`
+            : `<span class="stag dest-local">LOCAL</span>`)
+      : '';
     return `
       <div class="sitem${s.indexed ? '' : ' pending'}" data-src-id="${s.id || ''}" data-open-src="${s.id || ''}">
         <div class="sitem-name">${escapeHtml(s.name)}</div>
         <div class="sitem-meta">
-          <span class="stag stag-${kindTag}">${s.kind.toUpperCase()}</span>${escapeHtml(s.meta || '')}
+          <span class="stag stag-${kindTag}">${s.kind.toUpperCase()}</span>${destTag}${escapeHtml(s.meta || '')}
         </div>
         ${delBtn}
       </div>
@@ -3184,7 +3258,13 @@ self.addEventListener('message', (ev) => {
         kind: evt.payload.kind,
         meta: evt.payload.meta || '',
         indexed: true,
-        user_added: true
+        user_added: true,
+        destination: evt.payload.destination || 'local',
+        archive_url: evt.payload.archive_url || null,
+        archive_identifier: evt.payload.archive_identifier || null,
+        matrix_mxc: evt.payload.matrix_mxc || null,
+        matrix_room_id: evt.payload.matrix_room_id || null,
+        sha256: evt.payload.sha256 || null
       };
       continue;
     }
@@ -3304,13 +3384,15 @@ function isTextLike(name) {
 async function handleUpload(files) {
   const list = Array.from(files || []);
   if (!list.length) return;
-  let added = 0, skipped = 0;
+  let added = 0, skipped = 0, published = 0;
   for (const file of list) {
     if (!isTextLike(file.name)) {
       console.warn('[upload] skipping non-text file', file.name);
       skipped++;
       continue;
     }
+    const choice = await promptUploadDestination(file);
+    if (!choice) { skipped++; continue; } // user cancelled / skipped
     try {
       const text = await file.text();
       const id = 's_' + ulid().slice(-10);
@@ -3319,24 +3401,53 @@ async function handleUpload(files) {
       const meta = kind === 'csv'
         ? `${lineCount - 1} rows · ${humanSize(file.size)}`
         : `${humanSize(file.size)} · ${lineCount} lines`;
+
+      // If a non-local destination was chosen, post to the PROVeo webhook
+      // first. If the webhook fails we abort this file — the user asked
+      // for a remote copy, so saving only the local copy would be lying.
+      let proveo = null;
+      if (choice.visibility !== 'local') {
+        proveo = await uploadViaProveo(file, choice.visibility, {
+          title: choice.title,
+          description: choice.description
+        });
+        published++;
+      }
+
       await storage.saveSource(id, text);
       SOURCE_TEXT[id] = text;
       await appendEventAndRefold({
         op: 'SRC',
         site: `source:${id}`,
         resolution: 'Figure',
-        payload: { id, name: file.name, kind, meta, size: file.size, lines: lineCount },
+        payload: {
+          id, name: file.name, kind, meta,
+          size: file.size, lines: lineCount,
+          destination: choice.visibility,
+          archive_url: proveo?.archive?.url || null,
+          archive_identifier: proveo?.archive?.identifier || null,
+          matrix_mxc: proveo?.matrix?.mxc || null,
+          matrix_room_id: proveo?.matrix?.room_id || null,
+          sha256: proveo?.archive?.redacted_sha256 || proveo?.matrix?.original_sha256 || null
+        },
         author: 'human'
       });
       added++;
     } catch (err) {
       console.error('[upload] failed for', file.name, err);
+      showToast(`upload failed: ${err.message || 'unknown error'}`);
       skipped++;
     }
   }
   renderSources();
-  if (added) showToast(`added ${added} source${added === 1 ? '' : 's'}${skipped ? ` · skipped ${skipped}` : ''}`);
-  else if (skipped) showToast(`skipped ${skipped} file${skipped === 1 ? '' : 's'} (unsupported)`);
+  if (added) {
+    const parts = [`added ${added} source${added === 1 ? '' : 's'}`];
+    if (published) parts.push(`${published} published`);
+    if (skipped) parts.push(`skipped ${skipped}`);
+    showToast(parts.join(' · '));
+  } else if (skipped) {
+    showToast(`skipped ${skipped} file${skipped === 1 ? '' : 's'}`);
+  }
 }
 
 function wireUploads() {
@@ -3783,7 +3894,12 @@ async function showSourceViewer(id) {
   if (!src) return;
   const modal = $('#src-viewer');
   $('#src-viewer-title').textContent = src.name;
-  $('#src-viewer-sub').textContent = `${(src.kind || 'txt').toUpperCase()} · ${src.meta || ''}`;
+  const destBits = [];
+  if (src.destination) destBits.push(`destination: ${src.destination}`);
+  if (src.archive_url) destBits.push(`<a href="${escapeHtml(src.archive_url)}" target="_blank" rel="noopener" style="color:var(--teal-text); text-decoration:underline">archive.org ↗</a>`);
+  if (src.matrix_mxc) destBits.push(`matrix: <span style="font-family:var(--font-mono)">${escapeHtml(src.matrix_mxc)}</span>`);
+  if (src.sha256) destBits.push(`sha256: <span style="font-family:var(--font-mono)">${escapeHtml(src.sha256.slice(0, 16))}…</span>`);
+  $('#src-viewer-sub').innerHTML = `${(src.kind || 'txt').toUpperCase()} · ${escapeHtml(src.meta || '')}${destBits.length ? ' · ' + destBits.join(' · ') : ''}`;
   const textEl = $('#src-viewer-text');
   textEl.textContent = 'Loading…';
   modal.hidden = false;
@@ -3806,6 +3922,161 @@ function wireSourceViewer() {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !$('#src-viewer').hidden) hideSourceViewer();
   });
+}
+
+/* ======================================================================
+   PROVeo WEBHOOK + UPLOAD DESTINATION
+   ----------------------------------------------------------------------
+   PROVeo is an external n8n workflow that handles redaction, Archive.org
+   dedup + upload, and Matrix media sync. Schema per the workflow:
+     body: { visibility: 'public'|'gated', kind, mime, filename, title,
+             description, license, parent_identifier?, claim_id?,
+             redactions?, matrix_room_id?, consent_acknowledged? }
+     binary: the file bytes
+   Frontend just posts multipart/form-data; backend returns archive_url +
+   matrix mxc + hashes. Storing those on the source lets later exports
+   carry the provenance forward.
+====================================================================== */
+const LS_PROVEO_URL = 'nl.proveoUrl.v1';
+const LS_UPLOAD_DEST = 'nl.uploadDest.v1';
+
+let PROVEO_URL = (() => { try { return localStorage.getItem(LS_PROVEO_URL) || ''; } catch { return ''; } })();
+let UPLOAD_DEST_DEFAULT = (() => { try { return localStorage.getItem(LS_UPLOAD_DEST) || 'local'; } catch { return 'local'; } })();
+
+function saveProveoSettings() {
+  const url = $('#proveo-url').value.trim();
+  const radio = document.querySelector('input[name="upload-dest"]:checked');
+  const dest = radio ? radio.value : 'local';
+  PROVEO_URL = url;
+  UPLOAD_DEST_DEFAULT = dest;
+  try { localStorage.setItem(LS_PROVEO_URL, url); } catch {}
+  try { localStorage.setItem(LS_UPLOAD_DEST, dest); } catch {}
+  showToast('upload settings saved');
+}
+
+function loadProveoSettingsIntoModal() {
+  const urlEl = $('#proveo-url');
+  if (urlEl) urlEl.value = PROVEO_URL;
+  const radios = $$('input[name="upload-dest"]');
+  radios.forEach(r => { r.checked = (r.value === UPLOAD_DEST_DEFAULT); });
+}
+
+/* Sends a source to the PROVeo webhook. Returns the parsed JSON response. */
+async function uploadViaProveo(file, visibility, { title, description, redactions } = {}) {
+  if (!PROVEO_URL) throw new Error('PROVeo webhook URL not configured. Open Workspace settings to set it.');
+  const fd = new FormData();
+  fd.append('data', file, file.name);
+  fd.append('visibility', visibility);
+  fd.append('kind', 'source');
+  fd.append('mime', file.type || 'text/plain');
+  fd.append('filename', file.name);
+  fd.append('title', title || file.name);
+  if (description) fd.append('description', description);
+  fd.append('license', 'CC-BY-4.0');
+  if (redactions && redactions.length) {
+    fd.append('redactions', JSON.stringify(redactions));
+  }
+  if (visibility === 'public') {
+    fd.append('consent_acknowledged', JSON.stringify(['permanence', 'privacy', 'rights']));
+  }
+  if (visibility === 'gated' || (redactions && redactions.length)) {
+    if (!matrix.activeRoomId) throw new Error('Pick a Matrix workspace room before uploading to a gated/redacted destination.');
+    fd.append('matrix_room_id', matrix.activeRoomId);
+  }
+  const res = await fetch(PROVEO_URL, { method: 'POST', body: fd });
+  let payload = null;
+  try { payload = await res.json(); } catch { payload = { success: false, errors: [`non-JSON response (${res.status})`] }; }
+  if (!res.ok || payload.success === false) {
+    const errs = (payload && payload.errors) ? payload.errors.join('; ') : `HTTP ${res.status}`;
+    throw new Error(`PROVeo: ${errs}`);
+  }
+  return payload;
+}
+
+/* Modal that asks the user where a single upload should go. Returns a
+   promise that resolves to { visibility, title, description } or null if
+   the user cancels / skips. */
+function promptUploadDestination(file) {
+  return new Promise((resolve) => {
+    const modal = $('#updest-modal');
+    const sub = $('#updest-sub');
+    sub.textContent = `${file.name} · ${humanSize(file.size)}`;
+    // Prefill
+    $('#updest-title').value = file.name;
+    $('#updest-desc').value = '';
+    $('#consent-permanence').checked = false;
+    $('#consent-privacy').checked = false;
+    $('#consent-rights').checked = false;
+    $('#updest-err').hidden = true;
+    // Apply default destination
+    $$('input[name="updest"]').forEach(r => { r.checked = (r.value === UPLOAD_DEST_DEFAULT); });
+    syncUpdestVisibility();
+    modal.hidden = false;
+
+    const onChange = () => syncUpdestVisibility();
+    $$('input[name="updest"]').forEach(r => r.addEventListener('change', onChange));
+
+    const cleanup = () => {
+      modal.hidden = true;
+      $$('input[name="updest"]').forEach(r => r.removeEventListener('change', onChange));
+      $('#updest-cancel').removeEventListener('click', onCancel);
+      $('#updest-close').removeEventListener('click', onCancel);
+      $('#updest-backdrop').removeEventListener('click', onCancel);
+      $('#updest-confirm').removeEventListener('click', onConfirm);
+      document.removeEventListener('keydown', onEsc);
+    };
+    const onCancel = () => { cleanup(); resolve(null); };
+    const onEsc = (e) => { if (e.key === 'Escape' && !modal.hidden) onCancel(); };
+    const onConfirm = () => {
+      const radio = document.querySelector('input[name="updest"]:checked');
+      const visibility = radio ? radio.value : 'local';
+      const err = $('#updest-err');
+      err.hidden = true;
+      if (visibility !== 'local' && !PROVEO_URL) {
+        err.hidden = false;
+        err.textContent = 'Set a PROVeo webhook URL in Workspace settings first, or choose Local only.';
+        return;
+      }
+      if (visibility === 'gated' && !matrix.activeRoomId) {
+        err.hidden = false;
+        err.textContent = 'Pick a Matrix workspace room (click the workspace button in the topbar).';
+        return;
+      }
+      if (visibility === 'public') {
+        const ok = $('#consent-permanence').checked && $('#consent-privacy').checked && $('#consent-rights').checked;
+        if (!ok) {
+          err.hidden = false;
+          err.textContent = 'All three consent checkboxes are required for public uploads.';
+          return;
+        }
+      }
+      cleanup();
+      resolve({
+        visibility,
+        title: $('#updest-title').value.trim() || file.name,
+        description: $('#updest-desc').value.trim()
+      });
+    };
+    $('#updest-cancel').addEventListener('click', onCancel);
+    $('#updest-close').addEventListener('click', onCancel);
+    $('#updest-backdrop').addEventListener('click', onCancel);
+    $('#updest-confirm').addEventListener('click', onConfirm);
+    document.addEventListener('keydown', onEsc);
+  });
+}
+
+function syncUpdestVisibility() {
+  const radio = document.querySelector('input[name="updest"]:checked');
+  const v = radio ? radio.value : 'local';
+  const isRemote = v === 'public' || v === 'gated';
+  $('#updest-title-row').hidden = !isRemote;
+  $('#updest-desc-row').hidden = !isRemote;
+  $('#updest-consent-row').hidden = v !== 'public';
+  // helpful note
+  const note = $('#updest-note');
+  if (v === 'local') note.textContent = 'Stays in this browser only.';
+  else if (v === 'gated') note.textContent = matrix.activeRoomId ? 'Will POST to PROVeo → Matrix room.' : 'Pick a Matrix room first.';
+  else note.textContent = PROVEO_URL ? 'Will POST to PROVeo → Archive.org.' : 'Set the PROVeo webhook URL first.';
 }
 
 /* ======================================================================
@@ -4085,9 +4356,10 @@ function openWorkspaceModal() {
 function closeWorkspaceModal() { $('#ws-modal').hidden = true; }
 
 function wireWorkspace() {
-  $('#ws-btn').addEventListener('click', openWorkspaceModal);
+  $('#ws-btn').addEventListener('click', () => { openWorkspaceModal(); loadProveoSettingsIntoModal(); });
   $('#ws-close').addEventListener('click', closeWorkspaceModal);
   $('#ws-backdrop').addEventListener('click', closeWorkspaceModal);
+  $('#proveo-save').addEventListener('click', saveProveoSettings);
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !$('#ws-modal').hidden) closeWorkspaceModal();
   });
