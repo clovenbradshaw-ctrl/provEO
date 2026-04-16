@@ -206,6 +206,9 @@
   .stag-csv { background: var(--teal-fill); color: var(--teal-text); }
   .stag-pdf { background: var(--amber-fill); color: var(--amber-text); }
   .stag-txt { background: var(--blue-fill); color: var(--blue-text); }
+  .dest-local { background: var(--color-background-tertiary); color: var(--color-text-secondary); }
+  .dest-gated { background: var(--blue-fill); color: var(--blue-text); }
+  .dest-public { background: var(--teal-fill); color: var(--teal-text); }
   .sadd {
     margin: 8px 10px 10px;
     padding: 9px;
@@ -1527,6 +1530,170 @@
     cursor: not-allowed;
   }
 
+  /* ---------- WORKSPACE BUTTON + MODAL ---------- */
+  .ws-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--color-background-secondary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    padding: 4px 9px 4px 8px;
+    cursor: pointer;
+    font-size: 11.5px;
+    font-family: var(--font-mono);
+    color: var(--color-text-primary);
+    transition: border-color 0.12s, background 0.12s;
+  }
+  .ws-btn:hover { border-color: var(--color-text-primary); }
+  .ws-caret { font-size: 9px; opacity: 0.6; }
+  .ws-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--color-text-tertiary);
+    flex-shrink: 0;
+  }
+  .ws-dot.connected { background: var(--teal-mid); }
+  .ws-dot.error { background: var(--red-mid); }
+
+  .ws-modal-body {
+    position: relative;
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-lg);
+    width: min(640px, 92vw);
+    max-height: 86vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 12px 48px rgba(26,25,21,0.22);
+    overflow: hidden;
+  }
+  .ws-section {
+    padding: 16px 20px;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+  }
+  .ws-section:last-child { border-bottom: 0; }
+  .ws-section-title {
+    font-family: var(--font-serif);
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+  .ws-section-sub {
+    font-size: 11.5px;
+    color: var(--color-text-secondary);
+    margin-bottom: 12px;
+    line-height: 1.45;
+  }
+  .ws-form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 10px;
+  }
+  .ws-form-row label {
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+  }
+  .ws-input {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 7px 10px;
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    background: var(--color-background-primary);
+    color: var(--color-text-primary);
+    outline: none;
+  }
+  .ws-input:focus { border-color: var(--color-text-primary); }
+  .ws-btn-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+    align-items: center;
+  }
+  .ws-err {
+    color: var(--red-text);
+    background: var(--red-fill);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 6px 10px;
+    border-radius: var(--border-radius-md);
+    margin-top: 8px;
+  }
+  .ws-room-list { max-height: 220px; overflow-y: auto; }
+  .ws-room-item {
+    padding: 8px 10px;
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    margin-bottom: 4px;
+    cursor: pointer;
+    background: var(--color-background-primary);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .ws-room-item:hover { border-color: var(--color-text-primary); }
+  .ws-room-item.active { border-color: var(--color-text-primary); background: var(--amber-fill); }
+  .ws-room-name { font-family: var(--font-serif); font-size: 13px; }
+  .ws-room-meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--color-text-secondary); }
+  .ws-member-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .ws-member-chip {
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: var(--color-background-secondary);
+    border: 0.5px solid var(--color-border-tertiary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+  .ws-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+  }
+  .ws-toggle input { margin: 0; }
+
+  /* ---------- SOURCE VIEWER MODAL ---------- */
+  .src-viewer-body {
+    position: relative;
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-lg);
+    width: min(760px, 92vw);
+    max-height: 82vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 12px 48px rgba(26,25,21,0.22);
+    overflow: hidden;
+  }
+  .src-viewer-text {
+    flex: 1;
+    overflow: auto;
+    padding: 16px 20px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    color: var(--color-text-primary);
+    background: var(--color-background-primary);
+  }
+  .src-viewer-hint {
+    padding: 10px 18px;
+    font-size: 11.5px;
+    color: var(--color-text-secondary);
+    background: var(--color-background-secondary);
+    border-top: 0.5px solid var(--color-border-tertiary);
+  }
+
   .toast {
     position: fixed;
     bottom: 24px;
@@ -1581,6 +1748,11 @@
       <span id="boot-status" style="font-family: var(--font-mono); font-size: 10.5px; color: var(--color-text-secondary); margin-right: 4px;">booting…</span>
       <div class="srcbadge"><div class="statdot statdot-green"></div>3 indexed</div>
       <div class="srcbadge"><div class="statdot statdot-amber"></div>1 indexing</div>
+      <button class="ws-btn" id="ws-btn" title="Workspace / Matrix">
+        <span class="ws-dot" id="ws-dot"></span>
+        <span id="ws-label">Local workspace</span>
+        <span class="ws-caret">▾</span>
+      </button>
     </div>
   </div>
 
@@ -1705,7 +1877,164 @@
   </div>
 </div>
 
+<!-- ===== SOURCE VIEWER MODAL ===== -->
+<div id="src-viewer" class="cite-modal" hidden>
+  <div class="cite-modal-backdrop" id="src-viewer-backdrop"></div>
+  <div class="src-viewer-body">
+    <div class="cite-modal-head">
+      <div>
+        <div class="cite-modal-title" id="src-viewer-title">Source</div>
+        <div class="cite-modal-sub" id="src-viewer-sub"></div>
+      </div>
+      <button class="rphead-close" id="src-viewer-close">×</button>
+    </div>
+    <div class="src-viewer-text" id="src-viewer-text"></div>
+    <div class="src-viewer-hint">Tip: to cite, select text in your article (Write mode) and click <strong>＋ Cite source</strong>.</div>
+  </div>
+</div>
+
+<!-- ===== WORKSPACE / MATRIX MODAL ===== -->
+<div id="ws-modal" class="cite-modal" hidden>
+  <div class="cite-modal-backdrop" id="ws-backdrop"></div>
+  <div class="ws-modal-body">
+    <div class="cite-modal-head">
+      <div>
+        <div class="cite-modal-title">Workspace</div>
+        <div class="cite-modal-sub">A workspace is a Matrix room. Members of the room are collaborators.</div>
+      </div>
+      <button class="rphead-close" id="ws-close">×</button>
+    </div>
+
+    <!-- signed-out view -->
+    <div id="ws-loggedout">
+      <div class="ws-section">
+        <div class="ws-section-title">Sign in to Matrix</div>
+        <div class="ws-section-sub">Uses <span style="font-family:var(--font-mono)">matrix-js-sdk</span> loaded from the browser. Credentials are kept in this device's local storage only.</div>
+        <div class="ws-form-row">
+          <label for="mx-hs">Homeserver</label>
+          <input id="mx-hs" class="ws-input" type="text" placeholder="https://matrix.org" value="https://matrix.org">
+        </div>
+        <div class="ws-form-row">
+          <label for="mx-user">Username or Matrix ID</label>
+          <input id="mx-user" class="ws-input" type="text" placeholder="@alice:matrix.org or alice">
+        </div>
+        <div class="ws-form-row">
+          <label for="mx-pass">Password</label>
+          <input id="mx-pass" class="ws-input" type="password" placeholder="••••••••">
+        </div>
+        <div class="ws-btn-row">
+          <button class="btn-sm btn-sm-primary" id="mx-login">Sign in</button>
+          <span id="mx-login-status" class="cite-pick-note"></span>
+        </div>
+        <div id="mx-err" class="ws-err" hidden></div>
+      </div>
+      <div class="ws-section">
+        <div class="ws-section-title">PROVeo endpoint</div>
+        <div class="ws-section-sub">Backend webhook that handles redaction, Archive.org upload, and Matrix media sync. Leave blank to keep uploads local-only.</div>
+        <div class="ws-form-row">
+          <label for="proveo-url">Webhook URL</label>
+          <input id="proveo-url" class="ws-input" type="text" placeholder="https://n8n.example.com/webhook/PROVeo">
+        </div>
+        <div class="ws-form-row">
+          <label>Default destination for new uploads</label>
+          <div class="ws-btn-row" style="gap:14px">
+            <label class="ws-toggle"><input type="radio" name="upload-dest" value="local"> Local only</label>
+            <label class="ws-toggle"><input type="radio" name="upload-dest" value="public"> Public · Archive.org</label>
+            <label class="ws-toggle"><input type="radio" name="upload-dest" value="gated"> Gated · Matrix room</label>
+          </div>
+        </div>
+        <div class="ws-btn-row">
+          <button class="btn-sm btn-sm-primary" id="proveo-save">Save settings</button>
+          <span class="cite-pick-note">You'll be asked per-upload; this just sets the default.</span>
+        </div>
+      </div>
+      <div class="ws-section">
+        <div class="ws-section-title">Offline / local only</div>
+        <div class="ws-section-sub">Keep working without Matrix. Log and sources stay in this browser.</div>
+        <label class="ws-toggle">
+          <input type="checkbox" id="toggle-sample"> Show built-in sample article &amp; sources
+        </label>
+      </div>
+    </div>
+
+    <!-- signed-in view -->
+    <div id="ws-loggedin" hidden>
+      <div class="ws-section">
+        <div class="ws-section-title">Signed in as <span id="mx-me" style="font-family:var(--font-mono)"></span></div>
+        <div class="ws-section-sub">Pick a Matrix room to use as this workspace. Anything saved here can be synced to the room as encrypted events.</div>
+        <div class="ws-form-row">
+          <label>Rooms</label>
+          <div id="ws-rooms" class="ws-room-list"><div class="cite-empty">Loading rooms…</div></div>
+        </div>
+        <div class="ws-btn-row">
+          <button class="btn-sm" id="ws-refresh-rooms">Refresh</button>
+          <button class="btn-sm" id="mx-logout">Sign out</button>
+        </div>
+      </div>
+      <div class="ws-section" id="ws-active-section" hidden>
+        <div class="ws-section-title">Active workspace: <span id="ws-active-name" style="font-family:var(--font-serif)"></span></div>
+        <div class="ws-section-sub" id="ws-active-meta"></div>
+        <div class="ws-form-row">
+          <label>Members</label>
+          <div id="ws-members" class="ws-member-list"></div>
+        </div>
+        <label class="ws-toggle">
+          <input type="checkbox" id="toggle-sample-in"> Show built-in sample article &amp; sources
+        </label>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== UPLOAD DESTINATION MODAL ===== -->
+<div id="updest-modal" class="cite-modal" hidden>
+  <div class="cite-modal-backdrop" id="updest-backdrop"></div>
+  <div class="ws-modal-body">
+    <div class="cite-modal-head">
+      <div>
+        <div class="cite-modal-title">Where should this source live?</div>
+        <div class="cite-modal-sub" id="updest-sub">Pick a destination for this file.</div>
+      </div>
+      <button class="rphead-close" id="updest-close">×</button>
+    </div>
+    <div class="ws-section">
+      <div class="ws-form-row">
+        <label>Destination</label>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <label class="ws-toggle"><input type="radio" name="updest" value="local"> <div><strong>Local only</strong><div class="ws-section-sub" style="margin:0">Stays in this browser. No one else can see it.</div></div></label>
+          <label class="ws-toggle"><input type="radio" name="updest" value="gated"> <div><strong>Gated — Matrix room</strong><div class="ws-section-sub" style="margin:0">Uploaded to the active workspace room. Visible only to room members.</div></div></label>
+          <label class="ws-toggle"><input type="radio" name="updest" value="public"> <div><strong>Public — Archive.org</strong><div class="ws-section-sub" style="margin:0">Permanent public record. Redacted copy goes to Archive.org; original stays in the Matrix room if there are redactions.</div></div></label>
+        </div>
+      </div>
+      <div class="ws-form-row" id="updest-title-row" hidden>
+        <label for="updest-title">Title</label>
+        <input id="updest-title" class="ws-input" type="text">
+      </div>
+      <div class="ws-form-row" id="updest-desc-row" hidden>
+        <label for="updest-desc">Description (optional)</label>
+        <input id="updest-desc" class="ws-input" type="text">
+      </div>
+      <div class="ws-form-row" id="updest-consent-row" hidden>
+        <label>Consent (required for public)</label>
+        <label class="ws-toggle"><input type="checkbox" id="consent-permanence"> <span>I understand this upload is <strong>permanent</strong> on Archive.org.</span></label>
+        <label class="ws-toggle"><input type="checkbox" id="consent-privacy"> <span>No <strong>private information</strong> remains in the copy I'm publishing.</span></label>
+        <label class="ws-toggle"><input type="checkbox" id="consent-rights"> <span>I have the <strong>rights</strong> to publish this content.</span></label>
+      </div>
+      <div id="updest-err" class="ws-err" hidden></div>
+    </div>
+    <div class="cite-modal-actions">
+      <span id="updest-note" class="cite-pick-note"></span>
+      <button class="btn-sm" id="updest-cancel">Skip</button>
+      <button class="btn-sm btn-sm-primary" id="updest-confirm">Upload</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast"></div>
+
+<!-- Matrix client SDK (loaded from CDN, exposes window.matrixcs).
+     Loaded lazily so the app still works offline; checks for window.matrixcs before use. -->
+<script src="https://cdn.jsdelivr.net/npm/matrix-js-sdk@31.0.0/dist/browser-matrix.min.js" crossorigin="anonymous" referrerpolicy="no-referrer" onerror="console.warn('[matrix] SDK failed to load — Matrix features will be unavailable')"></script>
 
 <script>
 /* ===========================================================================
@@ -2022,12 +2351,15 @@ const SEED_CLAIMS = {
 };
 
 /* ---------- CHAT ---------- */
+/* Items with __seed: true are hidden when the sample-data toggle is off. */
 const CHAT_HISTORY = [
   {
     role: 'user',
-    text: "What is NDP's financial relationship to OHS?"
+    text: "What is NDP's financial relationship to OHS?",
+    __seed: true
   },
   {
+    __seed: true,
     role: 'system',
     meta: 'Fold-computable · CON-graph traversal',
     html: `This answer traverses the CON graph directly — no LLM generation in the load-bearing claims.<br><br>
@@ -2061,8 +2393,9 @@ let selectedReviewId = null;
 /* ---- Sources ---- */
 function allSources() {
   // Seed sources (read-only demo corpus) merged with user-added sources from the log.
+  // Seed sources are suppressed when SAMPLE_ON is false.
   const user = Object.values(USER_SOURCES);
-  return [...SOURCES, ...user];
+  return SAMPLE_ON ? [...SOURCES, ...user] : user;
 }
 function renderSources() {
   const list = allSources();
@@ -2071,11 +2404,18 @@ function renderSources() {
     const delBtn = s.user_added
       ? `<button class="sitem-del" data-del-src="${s.id}" title="Remove source">×</button>`
       : '';
+    const destTag = s.user_added
+      ? (s.destination === 'public'
+          ? `<span class="stag dest-public" title="${escapeHtml(s.archive_url || '')}">ARCHIVE</span>`
+          : s.destination === 'gated'
+            ? `<span class="stag dest-gated" title="${escapeHtml(s.matrix_room_id || '')}">MATRIX</span>`
+            : `<span class="stag dest-local">LOCAL</span>`)
+      : '';
     return `
-      <div class="sitem${s.indexed ? '' : ' pending'}" data-src-id="${s.id || ''}">
+      <div class="sitem${s.indexed ? '' : ' pending'}" data-src-id="${s.id || ''}" data-open-src="${s.id || ''}">
         <div class="sitem-name">${escapeHtml(s.name)}</div>
         <div class="sitem-meta">
-          <span class="stag stag-${kindTag}">${s.kind.toUpperCase()}</span>${escapeHtml(s.meta || '')}
+          <span class="stag stag-${kindTag}">${s.kind.toUpperCase()}</span>${destTag}${escapeHtml(s.meta || '')}
         </div>
         ${delBtn}
       </div>
@@ -2092,6 +2432,14 @@ function renderSources() {
     if (pending > 0) { badges[1].style.display = ''; badges[1].innerHTML = `<div class="statdot statdot-amber"></div>${pending} indexing`; }
     else { badges[1].style.display = 'none'; }
   }
+
+  // click to open source viewer (skipped on the × delete button via stopPropagation below)
+  $$('[data-open-src]').forEach(el => {
+    el.addEventListener('click', () => {
+      const id = el.dataset.openSrc;
+      if (id) showSourceViewer(id);
+    });
+  });
 
   // delete handlers
   $$('[data-del-src]').forEach(btn => {
@@ -2116,10 +2464,15 @@ function renderSources() {
 
 /* ---- Article body: render runs, wrap claims in span with class ---- */
 function articleHtml({interactive = true} = {}) {
+  if (!SAMPLE_ON) {
+    // Sample data is off — start from a blank draft with a gentle placeholder.
+    return `<p style="color: var(--color-text-tertiary); font-style: italic;">Start writing. Upload sources from the left panel, then select text to cite.</p>`;
+  }
   return ARTICLE.map(para => {
     const inner = para.p.map(r => {
       if (!r.c) return escapeHtml(r.t);
       const claim = CLAIMS[r.c];
+      if (!claim) return escapeHtml(r.t);
       const cls = claim.type === 'grounded' ? 'g' : claim.type === 'conflict' ? 'conflict' : 'absent';
       const attrs = interactive
         ? `class="${cls}" data-id="${r.c}"`
@@ -2128,6 +2481,20 @@ function articleHtml({interactive = true} = {}) {
     }).join('');
     return `<p>${inner}</p>`;
   }).join('');
+}
+
+/* Subset of CLAIMS that's visible given the SAMPLE_ON toggle. When sample
+   data is off, seed claim ids (keys of SEED_CLAIMS) are hidden from counts
+   and the review queue. They stay in the underlying log — toggling on
+   restores them. */
+function visibleClaims() {
+  if (SAMPLE_ON) return CLAIMS;
+  const seedIds = new Set(Object.keys(SEED_CLAIMS));
+  const out = {};
+  for (const [id, c] of Object.entries(CLAIMS)) {
+    if (!seedIds.has(id)) out[id] = c;
+  }
+  return out;
 }
 
 function renderArticleBody(container, {interactive = true} = {}) {
@@ -2145,7 +2512,7 @@ function escapeHtml(s) {
 
 /* ---- Counts ---- */
 function renderCounts() {
-  const all = Object.values(CLAIMS);
+  const all = Object.values(visibleClaims());
   const g = all.filter(c => c.type === 'grounded').length;
   const c = all.filter(c => c.type === 'conflict').length;
   const a = all.filter(c => c.type === 'absent').length;
@@ -2497,10 +2864,11 @@ function renderReview() {
     <div class="article-body">${articleHtml({interactive: false})}</div>
   `;
 
-  const pending = Object.entries(CLAIMS).filter(([, c]) => c.status === 'pending');
+  const visible = visibleClaims();
+  const pending = Object.entries(visible).filter(([, c]) => c.status === 'pending');
   $('#qhead-count').textContent = `${pending.length} remaining`;
 
-  const queue = Object.entries(CLAIMS)
+  const queue = Object.entries(visible)
     .sort(([, a], [, b]) => {
       const order = {conflict: 0, absent: 1, grounded: 2};
       if (a.status !== b.status) return a.status === 'pending' ? -1 : 1;
@@ -2568,7 +2936,8 @@ function renderReview() {
 
 /* ---- Chat ---- */
 function renderChat() {
-  $('#chat-msgs').innerHTML = CHAT_HISTORY.map((m, i) => {
+  const history = SAMPLE_ON ? CHAT_HISTORY : CHAT_HISTORY.filter(m => !m.__seed);
+  $('#chat-msgs').innerHTML = history.map((m, i) => {
     if (m.role === 'user') {
       return `
         <div class="chat-msg chat-msg-user">
@@ -2624,8 +2993,9 @@ function renderChat() {
     });
   });
 
-  // instruction set
-  $('#iset-body').innerHTML = ISET.map(r => `
+  // instruction set (seeded with sample rules; hidden when sample data is off)
+  const rules = SAMPLE_ON ? ISET : [];
+  $('#iset-body').innerHTML = rules.map(r => `
     <div class="iset-rule">
       <div class="iset-rule-head">
         <span class="iset-type stag ${r.color}">${r.type}</span>
@@ -2633,11 +3003,9 @@ function renderChat() {
       </div>
       <div class="iset-text">${escapeHtml(r.text)}</div>
     </div>
-  `).join('') + `
-    <div class="iset-footer">
-      3 rules · 2 firings today · 1 candidate refinement pending review
-    </div>
-  `;
+  `).join('') + (rules.length
+    ? `<div class="iset-footer">${rules.length} rules · 2 firings today · 1 candidate refinement pending review</div>`
+    : `<div class="iset-footer">No learned rules yet. Corrections you make in Review will appear here.</div>`);
 }
 
 function sendChatMessage() {
@@ -2890,7 +3258,13 @@ self.addEventListener('message', (ev) => {
         kind: evt.payload.kind,
         meta: evt.payload.meta || '',
         indexed: true,
-        user_added: true
+        user_added: true,
+        destination: evt.payload.destination || 'local',
+        archive_url: evt.payload.archive_url || null,
+        archive_identifier: evt.payload.archive_identifier || null,
+        matrix_mxc: evt.payload.matrix_mxc || null,
+        matrix_room_id: evt.payload.matrix_room_id || null,
+        sha256: evt.payload.sha256 || null
       };
       continue;
     }
@@ -3010,13 +3384,15 @@ function isTextLike(name) {
 async function handleUpload(files) {
   const list = Array.from(files || []);
   if (!list.length) return;
-  let added = 0, skipped = 0;
+  let added = 0, skipped = 0, published = 0;
   for (const file of list) {
     if (!isTextLike(file.name)) {
       console.warn('[upload] skipping non-text file', file.name);
       skipped++;
       continue;
     }
+    const choice = await promptUploadDestination(file);
+    if (!choice) { skipped++; continue; } // user cancelled / skipped
     try {
       const text = await file.text();
       const id = 's_' + ulid().slice(-10);
@@ -3025,24 +3401,53 @@ async function handleUpload(files) {
       const meta = kind === 'csv'
         ? `${lineCount - 1} rows · ${humanSize(file.size)}`
         : `${humanSize(file.size)} · ${lineCount} lines`;
+
+      // If a non-local destination was chosen, post to the PROVeo webhook
+      // first. If the webhook fails we abort this file — the user asked
+      // for a remote copy, so saving only the local copy would be lying.
+      let proveo = null;
+      if (choice.visibility !== 'local') {
+        proveo = await uploadViaProveo(file, choice.visibility, {
+          title: choice.title,
+          description: choice.description
+        });
+        published++;
+      }
+
       await storage.saveSource(id, text);
       SOURCE_TEXT[id] = text;
       await appendEventAndRefold({
         op: 'SRC',
         site: `source:${id}`,
         resolution: 'Figure',
-        payload: { id, name: file.name, kind, meta, size: file.size, lines: lineCount },
+        payload: {
+          id, name: file.name, kind, meta,
+          size: file.size, lines: lineCount,
+          destination: choice.visibility,
+          archive_url: proveo?.archive?.url || null,
+          archive_identifier: proveo?.archive?.identifier || null,
+          matrix_mxc: proveo?.matrix?.mxc || null,
+          matrix_room_id: proveo?.matrix?.room_id || null,
+          sha256: proveo?.archive?.redacted_sha256 || proveo?.matrix?.original_sha256 || null
+        },
         author: 'human'
       });
       added++;
     } catch (err) {
       console.error('[upload] failed for', file.name, err);
+      showToast(`upload failed: ${err.message || 'unknown error'}`);
       skipped++;
     }
   }
   renderSources();
-  if (added) showToast(`added ${added} source${added === 1 ? '' : 's'}${skipped ? ` · skipped ${skipped}` : ''}`);
-  else if (skipped) showToast(`skipped ${skipped} file${skipped === 1 ? '' : 's'} (unsupported)`);
+  if (added) {
+    const parts = [`added ${added} source${added === 1 ? '' : 's'}`];
+    if (published) parts.push(`${published} published`);
+    if (skipped) parts.push(`skipped ${skipped}`);
+    showToast(parts.join(' · '));
+  } else if (skipped) {
+    showToast(`skipped ${skipped} file${skipped === 1 ? '' : 's'}`);
+  }
 }
 
 function wireUploads() {
@@ -3477,6 +3882,517 @@ function wireEditor() {
   });
 }
 
+/* ======================================================================
+   SOURCE VIEWER — read-only preview for uploaded sources
+   ----------------------------------------------------------------------
+   Clicking a source in the sidebar opens this modal showing the full text.
+   From here the user can read, then switch back to Write mode and select
+   article text to cite against this source via the existing cite flow.
+====================================================================== */
+async function showSourceViewer(id) {
+  const src = USER_SOURCES[id] || SOURCES.find(s => s.id === id);
+  if (!src) return;
+  const modal = $('#src-viewer');
+  $('#src-viewer-title').textContent = src.name;
+  const destBits = [];
+  if (src.destination) destBits.push(`destination: ${src.destination}`);
+  if (src.archive_url) destBits.push(`<a href="${escapeHtml(src.archive_url)}" target="_blank" rel="noopener" style="color:var(--teal-text); text-decoration:underline">archive.org ↗</a>`);
+  if (src.matrix_mxc) destBits.push(`matrix: <span style="font-family:var(--font-mono)">${escapeHtml(src.matrix_mxc)}</span>`);
+  if (src.sha256) destBits.push(`sha256: <span style="font-family:var(--font-mono)">${escapeHtml(src.sha256.slice(0, 16))}…</span>`);
+  $('#src-viewer-sub').innerHTML = `${(src.kind || 'txt').toUpperCase()} · ${escapeHtml(src.meta || '')}${destBits.length ? ' · ' + destBits.join(' · ') : ''}`;
+  const textEl = $('#src-viewer-text');
+  textEl.textContent = 'Loading…';
+  modal.hidden = false;
+  try {
+    if (USER_SOURCES[id]) {
+      const text = await ensureSourceText(id);
+      textEl.textContent = text || '(empty file)';
+    } else {
+      textEl.textContent = '(This is a built-in sample source — no raw text is stored. Upload your own file to view its contents.)';
+    }
+  } catch (err) {
+    console.warn('[src-viewer] failed to load', err);
+    textEl.textContent = '(failed to load source text)';
+  }
+}
+function hideSourceViewer() { $('#src-viewer').hidden = true; }
+function wireSourceViewer() {
+  $('#src-viewer-close').addEventListener('click', hideSourceViewer);
+  $('#src-viewer-backdrop').addEventListener('click', hideSourceViewer);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !$('#src-viewer').hidden) hideSourceViewer();
+  });
+}
+
+/* ======================================================================
+   PROVeo WEBHOOK + UPLOAD DESTINATION
+   ----------------------------------------------------------------------
+   PROVeo is an external n8n workflow that handles redaction, Archive.org
+   dedup + upload, and Matrix media sync. Schema per the workflow:
+     body: { visibility: 'public'|'gated', kind, mime, filename, title,
+             description, license, parent_identifier?, claim_id?,
+             redactions?, matrix_room_id?, consent_acknowledged? }
+     binary: the file bytes
+   Frontend just posts multipart/form-data; backend returns archive_url +
+   matrix mxc + hashes. Storing those on the source lets later exports
+   carry the provenance forward.
+====================================================================== */
+const LS_PROVEO_URL = 'nl.proveoUrl.v1';
+const LS_UPLOAD_DEST = 'nl.uploadDest.v1';
+
+let PROVEO_URL = (() => { try { return localStorage.getItem(LS_PROVEO_URL) || ''; } catch { return ''; } })();
+let UPLOAD_DEST_DEFAULT = (() => { try { return localStorage.getItem(LS_UPLOAD_DEST) || 'local'; } catch { return 'local'; } })();
+
+function saveProveoSettings() {
+  const url = $('#proveo-url').value.trim();
+  const radio = document.querySelector('input[name="upload-dest"]:checked');
+  const dest = radio ? radio.value : 'local';
+  PROVEO_URL = url;
+  UPLOAD_DEST_DEFAULT = dest;
+  try { localStorage.setItem(LS_PROVEO_URL, url); } catch {}
+  try { localStorage.setItem(LS_UPLOAD_DEST, dest); } catch {}
+  showToast('upload settings saved');
+}
+
+function loadProveoSettingsIntoModal() {
+  const urlEl = $('#proveo-url');
+  if (urlEl) urlEl.value = PROVEO_URL;
+  const radios = $$('input[name="upload-dest"]');
+  radios.forEach(r => { r.checked = (r.value === UPLOAD_DEST_DEFAULT); });
+}
+
+/* Sends a source to the PROVeo webhook. Returns the parsed JSON response. */
+async function uploadViaProveo(file, visibility, { title, description, redactions } = {}) {
+  if (!PROVEO_URL) throw new Error('PROVeo webhook URL not configured. Open Workspace settings to set it.');
+  const fd = new FormData();
+  fd.append('data', file, file.name);
+  fd.append('visibility', visibility);
+  fd.append('kind', 'source');
+  fd.append('mime', file.type || 'text/plain');
+  fd.append('filename', file.name);
+  fd.append('title', title || file.name);
+  if (description) fd.append('description', description);
+  fd.append('license', 'CC-BY-4.0');
+  if (redactions && redactions.length) {
+    fd.append('redactions', JSON.stringify(redactions));
+  }
+  if (visibility === 'public') {
+    fd.append('consent_acknowledged', JSON.stringify(['permanence', 'privacy', 'rights']));
+  }
+  if (visibility === 'gated' || (redactions && redactions.length)) {
+    if (!matrix.activeRoomId) throw new Error('Pick a Matrix workspace room before uploading to a gated/redacted destination.');
+    fd.append('matrix_room_id', matrix.activeRoomId);
+  }
+  const res = await fetch(PROVEO_URL, { method: 'POST', body: fd });
+  let payload = null;
+  try { payload = await res.json(); } catch { payload = { success: false, errors: [`non-JSON response (${res.status})`] }; }
+  if (!res.ok || payload.success === false) {
+    const errs = (payload && payload.errors) ? payload.errors.join('; ') : `HTTP ${res.status}`;
+    throw new Error(`PROVeo: ${errs}`);
+  }
+  return payload;
+}
+
+/* Modal that asks the user where a single upload should go. Returns a
+   promise that resolves to { visibility, title, description } or null if
+   the user cancels / skips. */
+function promptUploadDestination(file) {
+  return new Promise((resolve) => {
+    const modal = $('#updest-modal');
+    const sub = $('#updest-sub');
+    sub.textContent = `${file.name} · ${humanSize(file.size)}`;
+    // Prefill
+    $('#updest-title').value = file.name;
+    $('#updest-desc').value = '';
+    $('#consent-permanence').checked = false;
+    $('#consent-privacy').checked = false;
+    $('#consent-rights').checked = false;
+    $('#updest-err').hidden = true;
+    // Apply default destination
+    $$('input[name="updest"]').forEach(r => { r.checked = (r.value === UPLOAD_DEST_DEFAULT); });
+    syncUpdestVisibility();
+    modal.hidden = false;
+
+    const onChange = () => syncUpdestVisibility();
+    $$('input[name="updest"]').forEach(r => r.addEventListener('change', onChange));
+
+    const cleanup = () => {
+      modal.hidden = true;
+      $$('input[name="updest"]').forEach(r => r.removeEventListener('change', onChange));
+      $('#updest-cancel').removeEventListener('click', onCancel);
+      $('#updest-close').removeEventListener('click', onCancel);
+      $('#updest-backdrop').removeEventListener('click', onCancel);
+      $('#updest-confirm').removeEventListener('click', onConfirm);
+      document.removeEventListener('keydown', onEsc);
+    };
+    const onCancel = () => { cleanup(); resolve(null); };
+    const onEsc = (e) => { if (e.key === 'Escape' && !modal.hidden) onCancel(); };
+    const onConfirm = () => {
+      const radio = document.querySelector('input[name="updest"]:checked');
+      const visibility = radio ? radio.value : 'local';
+      const err = $('#updest-err');
+      err.hidden = true;
+      if (visibility !== 'local' && !PROVEO_URL) {
+        err.hidden = false;
+        err.textContent = 'Set a PROVeo webhook URL in Workspace settings first, or choose Local only.';
+        return;
+      }
+      if (visibility === 'gated' && !matrix.activeRoomId) {
+        err.hidden = false;
+        err.textContent = 'Pick a Matrix workspace room (click the workspace button in the topbar).';
+        return;
+      }
+      if (visibility === 'public') {
+        const ok = $('#consent-permanence').checked && $('#consent-privacy').checked && $('#consent-rights').checked;
+        if (!ok) {
+          err.hidden = false;
+          err.textContent = 'All three consent checkboxes are required for public uploads.';
+          return;
+        }
+      }
+      cleanup();
+      resolve({
+        visibility,
+        title: $('#updest-title').value.trim() || file.name,
+        description: $('#updest-desc').value.trim()
+      });
+    };
+    $('#updest-cancel').addEventListener('click', onCancel);
+    $('#updest-close').addEventListener('click', onCancel);
+    $('#updest-backdrop').addEventListener('click', onCancel);
+    $('#updest-confirm').addEventListener('click', onConfirm);
+    document.addEventListener('keydown', onEsc);
+  });
+}
+
+function syncUpdestVisibility() {
+  const radio = document.querySelector('input[name="updest"]:checked');
+  const v = radio ? radio.value : 'local';
+  const isRemote = v === 'public' || v === 'gated';
+  $('#updest-title-row').hidden = !isRemote;
+  $('#updest-desc-row').hidden = !isRemote;
+  $('#updest-consent-row').hidden = v !== 'public';
+  // helpful note
+  const note = $('#updest-note');
+  if (v === 'local') note.textContent = 'Stays in this browser only.';
+  else if (v === 'gated') note.textContent = matrix.activeRoomId ? 'Will POST to PROVeo → Matrix room.' : 'Pick a Matrix room first.';
+  else note.textContent = PROVEO_URL ? 'Will POST to PROVeo → Archive.org.' : 'Set the PROVeo webhook URL first.';
+}
+
+/* ======================================================================
+   SAMPLE DATA TOGGLE
+   ----------------------------------------------------------------------
+   When OFF, the built-in demo article + seed claims + seed sources are
+   hidden. Uploaded sources and user-authored article content remain.
+   Persisted to localStorage. Re-renders on change.
+====================================================================== */
+const LS_SAMPLE = 'nl.sampleOn';
+let SAMPLE_ON = (() => {
+  try { return localStorage.getItem(LS_SAMPLE) !== 'false'; } catch { return true; }
+})();
+
+function setSampleData(on) {
+  SAMPLE_ON = !!on;
+  try { localStorage.setItem(LS_SAMPLE, SAMPLE_ON ? 'true' : 'false'); } catch {}
+  // Re-render surfaces that depend on seed content. We do NOT wipe the
+  // article body — that would discard a user's edits. The seed article is
+  // only respected on first load (via articleHtml at boot).
+  renderSources();
+  renderCounts();
+  selectedClaimId = null;
+  selectedReviewId = null;
+  if ($('#mode-review').classList.contains('active')) renderReview();
+  if ($('#mode-chat').classList.contains('active')) renderChat();
+  showToast(SAMPLE_ON ? 'sample data on' : 'sample data hidden');
+}
+
+/* ======================================================================
+   MATRIX / WORKSPACE
+   ----------------------------------------------------------------------
+   Thin wrapper over matrix-js-sdk (loaded from CDN, window.matrixcs).
+   Stores a session token in localStorage so the user stays signed in.
+   A Workspace = a Matrix room; members of the room are collaborators.
+   Encrypted sync of sources/article is sketched (stubbed) — the login +
+   room list + member list are fully wired against a real homeserver.
+====================================================================== */
+const LS_MX_SESSION = 'nl.mxSession.v1';
+const LS_MX_ROOM = 'nl.mxRoom.v1';
+
+const matrix = {
+  client: null,
+  userId: null,
+  accessToken: null,
+  homeserver: null,
+  rooms: [],       // [{ id, name, memberCount }]
+  activeRoomId: null,
+  members: [],     // [{ userId, displayName, membership }]
+  ready: false
+};
+
+function matrixAvailable() { return !!window.matrixcs; }
+
+function readStoredMatrixSession() {
+  try {
+    const raw = localStorage.getItem(LS_MX_SESSION);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function storeMatrixSession(s) {
+  try { localStorage.setItem(LS_MX_SESSION, JSON.stringify(s)); } catch {}
+}
+function clearStoredMatrixSession() {
+  try { localStorage.removeItem(LS_MX_SESSION); } catch {}
+  try { localStorage.removeItem(LS_MX_ROOM); } catch {}
+}
+
+async function matrixLoginWithPassword(homeserver, user, password) {
+  if (!matrixAvailable()) throw new Error('Matrix SDK failed to load');
+  const sdk = window.matrixcs;
+  // Normalize homeserver URL
+  const base = homeserver.replace(/\/+$/, '');
+  // The SDK accepts either a fully-qualified Matrix ID or a local part.
+  const tmp = sdk.createClient({ baseUrl: base });
+  const res = await tmp.login('m.login.password', {
+    identifier: { type: 'm.id.user', user: user.startsWith('@') ? user.split(':')[0].slice(1) : user },
+    password,
+    initial_device_display_name: 'NL Explorer'
+  });
+  const session = {
+    homeserver: base,
+    accessToken: res.access_token,
+    userId: res.user_id,
+    deviceId: res.device_id
+  };
+  storeMatrixSession(session);
+  await matrixStart(session);
+  return session;
+}
+
+async function matrixStart(session) {
+  if (!matrixAvailable()) throw new Error('Matrix SDK not loaded');
+  const sdk = window.matrixcs;
+  const client = sdk.createClient({
+    baseUrl: session.homeserver,
+    accessToken: session.accessToken,
+    userId: session.userId,
+    deviceId: session.deviceId
+  });
+  matrix.client = client;
+  matrix.userId = session.userId;
+  matrix.accessToken = session.accessToken;
+  matrix.homeserver = session.homeserver;
+  matrix.ready = false;
+  // Lightweight start: limit initial sync so browser doesn't hang on big accounts.
+  await client.startClient({ initialSyncLimit: 1 });
+  await new Promise((resolve) => {
+    const onSync = (state) => {
+      if (state === 'PREPARED' || state === 'SYNCING') {
+        client.removeListener('sync', onSync);
+        resolve();
+      }
+    };
+    client.on('sync', onSync);
+  });
+  matrix.ready = true;
+  refreshRooms();
+  // Restore previously selected workspace
+  try {
+    const rid = localStorage.getItem(LS_MX_ROOM);
+    if (rid) selectWorkspaceRoom(rid, { silent: true });
+  } catch {}
+  updateWorkspaceIndicator();
+}
+
+async function matrixLogout() {
+  try { if (matrix.client) await matrix.client.logout(); } catch (e) { console.warn('[matrix] logout failed', e); }
+  try { if (matrix.client) matrix.client.stopClient(); } catch {}
+  matrix.client = null;
+  matrix.userId = null;
+  matrix.accessToken = null;
+  matrix.homeserver = null;
+  matrix.rooms = [];
+  matrix.activeRoomId = null;
+  matrix.members = [];
+  matrix.ready = false;
+  clearStoredMatrixSession();
+  updateWorkspaceIndicator();
+  renderWorkspaceModal();
+}
+
+function refreshRooms() {
+  if (!matrix.client) { matrix.rooms = []; return; }
+  const raw = matrix.client.getRooms();
+  matrix.rooms = raw
+    .filter(r => r.getMyMembership() === 'join')
+    .map(r => ({
+      id: r.roomId,
+      name: r.name || r.roomId,
+      memberCount: r.getJoinedMemberCount ? r.getJoinedMemberCount() : (r.getJoinedMembers?.() || []).length
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function selectWorkspaceRoom(roomId, { silent = false } = {}) {
+  if (!matrix.client) return;
+  const room = matrix.client.getRoom(roomId);
+  if (!room) return;
+  matrix.activeRoomId = roomId;
+  const joined = room.getJoinedMembers ? room.getJoinedMembers() : [];
+  matrix.members = joined.map(m => ({
+    userId: m.userId,
+    displayName: m.name || m.rawDisplayName || m.userId,
+    membership: m.membership
+  }));
+  try { localStorage.setItem(LS_MX_ROOM, roomId); } catch {}
+  updateWorkspaceIndicator();
+  renderWorkspaceModal();
+  if (!silent) showToast(`workspace: ${room.name || roomId}`);
+}
+
+function updateWorkspaceIndicator() {
+  const dot = $('#ws-dot');
+  const label = $('#ws-label');
+  if (!dot || !label) return;
+  if (!matrix.userId) {
+    dot.classList.remove('connected', 'error');
+    label.textContent = 'Local workspace';
+    return;
+  }
+  dot.classList.add('connected');
+  dot.classList.remove('error');
+  if (matrix.activeRoomId) {
+    const room = matrix.client?.getRoom(matrix.activeRoomId);
+    label.textContent = room ? (room.name || matrix.activeRoomId) : matrix.activeRoomId;
+  } else {
+    label.textContent = 'Matrix · pick a room';
+  }
+}
+
+function renderWorkspaceModal() {
+  const out = $('#ws-loggedout');
+  const inn = $('#ws-loggedin');
+  if (!out || !inn) return;
+  const signedIn = !!matrix.userId;
+  out.hidden = signedIn;
+  inn.hidden = !signedIn;
+
+  // Offline view: keep sample toggle in sync
+  const tg1 = $('#toggle-sample');
+  if (tg1) tg1.checked = SAMPLE_ON;
+  const tg2 = $('#toggle-sample-in');
+  if (tg2) tg2.checked = SAMPLE_ON;
+
+  if (signedIn) {
+    $('#mx-me').textContent = matrix.userId;
+    // Rooms
+    const listEl = $('#ws-rooms');
+    if (!matrix.rooms.length) {
+      listEl.innerHTML = `<div class="cite-empty">No joined rooms yet. Create one in Element (element.io) and join it, then click Refresh.</div>`;
+    } else {
+      listEl.innerHTML = matrix.rooms.map(r => `
+        <div class="ws-room-item${r.id === matrix.activeRoomId ? ' active' : ''}" data-room="${escapeHtml(r.id)}">
+          <div>
+            <div class="ws-room-name">${escapeHtml(r.name)}</div>
+            <div class="ws-room-meta">${escapeHtml(r.id)} · ${r.memberCount} member${r.memberCount === 1 ? '' : 's'}</div>
+          </div>
+          <div class="ws-room-meta">select ›</div>
+        </div>
+      `).join('');
+      $$('.ws-room-item', listEl).forEach(el => {
+        el.addEventListener('click', () => selectWorkspaceRoom(el.dataset.room));
+      });
+    }
+    // Active workspace panel
+    const sec = $('#ws-active-section');
+    if (matrix.activeRoomId) {
+      sec.hidden = false;
+      const room = matrix.client?.getRoom(matrix.activeRoomId);
+      $('#ws-active-name').textContent = room ? (room.name || matrix.activeRoomId) : matrix.activeRoomId;
+      $('#ws-active-meta').textContent = `${matrix.members.length} joined member${matrix.members.length === 1 ? '' : 's'} · ${matrix.activeRoomId}`;
+      $('#ws-members').innerHTML = matrix.members.map(m =>
+        `<span class="ws-member-chip" title="${escapeHtml(m.userId)}">${escapeHtml(m.displayName)}</span>`
+      ).join('') || '<span class="cite-empty">No members loaded yet.</span>';
+    } else {
+      sec.hidden = true;
+    }
+  }
+}
+
+async function tryMatrixLogin() {
+  const hs = $('#mx-hs').value.trim();
+  const user = $('#mx-user').value.trim();
+  const pass = $('#mx-pass').value;
+  const err = $('#mx-err');
+  const status = $('#mx-login-status');
+  err.hidden = true;
+  if (!hs || !user || !pass) {
+    err.hidden = false;
+    err.textContent = 'Homeserver, username, and password are required.';
+    return;
+  }
+  if (!matrixAvailable()) {
+    err.hidden = false;
+    err.textContent = 'Matrix SDK failed to load (check the CDN or your network).';
+    return;
+  }
+  status.textContent = 'signing in…';
+  try {
+    await matrixLoginWithPassword(hs, user, pass);
+    status.textContent = '';
+    $('#mx-pass').value = '';
+    renderWorkspaceModal();
+  } catch (e) {
+    console.warn('[matrix] login failed', e);
+    err.hidden = false;
+    err.textContent = (e && (e.errcode ? `${e.errcode}: ` : '') + (e.message || 'login failed')) || 'login failed';
+    status.textContent = '';
+  }
+}
+
+function openWorkspaceModal() {
+  $('#ws-modal').hidden = false;
+  renderWorkspaceModal();
+}
+function closeWorkspaceModal() { $('#ws-modal').hidden = true; }
+
+function wireWorkspace() {
+  $('#ws-btn').addEventListener('click', () => { openWorkspaceModal(); loadProveoSettingsIntoModal(); });
+  $('#ws-close').addEventListener('click', closeWorkspaceModal);
+  $('#ws-backdrop').addEventListener('click', closeWorkspaceModal);
+  $('#proveo-save').addEventListener('click', saveProveoSettings);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !$('#ws-modal').hidden) closeWorkspaceModal();
+  });
+  $('#mx-login').addEventListener('click', tryMatrixLogin);
+  $('#mx-pass').addEventListener('keydown', (e) => { if (e.key === 'Enter') tryMatrixLogin(); });
+  $('#mx-logout').addEventListener('click', async () => {
+    if (!confirm('Sign out of Matrix? Uploaded sources stay on this device.')) return;
+    await matrixLogout();
+  });
+  $('#ws-refresh-rooms').addEventListener('click', () => {
+    refreshRooms();
+    renderWorkspaceModal();
+  });
+  $('#toggle-sample').addEventListener('change', e => setSampleData(e.target.checked));
+  $('#toggle-sample-in').addEventListener('change', e => setSampleData(e.target.checked));
+}
+
+async function bootMatrixIfPossible() {
+  const session = readStoredMatrixSession();
+  if (!session) return;
+  if (!matrixAvailable()) {
+    console.warn('[matrix] stored session exists but SDK not loaded');
+    return;
+  }
+  try {
+    await matrixStart(session);
+  } catch (e) {
+    console.warn('[matrix] auto-resume failed', e);
+    const dot = $('#ws-dot');
+    if (dot) { dot.classList.remove('connected'); dot.classList.add('error'); }
+  }
+}
+
 /* ---------- Boot status indicator ---------- */
 function setBootStatus(text, color) {
   const el = $('#boot-status');
@@ -3510,6 +4426,11 @@ async function init() {
   wireUploads();
   wireSelectionToolbar();
   wireCiteModal();
+  wireSourceViewer();
+  wireWorkspace();
+  updateWorkspaceIndicator();
+  // Try to resume a stored Matrix session in the background — don't block boot.
+  bootMatrixIfPossible().catch(err => console.warn('[matrix] boot error', err));
 
   $$('.mtab').forEach(b => {
     b.addEventListener('click', () => switchMode(b.dataset.mode));
