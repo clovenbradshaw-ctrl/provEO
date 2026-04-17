@@ -222,6 +222,10 @@
   .stag-csv { background: var(--teal-fill); color: var(--teal-text); }
   .stag-pdf { background: var(--amber-fill); color: var(--amber-text); }
   .stag-txt { background: var(--blue-fill); color: var(--blue-text); }
+  .stag-img { background: var(--teal-fill); color: var(--teal-text); }
+  .stag-video { background: var(--amber-fill); color: var(--amber-text); }
+  .stag-audio { background: var(--blue-fill); color: var(--blue-text); }
+  .stag-bin { background: var(--color-background-tertiary); color: var(--color-text-secondary); }
   .dest-local { background: var(--color-background-tertiary); color: var(--color-text-secondary); }
   .dest-gated { background: var(--blue-fill); color: var(--blue-text); }
   .dest-public { background: var(--teal-fill); color: var(--teal-text); }
@@ -2271,6 +2275,64 @@
     color: var(--color-text-primary);
     background: var(--color-background-primary);
   }
+  .src-viewer-media {
+    flex: 1;
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: var(--color-background-secondary);
+  }
+  .src-viewer-media img,
+  .src-viewer-media video {
+    max-width: 100%;
+    max-height: 70vh;
+    border-radius: var(--border-radius-md);
+    box-shadow: 0 4px 18px rgba(26,25,21,0.12);
+    background: #000;
+  }
+  .src-viewer-media audio { width: min(480px, 90%); }
+  .src-viewer-media iframe {
+    width: 100%;
+    height: 70vh;
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    background: var(--color-background-primary);
+  }
+  .src-viewer-binary {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    text-align: center;
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    padding: 24px;
+  }
+  .src-viewer-binary .bin-icon {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    padding: 10px 14px;
+    border: 0.5px dashed var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    color: var(--color-text-tertiary);
+  }
+  .src-viewer-binary .bin-download {
+    appearance: none;
+    text-decoration: none;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    padding: 6px 14px;
+    border-radius: var(--border-radius-md);
+    border: 0.5px solid var(--color-border-secondary);
+    background: var(--color-background-primary);
+    color: var(--color-text-primary);
+    cursor: pointer;
+  }
+  .src-viewer-binary .bin-download:hover { background: var(--color-background-tertiary); }
   .src-viewer-hint {
     padding: 10px 18px;
     font-size: 11.5px;
@@ -2312,6 +2374,127 @@
   }
   .src-viewer-tuple-btn:disabled { opacity: 0.4; cursor: default; }
   .src-viewer-tuple-btn:not(:disabled):hover { background: var(--color-background-tertiary); }
+
+  /* ---------- PDF VIEW (rendered original + audited extraction) ---------- */
+  .src-viewer-body.is-pdf { width: min(1180px, 96vw); }
+  .src-viewer-pdf-wrap {
+    flex: 1;
+    overflow: auto;
+    padding: 16px;
+    background: var(--color-background-secondary);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .pdf-page-card {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    min-height: 220px;
+  }
+  .pdf-page-canvas-wrap {
+    background: #2a2a2a;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 12px;
+    overflow: auto;
+    border-right: 0.5px solid var(--color-border-tertiary);
+  }
+  .pdf-page-canvas-wrap canvas {
+    max-width: 100%;
+    height: auto;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+  }
+  .pdf-page-text-wrap {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .pdf-page-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: var(--color-background-secondary);
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-secondary);
+  }
+  .pdf-page-num { font-weight: 600; color: var(--color-text-primary); }
+  .pdf-page-meta { color: var(--color-text-tertiary); margin-left: auto; }
+  .pdf-page-text {
+    flex: 1;
+    overflow: auto;
+    padding: 10px 14px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    color: var(--color-text-primary);
+  }
+  .pdf-page-text.is-empty {
+    color: var(--color-text-tertiary);
+    font-style: italic;
+  }
+  .method-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .method-badge.method-native { background: var(--teal-fill); color: var(--teal-text); }
+  .method-badge.method-ocr    { background: var(--amber-fill); color: var(--amber-text); }
+  .method-badge.method-failed { background: var(--blue-fill); color: var(--red-mid); }
+  .pdf-doc-summary {
+    padding: 10px 14px;
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: center;
+  }
+  .pdf-doc-summary b { color: var(--color-text-primary); font-weight: 600; }
+  .pdf-doc-summary .audit-link {
+    margin-left: auto;
+    color: var(--teal-text);
+    cursor: pointer;
+    text-decoration: underline;
+    background: none;
+    border: 0;
+    font: inherit;
+    padding: 0;
+  }
+  .pdf-audit-json {
+    margin: 0;
+    padding: 10px 14px;
+    max-height: 240px;
+    overflow: auto;
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--color-text-primary);
+    white-space: pre;
+  }
 
   /* ---------- CSV / TSV TABLE VIEW (spreadsheet-style) ---------- */
   .src-viewer-body.is-table { width: min(1180px, 96vw); }
@@ -2609,7 +2792,7 @@
   </div>
 </div>
 
-<input type="file" id="file-input" multiple accept=".txt,.csv,.md,.tsv,.json,.log,.xml,.html,.htm" style="display:none">
+<input type="file" id="file-input" multiple style="display:none">
 
 <div id="cite-toolbar" class="cite-toolbar" hidden>
   <button class="ct-btn" id="cite-btn">＋ Anchor evidence</button>
@@ -2630,6 +2813,8 @@
       </div>
     </div>
     <div class="src-viewer-text" id="src-viewer-text"></div>
+    <div class="src-viewer-pdf-wrap" id="src-viewer-pdf-wrap" hidden></div>
+    <div class="src-viewer-media" id="src-viewer-media" hidden></div>
     <div class="src-viewer-table-wrap" id="src-viewer-table-wrap" hidden></div>
     <div class="src-viewer-table-footer" id="src-viewer-table-footer" hidden></div>
     <div class="src-viewer-tuple is-empty" id="src-viewer-tuple" hidden>
@@ -3179,7 +3364,7 @@ function allSources() {
 function renderSources() {
   const list = allSources();
   const items = list.map(s => {
-    const kindTag = ['csv','pdf','txt'].includes(s.kind) ? s.kind : 'txt';
+    const kindTag = ['csv','pdf','txt','img','video','audio','bin'].includes(s.kind) ? s.kind : 'txt';
     const delBtn = s.user_added
       ? `<button class="sitem-del" data-del-src="${s.id}" title="Remove source">×</button>`
       : '';
@@ -4252,13 +4437,28 @@ const storage = (() => {
   }
 
   // ---- Source file persistence ----
-  const memSources = new Map(); // id -> text
+  // Text content lives at sources/{id}. Binary originals (PDFs and any
+  // other non-text source) live at sources/{id}.bin. PDFs have BOTH —
+  // the text file is the auditable extraction the pipeline reads, the
+  // .bin file is the original used to re-render the page in the viewer.
+  // Pure binary sources (images, video, audio, generic files) only have
+  // the .bin file.
+  const memSources = new Map(); // id -> string
+  const memBlobs = new Map();   // id -> Blob
   async function saveSource(id, text) {
     if (!available) { memSources.set(id, text); return; }
     const srcDir = await getDir('sources', true);
     const fh = await srcDir.getFileHandle(id, { create: true });
     const w = await fh.createWritable();
     await w.write(text);
+    await w.close();
+  }
+  async function saveSourceBlob(id, blob) {
+    if (!available) { memBlobs.set(id, blob); return; }
+    const srcDir = await getDir('sources', true);
+    const fh = await srcDir.getFileHandle(id + '.bin', { create: true });
+    const w = await fh.createWritable();
+    await w.write(blob);
     await w.close();
   }
   async function readSource(id) {
@@ -4272,11 +4472,28 @@ const storage = (() => {
       return '';
     }
   }
+  async function readSourceBlob(id, mime = 'application/octet-stream') {
+    if (!available) return memBlobs.get(id) || null;
+    try {
+      const srcDir = await getDir('sources', true);
+      const fh = await srcDir.getFileHandle(id + '.bin');
+      const f = await fh.getFile();
+      return mime && !f.type ? new Blob([f], { type: mime }) : f;
+    } catch {
+      return null;
+    }
+  }
   async function deleteSource(id) {
-    if (!available) { memSources.delete(id); return; }
+    memSources.delete(id);
+    memBlobs.delete(id);
+    if (!available) return;
     try {
       const srcDir = await getDir('sources', true);
       await srcDir.removeEntry(id);
+    } catch {}
+    try {
+      const srcDir = await getDir('sources', true);
+      await srcDir.removeEntry(id + '.bin');
     } catch {}
   }
 
@@ -4303,7 +4520,7 @@ const storage = (() => {
 
   return {
     init, append, readAll, seedMarkerExists, setSeedMarker,
-    saveSource, readSource, deleteSource,
+    saveSource, saveSourceBlob, readSource, readSourceBlob, deleteSource,
     saveArticle, readArticle,
     get available() { return available; }
   };
@@ -4428,6 +4645,9 @@ self.addEventListener('message', (ev) => {
         name: evt.payload.name,
         kind: evt.payload.kind,
         meta: evt.payload.meta || '',
+        mime: evt.payload.mime || '',
+        size: evt.payload.size || 0,
+        has_text: evt.payload.has_text !== false,
         indexed: true,
         user_added: true,
         destination: evt.payload.destination || 'local',
@@ -4435,7 +4655,13 @@ self.addEventListener('message', (ev) => {
         archive_identifier: evt.payload.archive_identifier || null,
         matrix_mxc: evt.payload.matrix_mxc || null,
         matrix_room_id: evt.payload.matrix_room_id || null,
-        sha256: evt.payload.sha256 || null
+        sha256: evt.payload.sha256 || null,
+        // PDF (or any non-text source) carries an extraction audit
+        // describing exactly how its plain text was obtained — native
+        // PDF text vs. OCR — and a flag for whether the original
+        // binary is preserved in OPFS for re-rendering.
+        extraction: evt.payload.extraction || null,
+        has_blob: !!evt.payload.has_blob
       };
       continue;
     }
@@ -4601,11 +4827,195 @@ async function seedIfNeeded() {
 }
 
 /* ======================================================================
+   PDF EXTRACTION
+   ----------------------------------------------------------------------
+   PDFs are first-class sources. We extract text two ways:
+
+     1. native — PDF.js reads the text layer the producing application
+                 embedded in the file. Fast, exact, no hallucination
+                 surface area.
+     2. ocr    — when a page has no usable text layer (scanned
+                 document, photographed contract, image-only export)
+                 we render the page to a canvas and run Tesseract.js.
+                 OCR text is real text with a confidence score, not a
+                 guess — and it is *labelled* as OCR everywhere so it
+                 cannot be confused for native extraction downstream.
+
+   Per-page audit: every page produces an entry recording the method,
+   character count, OCR confidence (when applicable), engine versions,
+   and elapsed time. The audit is attached to the SRC event in the
+   append-only log, so a reader holding the JSON export and the
+   original PDF can replay extraction and verify it.
+
+   Original formatting: the PDF bytes are persisted unchanged in OPFS
+   so the source viewer renders the page exactly as the author saw it.
+   Provenance is what the pipeline saw; the rendered page is what the
+   human saw. Both are kept.
+====================================================================== */
+
+const PDFJS_VERSION    = '4.7.76';
+const PDFJS_CDN        = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.min.mjs`;
+const PDFJS_WORKER     = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.mjs`;
+const TESSERACT_VERSION = '5.1.1';
+const TESSERACT_CDN    = `https://cdn.jsdelivr.net/npm/tesseract.js@${TESSERACT_VERSION}/dist/tesseract.min.js`;
+
+// A page is OCRd when native extraction yields fewer than this many
+// printable characters. Empty cover pages and section dividers stay
+// labelled "native" with chars: 0 — that is itself a useful signal
+// (NUL fires on absent content), so we don't pad them with OCR noise.
+const OCR_FALLBACK_MIN_CHARS = 16;
+
+let _pdfjsP = null;
+function loadPdfJs() {
+  if (_pdfjsP) return _pdfjsP;
+  _pdfjsP = (async () => {
+    const mod = await import(/* @vite-ignore */ PDFJS_CDN);
+    mod.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+    return mod;
+  })().catch(err => { _pdfjsP = null; throw err; });
+  return _pdfjsP;
+}
+
+let _tesseractP = null;
+function loadTesseract() {
+  if (_tesseractP) return _tesseractP;
+  _tesseractP = new Promise((resolve, reject) => {
+    if (window.Tesseract) return resolve(window.Tesseract);
+    const s = document.createElement('script');
+    s.src = TESSERACT_CDN;
+    s.async = true;
+    s.onload = () => window.Tesseract ? resolve(window.Tesseract) : reject(new Error('tesseract.js loaded but global missing'));
+    s.onerror = () => reject(new Error('failed to load tesseract.js from CDN'));
+    document.head.appendChild(s);
+  }).catch(err => { _tesseractP = null; throw err; });
+  return _tesseractP;
+}
+
+async function sha256Hex(buf) {
+  const h = await crypto.subtle.digest('SHA-256', buf);
+  return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/* Extract plaintext + audit from a PDF File. Returns:
+   {
+     text:    string with each page preceded by "\f[page N]\n" so
+              downstream spans can be located deterministically,
+     audit:   per-page extraction record (see below),
+     pdfBytes: ArrayBuffer of the original — caller persists this
+              alongside so the viewer can re-render the pages.
+   }
+   audit shape:
+   {
+     engine: 'pdfjs@4.7.76',
+     ocr_engine: 'tesseract.js@5.1.1' | null,
+     doc_sha256: <hex>,
+     page_count: <int>,
+     method: 'native' | 'ocr' | 'hybrid',
+     extracted_at: <ISO timestamp>,
+     pages: [
+       { n, method: 'native'|'ocr'|'failed', chars, ms,
+         ocr_confidence?, ocr_lang?, error? }
+     ]
+   } */
+async function extractPdf(file, { onProgress } = {}) {
+  const pdfjs = await loadPdfJs();
+  const pdfBytes = await file.arrayBuffer();
+  const sha = await sha256Hex(pdfBytes);
+  // PDF.js transfers the buffer it consumes — give it a copy so the
+  // caller still owns pdfBytes for storage.
+  const doc = await pdfjs.getDocument({ data: pdfBytes.slice(0) }).promise;
+
+  const pages = [];
+  const chunks = [];
+  let usedOcr = false, usedNative = false;
+
+  for (let i = 1; i <= doc.numPages; i++) {
+    const t0 = performance.now();
+    onProgress && onProgress({ phase: 'native', page: i, total: doc.numPages });
+    const page = await doc.getPage(i);
+    const tc = await page.getTextContent();
+    const native = tc.items
+      .map(it => ('str' in it) ? it.str : '')
+      .join(' ')
+      .replace(/[ \t]+/g, ' ')
+      .trim();
+
+    let pageText = native;
+    let method = 'native';
+    let ocrConfidence = null;
+    let ocrLang = null;
+    let error = null;
+
+    if (native.length < OCR_FALLBACK_MIN_CHARS) {
+      try {
+        onProgress && onProgress({ phase: 'ocr', page: i, total: doc.numPages });
+        const viewport = page.getViewport({ scale: 2.0 });
+        const canvas = document.createElement('canvas');
+        canvas.width  = Math.ceil(viewport.width);
+        canvas.height = Math.ceil(viewport.height);
+        const ctx = canvas.getContext('2d', { alpha: false });
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        const Tesseract = await loadTesseract();
+        ocrLang = 'eng';
+        const result = await Tesseract.recognize(canvas, ocrLang);
+        pageText = (result?.data?.text || '').trim();
+        ocrConfidence = typeof result?.data?.confidence === 'number'
+          ? Math.round(result.data.confidence * 10) / 10 : null;
+        method = 'ocr';
+        usedOcr = true;
+      } catch (err) {
+        // OCR failed — keep whatever native gave us (probably ''),
+        // and record the failure so the audit shows it honestly.
+        method = 'failed';
+        error = String(err && err.message || err);
+      }
+    } else {
+      usedNative = true;
+    }
+
+    chunks.push(`\f[page ${i}]\n${pageText}`);
+    pages.push({
+      n: i,
+      method,
+      chars: pageText.length,
+      ms: Math.round(performance.now() - t0),
+      ...(method === 'ocr' ? { ocr_confidence: ocrConfidence, ocr_lang: ocrLang } : {}),
+      ...(error ? { error } : {})
+    });
+  }
+
+  let docMethod;
+  if (usedOcr && usedNative) docMethod = 'hybrid';
+  else if (usedOcr)          docMethod = 'ocr';
+  else                       docMethod = 'native';
+
+  return {
+    text: chunks.join('\n\n'),
+    pdfBytes,
+    audit: {
+      engine: `pdfjs@${PDFJS_VERSION}`,
+      ocr_engine: usedOcr ? `tesseract.js@${TESSERACT_VERSION}` : null,
+      doc_sha256: sha,
+      page_count: doc.numPages,
+      method: docMethod,
+      extracted_at: new Date().toISOString(),
+      pages
+    }
+  };
+}
+
+/* ======================================================================
    UPLOADS
    ----------------------------------------------------------------------
    Click "+ add source" or drop files onto the Sources panel.
    Text-based formats (.txt, .csv, .md, .json, .tsv, .log, .xml, .html)
-   are read and indexed. Binary formats are rejected with a toast.
+   are read and indexed for citation. PDFs are run through PDF.js with
+   a Tesseract.js OCR fallback so each page's text is auditable
+   (engine, method, char count, OCR confidence — see extractPdf above).
+   Images, videos, audio, and any other binary files are stored as
+   blobs and rendered in the source viewer; they can't be snippet-cited
+   yet but they are first-class library entries with the same event log
+   provenance.
 ====================================================================== */
 
 function humanSize(n) {
@@ -4614,19 +5024,29 @@ function humanSize(n) {
   return (n / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
-function detectKind(name) {
-  const m = /\.([^.]+)$/.exec(name);
-  if (!m) return 'txt';
-  const ext = m[1].toLowerCase();
-  if (ext === 'csv' || ext === 'tsv') return 'csv';
-  if (ext === 'pdf') return 'pdf';
-  return 'txt';
+const IMG_EXTS = ['png','jpg','jpeg','gif','webp','bmp','svg','avif','heic','heif','tiff','tif','ico'];
+const VIDEO_EXTS = ['mp4','webm','mov','avi','mkv','m4v','ogv','mpg','mpeg'];
+const AUDIO_EXTS = ['mp3','wav','ogg','flac','aac','m4a','opus','oga'];
+const TEXT_EXTS = ['txt','md','csv','tsv','json','log','xml','html','htm','yaml','yml','ini','conf','js','ts','py','rb','go','rs','c','h','cpp','java','sh'];
+
+function fileExt(name) {
+  return (/\.([^.]+)$/.exec(name || '') || [])[1]?.toLowerCase() || '';
 }
 
-function isTextLike(name) {
-  const ext = (/\.([^.]+)$/.exec(name) || [])[1];
-  if (!ext) return true;
-  return ['txt','md','csv','tsv','json','log','xml','html','htm'].includes(ext.toLowerCase());
+function detectKind(name, mime = '') {
+  const ext = fileExt(name);
+  if (ext === 'csv' || ext === 'tsv') return 'csv';
+  if (ext === 'pdf' || mime === 'application/pdf') return 'pdf';
+  if ((mime && mime.startsWith('image/')) || IMG_EXTS.includes(ext)) return 'img';
+  if ((mime && mime.startsWith('video/')) || VIDEO_EXTS.includes(ext)) return 'video';
+  if ((mime && mime.startsWith('audio/')) || AUDIO_EXTS.includes(ext)) return 'audio';
+  if ((mime && (mime.startsWith('text/') || mime === 'application/json' || mime === 'application/xml')) || TEXT_EXTS.includes(ext) || !ext) return 'txt';
+  return 'bin';
+}
+
+function isTextLike(name, mime = '') {
+  const k = detectKind(name, mime);
+  return k === 'txt' || k === 'csv';
 }
 
 async function handleUpload(files) {
@@ -4634,21 +5054,62 @@ async function handleUpload(files) {
   if (!list.length) return;
   let added = 0, skipped = 0, published = 0;
   for (const file of list) {
-    if (!isTextLike(file.name)) {
-      console.warn('[upload] skipping non-text file', file.name);
-      skipped++;
-      continue;
-    }
     const choice = await promptUploadDestination(file);
     if (!choice) { skipped++; continue; } // user cancelled / skipped
     try {
-      const text = await file.text();
       const id = 's_' + ulid().slice(-10);
-      const kind = detectKind(file.name);
-      const lineCount = (text.match(/\n/g) || []).length + 1;
-      const meta = kind === 'csv'
-        ? `${lineCount - 1} rows · ${humanSize(file.size)}`
-        : `${humanSize(file.size)} · ${lineCount} lines`;
+      const kind = detectKind(file.name, file.type);
+      const mime = file.type || (kind === 'pdf' ? 'application/pdf' : '');
+
+      // Three branches:
+      //   pdf      → run our auditable extractor (PDF.js + OCR fallback);
+      //              save BOTH the extracted text (for citation) and the
+      //              original blob (for visual re-render in the viewer).
+      //   textLike → file.text(), saved as text only.
+      //   binary   → save blob only; viewer renders a media preview.
+      let text = null, lineCount = 0, extraction = null, pdfBytes = null;
+      let hasText = false, hasBlob = false;
+
+      if (kind === 'pdf') {
+        // First PDF lazy-loads PDF.js (~1 MB) and, if any page needs
+        // OCR, Tesseract.js (~10 MB on first run).
+        showToast(`extracting ${file.name}…`);
+        const result = await extractPdf(file, {
+          onProgress: (p) => {
+            if (p.phase === 'ocr') {
+              showToast(`OCR page ${p.page}/${p.total} — ${file.name}`);
+            }
+          }
+        });
+        text = result.text;
+        extraction = result.audit;
+        pdfBytes = result.pdfBytes;
+        lineCount = (text.match(/\n/g) || []).length + 1;
+        hasText = true;
+        hasBlob = true;
+      } else if (isTextLike(file.name, file.type)) {
+        text = await file.text();
+        lineCount = (text.match(/\n/g) || []).length + 1;
+        hasText = true;
+      } else {
+        hasBlob = true;
+      }
+
+      let meta;
+      if (kind === 'pdf') {
+        const ocrPages = extraction.pages.filter(p => p.method === 'ocr').length;
+        const failedPages = extraction.pages.filter(p => p.method === 'failed').length;
+        const methodTag = extraction.method === 'hybrid'
+          ? `${extraction.page_count - ocrPages - failedPages} native · ${ocrPages} OCR${failedPages ? ` · ${failedPages} failed` : ''}`
+          : extraction.method.toUpperCase();
+        meta = `${extraction.page_count} pp · ${humanSize(file.size)} · ${methodTag}`;
+      } else if (kind === 'csv' && hasText) {
+        meta = `${Math.max(0, lineCount - 1)} rows · ${humanSize(file.size)}`;
+      } else if (hasText) {
+        meta = `${humanSize(file.size)} · ${lineCount} lines`;
+      } else {
+        meta = `${(fileExt(file.name) || 'file').toUpperCase()} · ${humanSize(file.size)}`;
+      }
 
       // If a non-local destination was chosen, post to the PROVeo webhook
       // first. If the webhook fails we abort this file — the user asked
@@ -4662,21 +5123,40 @@ async function handleUpload(files) {
         published++;
       }
 
-      await storage.saveSource(id, text);
-      SOURCE_TEXT[id] = text;
+      if (hasText) {
+        await storage.saveSource(id, text);
+        SOURCE_TEXT[id] = text;
+      }
+      if (hasBlob) {
+        // For PDFs, persist the original bytes (already in memory from
+        // extractPdf) so the viewer can re-render pages without going
+        // back to the upload File. For other binaries, just save the
+        // File directly.
+        const blob = pdfBytes
+          ? new Blob([pdfBytes], { type: 'application/pdf' })
+          : file;
+        await storage.saveSourceBlob(id, blob);
+      }
+
       await appendEventAndRefold({
         op: 'SRC',
         site: `source:${id}`,
         resolution: 'Figure',
         payload: {
-          id, name: file.name, kind, meta,
+          id, name: file.name, kind, meta, mime,
           size: file.size, lines: lineCount,
+          has_text: hasText,
+          has_blob: hasBlob,
           destination: choice.visibility,
           archive_url: proveo?.archive?.url || null,
           archive_identifier: proveo?.archive?.identifier || null,
           matrix_mxc: proveo?.matrix?.mxc || null,
           matrix_room_id: proveo?.matrix?.room_id || null,
-          sha256: proveo?.archive?.redacted_sha256 || proveo?.matrix?.original_sha256 || null
+          sha256: proveo?.archive?.redacted_sha256 || proveo?.matrix?.original_sha256
+                  || extraction?.doc_sha256 || null,
+          // PDF audit: how the text we just indexed was actually
+          // obtained, page by page. Travels in the append-only log.
+          extraction
         },
         author: 'human'
       });
@@ -4988,8 +5468,10 @@ function wireSelectionToolbar() {
 }
 
 function citeableSources() {
-  // only user-uploaded (have raw text available); seed sources are demo-only.
-  return Object.values(USER_SOURCES);
+  // only user-uploaded sources that carry raw text can be snippet-cited.
+  // Images, video, audio, pdf and other binary sources live in the library
+  // but are excluded from the cite picker — there's no text span to pick.
+  return Object.values(USER_SOURCES).filter(s => s.has_text !== false);
 }
 
 function ensureSourceText(id) {
@@ -7090,6 +7572,18 @@ function resolveSourceIdByName(name) {
   return seed ? seed.id : null;
 }
 
+// Object URLs created for media previews — revoked when the viewer closes
+// so we don't leak blob memory on repeated opens of large files.
+let _srcViewerMediaUrl = null;
+function revokeSrcViewerMedia() {
+  if (_srcViewerMediaUrl) {
+    try { URL.revokeObjectURL(_srcViewerMediaUrl); } catch {}
+    _srcViewerMediaUrl = null;
+  }
+  const mediaEl = $('#src-viewer-media');
+  if (mediaEl) mediaEl.innerHTML = '';
+}
+
 /* showSourceViewer(id, { scrollTo, selecting })
      scrollTo  = { kind: 'quote', highlight }     → find & pulse a text span
      scrollTo  = { kind: 'cell',  row, col }      → scroll row into view, pulse target cell
@@ -7112,27 +7606,86 @@ async function showSourceViewer(id, opts = {}) {
   if (src.sha256) destBits.push(`sha256: <span style="font-family:var(--font-mono)">${escapeHtml(src.sha256.slice(0, 16))}…</span>`);
   $('#src-viewer-sub').innerHTML = `${(src.kind || 'txt').toUpperCase()} · ${escapeHtml(src.meta || '')}${destBits.length ? ' · ' + destBits.join(' · ') : ''}`;
   const textEl = $('#src-viewer-text');
+  const pdfWrap = $('#src-viewer-pdf-wrap');
+  const mediaEl = $('#src-viewer-media');
   const tableWrap = $('#src-viewer-table-wrap');
   const tableFooter = $('#src-viewer-table-footer');
   const tupleBar = $('#src-viewer-tuple');
   // Reset to text view by default
-  body.classList.remove('is-table');
+  body.classList.remove('is-table', 'is-pdf');
   tableWrap.hidden = true;
   tableWrap.innerHTML = '';
   tableFooter.hidden = true;
   tableFooter.innerHTML = '';
+  pdfWrap.hidden = true;
+  pdfWrap.innerHTML = '';
+  // Cancel any in-flight PDF render from a previous open.
+  if (pdfWrap._renderToken) pdfWrap._renderToken.cancelled = true;
+  revokeSrcViewerMedia();
+  mediaEl.hidden = true;
   if (tupleBar) { tupleBar.hidden = true; tupleBar._tuple = null; tupleBar._headers = null; tupleBar._src = null; }
   textEl.hidden = false;
   textEl.textContent = 'Loading…';
   modal.hidden = false;
   try {
     if (USER_SOURCES[id]) {
-      const text = await ensureSourceText(id);
+      const kind = src.kind;
       const ext = (/\.([^.]+)$/.exec(src.name) || [])[1]?.toLowerCase();
-      const isTable = (src.kind === 'csv') || ext === 'csv' || ext === 'tsv';
-      if (isTable && text) {
+      const hasText = src.has_text !== false;
+      const isPdf = kind === 'pdf' || ext === 'pdf';
+      const isTable = kind === 'csv' || ext === 'csv' || ext === 'tsv';
+      const isMedia = kind === 'img' || kind === 'video' || kind === 'audio' || kind === 'bin' || (!hasText && !isPdf);
+
+      if (isPdf && src.extraction) {
+        // Auditable PDF view: rendered pages next to the extracted text
+        // with per-page method badges. The extraction audit is the
+        // provenance of every character of pipeline input.
+        textEl.hidden = true;
+        pdfWrap.hidden = false;
+        body.classList.add('is-pdf');
+        await renderPdfSource(src, pdfWrap);
+      } else if (isPdf) {
+        // Legacy PDF (uploaded before the auditable extractor existed):
+        // fall back to the browser's embedded PDF viewer.
+        const blob = await storage.readSourceBlob(id, 'application/pdf');
+        if (!blob) {
+          textEl.textContent = '(PDF bytes unavailable — upload again to get auditable extraction.)';
+        } else {
+          _srcViewerMediaUrl = URL.createObjectURL(blob);
+          textEl.hidden = true;
+          mediaEl.hidden = false;
+          mediaEl.innerHTML = `<iframe src="${_srcViewerMediaUrl}" title="${escapeHtml(src.name)}"></iframe>`;
+        }
+      } else if (isMedia) {
+        const blob = await storage.readSourceBlob(id, src.mime);
+        if (!blob) {
+          textEl.textContent = '(file bytes unavailable — this source may have been uploaded in a previous session without persistent storage.)';
+        } else {
+          _srcViewerMediaUrl = URL.createObjectURL(blob);
+          textEl.hidden = true;
+          mediaEl.hidden = false;
+          if (kind === 'img') {
+            mediaEl.innerHTML = `<img src="${_srcViewerMediaUrl}" alt="${escapeHtml(src.name)}">`;
+          } else if (kind === 'video') {
+            mediaEl.innerHTML = `<video src="${_srcViewerMediaUrl}" controls preload="metadata"></video>`;
+          } else if (kind === 'audio') {
+            mediaEl.innerHTML = `<audio src="${_srcViewerMediaUrl}" controls preload="metadata"></audio>`;
+          } else {
+            const dl = _srcViewerMediaUrl;
+            const label = (src.mime || 'application/octet-stream') + ' · ' + humanSize(src.size || blob.size || 0);
+            mediaEl.innerHTML = `
+              <div class="src-viewer-binary">
+                <div class="bin-icon">${escapeHtml(label)}</div>
+                <div>No in-app preview for this file type.</div>
+                <a class="bin-download" href="${dl}" download="${escapeHtml(src.name)}">Download ${escapeHtml(src.name)}</a>
+              </div>
+            `;
+          }
+        }
+      } else if (isTable) {
+        const text = await ensureSourceText(id);
         const tableKind = ext === 'tsv' ? 'tsv' : 'csv';
-        const { html, rowCount, colCount, headers } = renderCsvTable(text, tableKind);
+        const { html, rowCount, colCount, headers } = renderCsvTable(text || '', tableKind);
         tableWrap.innerHTML = html;
         tableFooter.innerHTML = `<span>${rowCount.toLocaleString()} rows · ${colCount} columns</span><span>${tableKind.toUpperCase()}</span>`;
         textEl.hidden = true;
@@ -7146,6 +7699,7 @@ async function showSourceViewer(id, opts = {}) {
           resetCellTuple();
         }
       } else {
+        const text = await ensureSourceText(id);
         textEl.textContent = text || '(empty file)';
       }
     } else {
@@ -7161,11 +7715,14 @@ async function showSourceViewer(id, opts = {}) {
     togglePickerBar(selecting, src);
   } catch (err) {
     console.warn('[src-viewer] failed to load', err);
+    revokeSrcViewerMedia();
+    mediaEl.hidden = true;
     textEl.hidden = false;
+    pdfWrap.hidden = true;
     tableWrap.hidden = true;
     tableFooter.hidden = true;
-    body.classList.remove('is-table');
-    textEl.textContent = '(failed to load source text)';
+    body.classList.remove('is-table', 'is-pdf');
+    textEl.textContent = '(failed to load source: ' + (err && err.message || err) + ')';
   }
 }
 
@@ -7205,6 +7762,210 @@ function applySourceViewerScrollTo(scrollTo, { body }) {
       setTimeout(() => hit && hit.classList.remove('pulse-target'), 1500);
     }
   }
+}
+
+/* Render the PDF source viewer: the original PDF rendered page-by-page
+   on the left, the audited extracted text on the right, with a method
+   badge on every page. The doc summary at the top shows the SHA-256 of
+   the original bytes and the engine versions — together with the JSON
+   audit export, that's enough for a reader to independently replay the
+   extraction and verify it. */
+async function renderPdfSource(src, container) {
+  const token = { cancelled: false };
+  container._renderToken = token;
+  container.innerHTML = '<div style="padding:20px;color:var(--color-text-tertiary);font-family:var(--font-mono);font-size:12px">Loading PDF…</div>';
+
+  const blob = await storage.readSourceBlob(src.id, 'application/pdf');
+  const audit = src.extraction || null;
+
+  if (!blob) {
+    container.innerHTML = '';
+    const note = document.createElement('div');
+    note.style.cssText = 'padding:20px;color:var(--color-text-tertiary);font-family:var(--font-mono);font-size:12px';
+    note.textContent = '(original PDF bytes are not stored for this source — showing extracted text only)';
+    container.appendChild(note);
+    if (audit) container.appendChild(buildPdfDocSummary(audit));
+    const text = await ensureSourceText(src.id);
+    const pre = document.createElement('pre');
+    pre.className = 'pdf-page-text';
+    pre.style.background = 'var(--color-background-primary)';
+    pre.style.border = '0.5px solid var(--color-border-tertiary)';
+    pre.style.borderRadius = 'var(--border-radius-md)';
+    pre.textContent = text || '(no extracted text)';
+    container.appendChild(pre);
+    return;
+  }
+
+  let pdfjs, doc;
+  try {
+    pdfjs = await loadPdfJs();
+    const buf = await blob.arrayBuffer();
+    doc = await pdfjs.getDocument({ data: buf }).promise;
+  } catch (err) {
+    container.innerHTML = '';
+    const fail = document.createElement('div');
+    fail.style.cssText = 'padding:20px;color:var(--red-mid);font-family:var(--font-mono);font-size:12px';
+    fail.textContent = 'Failed to load PDF.js: ' + (err && err.message || err);
+    container.appendChild(fail);
+    return;
+  }
+  if (token.cancelled) return;
+
+  // Slice the extracted text back into per-page chunks using the page
+  // anchors written by extractPdf ("\f[page N]\n…").
+  const fullText = await ensureSourceText(src.id);
+  const pageTexts = splitExtractedTextByPage(fullText, doc.numPages);
+
+  container.innerHTML = '';
+  if (audit) container.appendChild(buildPdfDocSummary(audit));
+
+  const cards = [];
+  for (let i = 1; i <= doc.numPages; i++) {
+    const pageAudit = audit?.pages?.find(p => p.n === i) || null;
+    const card = buildPdfPageCard(i, pageTexts[i - 1] || '', pageAudit);
+    container.appendChild(card);
+    cards.push(card);
+  }
+
+  // Lazy-render canvases on scroll so a 200-page PDF doesn't try to
+  // rasterise everything up front.
+  const observer = new IntersectionObserver((entries) => {
+    if (token.cancelled) { observer.disconnect(); return; }
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      const card = entry.target;
+      observer.unobserve(card);
+      const pageNum = Number(card.dataset.pageNum);
+      renderPdfCanvas(doc, pageNum, card.querySelector('.pdf-page-canvas-wrap'), token);
+    }
+  }, { root: container, rootMargin: '400px 0px' });
+  cards.forEach(c => observer.observe(c));
+}
+
+function buildPdfDocSummary(audit) {
+  const wrap = document.createElement('div');
+  wrap.className = 'pdf-doc-summary';
+  const ocrPages = audit.pages.filter(p => p.method === 'ocr').length;
+  const failedPages = audit.pages.filter(p => p.method === 'failed').length;
+  const nativePages = audit.page_count - ocrPages - failedPages;
+  const avgConf = (() => {
+    const confs = audit.pages.filter(p => typeof p.ocr_confidence === 'number').map(p => p.ocr_confidence);
+    if (!confs.length) return null;
+    return Math.round((confs.reduce((a, b) => a + b, 0) / confs.length) * 10) / 10;
+  })();
+  wrap.innerHTML = [
+    `<span><b>${audit.page_count}</b> pp</span>`,
+    `<span><b>${nativePages}</b> native</span>`,
+    `<span><b>${ocrPages}</b> OCR${avgConf != null ? ` · avg conf <b>${avgConf}</b>` : ''}</span>`,
+    failedPages ? `<span style="color:var(--red-mid)"><b>${failedPages}</b> failed</span>` : '',
+    `<span>${escapeHtml(audit.engine)}${audit.ocr_engine ? ' + ' + escapeHtml(audit.ocr_engine) : ''}</span>`,
+    `<span title="${escapeHtml(audit.doc_sha256)}">sha256 ${escapeHtml(audit.doc_sha256.slice(0, 16))}…</span>`,
+    `<button class="audit-link" type="button">view audit JSON</button>`
+  ].filter(Boolean).join('');
+  const btn = wrap.querySelector('.audit-link');
+  let pre = null;
+  btn.addEventListener('click', () => {
+    if (pre) { pre.remove(); pre = null; btn.textContent = 'view audit JSON'; return; }
+    pre = document.createElement('pre');
+    pre.className = 'pdf-audit-json';
+    pre.textContent = JSON.stringify(audit, null, 2);
+    wrap.parentNode.insertBefore(pre, wrap.nextSibling);
+    btn.textContent = 'hide audit JSON';
+  });
+  return wrap;
+}
+
+function buildPdfPageCard(pageNum, pageText, pageAudit) {
+  const card = document.createElement('div');
+  card.className = 'pdf-page-card';
+  card.dataset.pageNum = String(pageNum);
+
+  const canvasWrap = document.createElement('div');
+  canvasWrap.className = 'pdf-page-canvas-wrap';
+  canvasWrap.innerHTML = '<div style="color:#aaa;font-family:var(--font-mono);font-size:11px;padding:24px">rendering…</div>';
+
+  const textWrap = document.createElement('div');
+  textWrap.className = 'pdf-page-text-wrap';
+  const head = document.createElement('div');
+  head.className = 'pdf-page-head';
+  const method = pageAudit?.method || 'native';
+  const badge = `<span class="method-badge method-${method}">${method}${
+    method === 'ocr' && pageAudit?.ocr_confidence != null ? ` · conf ${pageAudit.ocr_confidence}` : ''
+  }${
+    method === 'failed' && pageAudit?.error ? ` · ${escapeHtml(pageAudit.error.slice(0, 32))}` : ''
+  }</span>`;
+  head.innerHTML = `<span class="pdf-page-num">page ${pageNum}</span>${badge}<span class="pdf-page-meta">${
+    pageAudit ? `${pageAudit.chars} chars · ${pageAudit.ms} ms` : ''
+  }</span>`;
+  const textEl = document.createElement('div');
+  textEl.className = 'pdf-page-text';
+  if (pageText.trim()) {
+    textEl.textContent = pageText;
+  } else {
+    textEl.classList.add('is-empty');
+    textEl.textContent = '(no text extracted from this page)';
+  }
+  textWrap.appendChild(head);
+  textWrap.appendChild(textEl);
+
+  card.appendChild(canvasWrap);
+  card.appendChild(textWrap);
+  return card;
+}
+
+async function renderPdfCanvas(doc, pageNum, container, token) {
+  try {
+    const page = await doc.getPage(pageNum);
+    if (token.cancelled) return;
+    // Render at a reasonable visual quality; cap width to avoid
+    // gigantic canvases on landscape/oversize pages.
+    const targetWidth = Math.min(720, container.clientWidth || 480);
+    const baseViewport = page.getViewport({ scale: 1 });
+    const scale = Math.min(2.5, Math.max(0.75, targetWidth / baseViewport.width));
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    const ctx = canvas.getContext('2d', { alpha: false });
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    if (token.cancelled) return;
+    container.innerHTML = '';
+    container.appendChild(canvas);
+  } catch (err) {
+    if (token.cancelled) return;
+    container.innerHTML = '';
+    const fail = document.createElement('div');
+    fail.style.cssText = 'color:var(--red-mid);font-family:var(--font-mono);font-size:11px;padding:12px';
+    fail.textContent = 'render failed: ' + (err && err.message || err);
+    container.appendChild(fail);
+  }
+}
+
+/* Splits text written by extractPdf back into a per-page array. The
+   anchor format is "\f[page N]\n" — if that anchor is absent (text was
+   loaded from a non-PDF source by mistake) we fall back to one page
+   holding the entire text. */
+function splitExtractedTextByPage(text, expectedPages) {
+  const out = new Array(expectedPages).fill('');
+  if (!text) return out;
+  const re = /\f\[page (\d+)\]\n/g;
+  const positions = [];
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    positions.push({ n: Number(m[1]), start: m.index, contentStart: m.index + m[0].length });
+  }
+  if (!positions.length) {
+    out[0] = text;
+    return out;
+  }
+  for (let i = 0; i < positions.length; i++) {
+    const cur = positions[i];
+    const end = i + 1 < positions.length ? positions[i + 1].start : text.length;
+    if (cur.n >= 1 && cur.n <= expectedPages) {
+      out[cur.n - 1] = text.slice(cur.contentStart, end).replace(/\n+$/, '');
+    }
+  }
+  return out;
 }
 
 function resetCellTuple() {
@@ -7387,6 +8148,9 @@ function hideSourceViewer() {
   highlightMode = false;
   const hlBtn = $('#src-viewer-hl-toggle');
   if (hlBtn) { hlBtn.setAttribute('aria-pressed', 'false'); hlBtn.classList.remove('active'); }
+  // Revoke media object URLs so large video/image/PDF blobs don't
+  // leak memory across repeated opens.
+  revokeSrcViewerMedia();
   $('#src-viewer').hidden = true;
 }
 function wireSourceViewer() {
@@ -7492,7 +8256,7 @@ async function uploadViaProveo(file, visibility, { title, description, redaction
   fd.append('data', file, file.name);
   fd.append('visibility', visibility);
   fd.append('kind', 'source');
-  fd.append('mime', file.type || 'text/plain');
+  fd.append('mime', file.type || 'application/octet-stream');
   fd.append('filename', file.name);
   fd.append('title', title || file.name);
   if (description) fd.append('description', description);
