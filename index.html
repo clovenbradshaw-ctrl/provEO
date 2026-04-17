@@ -1884,6 +1884,40 @@
     background: var(--color-background-secondary);
     border-top: 0.5px solid var(--color-border-tertiary);
   }
+  .src-viewer-tuple {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 14px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    background: var(--color-background-primary);
+    border-top: 0.5px solid var(--color-border-tertiary);
+  }
+  .src-viewer-tuple.is-empty { color: var(--color-text-tertiary); font-style: italic; }
+  .src-viewer-tuple-label {
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 10px;
+    color: var(--color-text-tertiary);
+  }
+  .src-viewer-tuple-readable { color: var(--color-text-primary); }
+  .src-viewer-tuple-readable b { color: var(--amber-text); font-weight: 600; }
+  .src-viewer-tuple-spacer { flex: 1; }
+  .src-viewer-tuple-btn {
+    appearance: none;
+    border: 0.5px solid var(--color-border-secondary);
+    background: var(--color-background-secondary);
+    color: var(--color-text-primary);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    padding: 4px 10px;
+    border-radius: var(--border-radius-md);
+    cursor: pointer;
+  }
+  .src-viewer-tuple-btn:disabled { opacity: 0.4; cursor: default; }
+  .src-viewer-tuple-btn:not(:disabled):hover { background: var(--color-background-tertiary); }
 
   /* ---------- CSV / TSV TABLE VIEW (spreadsheet-style) ---------- */
   .src-viewer-body.is-table { width: min(1180px, 96vw); }
@@ -1933,6 +1967,28 @@
   }
   .src-viewer-table tbody tr:hover td {
     background: var(--teal-fill);
+  }
+  .src-viewer-table tbody td { cursor: cell; }
+  .src-viewer-table tbody td.same-row,
+  .src-viewer-table thead th.same-col {
+    background: color-mix(in srgb, var(--amber-fill) 55%, var(--color-background-primary));
+  }
+  .src-viewer-table tbody td.same-col {
+    background: color-mix(in srgb, var(--amber-fill) 35%, var(--color-background-primary));
+  }
+  .src-viewer-table tbody tr:hover td.same-col {
+    background: color-mix(in srgb, var(--amber-fill) 55%, var(--teal-fill));
+  }
+  .src-viewer-table tbody td.selected {
+    background: var(--amber-fill);
+    color: var(--amber-text);
+    box-shadow: inset 0 0 0 1.5px var(--amber-mid);
+    font-weight: 600;
+  }
+  .src-viewer-table tbody tr:hover td.selected { background: var(--amber-fill); }
+  .src-viewer-table tbody td.rowno.selected-row {
+    color: var(--amber-text);
+    background: color-mix(in srgb, var(--amber-fill) 60%, var(--color-background-secondary));
   }
   .src-viewer-table td.num,
   .src-viewer-table th.num {
@@ -2206,6 +2262,12 @@
     <div class="src-viewer-text" id="src-viewer-text"></div>
     <div class="src-viewer-table-wrap" id="src-viewer-table-wrap" hidden></div>
     <div class="src-viewer-table-footer" id="src-viewer-table-footer" hidden></div>
+    <div class="src-viewer-tuple is-empty" id="src-viewer-tuple" hidden>
+      <span class="src-viewer-tuple-label">tuple</span>
+      <span class="src-viewer-tuple-readable" id="src-viewer-tuple-readable">Click a cell to pull through its tuple.</span>
+      <span class="src-viewer-tuple-spacer"></span>
+      <button class="src-viewer-tuple-btn" id="src-viewer-tuple-copy" disabled>Copy JSON</button>
+    </div>
     <div class="src-viewer-hint">Tip: to cite, select text in your article (Write mode) and click <strong>＋ Cite source</strong>.</div>
   </div>
 </div>
@@ -5396,8 +5458,9 @@ function renderCsvTable(text, kind) {
   });
 
   const headHtml = header.map((h, ci) => {
-    const cls = colClass[ci] === 'money' || colClass[ci] === 'num' ? ' class="num"' : '';
-    return `<th${cls}>${escapeHtml(h)}</th>`;
+    const isNum = colClass[ci] === 'money' || colClass[ci] === 'num';
+    const cls = isNum ? 'num' : '';
+    return `<th class="${cls}" data-col-idx="${ci}">${escapeHtml(h)}</th>`;
   }).join('');
   const bodyHtml = body.map((r, ri) => {
     const cells = [];
@@ -5405,13 +5468,13 @@ function renderCsvTable(text, kind) {
       const v = r[ci] == null ? '' : r[ci];
       const cls = classifyCell(v) || colClass[ci] || '';
       const clsAttr = cls ? ` class="${cls}"` : '';
-      cells.push(`<td${clsAttr} title="${escapeHtml(v)}">${v === '' ? '' : escapeHtml(v)}</td>`);
+      cells.push(`<td${clsAttr} data-row="${ri + 1}" data-col-idx="${ci}" title="${escapeHtml(v)}">${v === '' ? '' : escapeHtml(v)}</td>`);
     }
-    return `<tr><td class="rowno">${ri + 1}</td>${cells.join('')}</tr>`;
+    return `<tr data-row="${ri + 1}"><td class="rowno" data-row="${ri + 1}">${ri + 1}</td>${cells.join('')}</tr>`;
   }).join('');
 
   const html = `<table class="src-viewer-table"><thead><tr><th class="rowno">#</th>${headHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`;
-  return { html, rowCount: body.length, colCount };
+  return { html, rowCount: body.length, colCount, headers: header };
 }
 
 async function showSourceViewer(id) {
@@ -5429,12 +5492,14 @@ async function showSourceViewer(id) {
   const textEl = $('#src-viewer-text');
   const tableWrap = $('#src-viewer-table-wrap');
   const tableFooter = $('#src-viewer-table-footer');
+  const tupleBar = $('#src-viewer-tuple');
   // Reset to text view by default
   body.classList.remove('is-table');
   tableWrap.hidden = true;
   tableWrap.innerHTML = '';
   tableFooter.hidden = true;
   tableFooter.innerHTML = '';
+  if (tupleBar) { tupleBar.hidden = true; tupleBar._tuple = null; tupleBar._headers = null; tupleBar._src = null; }
   textEl.hidden = false;
   textEl.textContent = 'Loading…';
   modal.hidden = false;
@@ -5445,13 +5510,19 @@ async function showSourceViewer(id) {
       const isTable = (src.kind === 'csv') || ext === 'csv' || ext === 'tsv';
       if (isTable && text) {
         const tableKind = ext === 'tsv' ? 'tsv' : 'csv';
-        const { html, rowCount, colCount } = renderCsvTable(text, tableKind);
+        const { html, rowCount, colCount, headers } = renderCsvTable(text, tableKind);
         tableWrap.innerHTML = html;
         tableFooter.innerHTML = `<span>${rowCount.toLocaleString()} rows · ${colCount} columns</span><span>${tableKind.toUpperCase()}</span>`;
         textEl.hidden = true;
         tableWrap.hidden = false;
         tableFooter.hidden = false;
         body.classList.add('is-table');
+        if (tupleBar) {
+          tupleBar.hidden = false;
+          tupleBar._headers = headers;
+          tupleBar._src = src;
+          resetCellTuple();
+        }
       } else {
         textEl.textContent = text || '(empty file)';
       }
@@ -5465,6 +5536,90 @@ async function showSourceViewer(id) {
     tableFooter.hidden = true;
     body.classList.remove('is-table');
     textEl.textContent = '(failed to load source text)';
+  }
+}
+
+function resetCellTuple() {
+  const tupleBar = $('#src-viewer-tuple');
+  if (!tupleBar) return;
+  tupleBar.classList.add('is-empty');
+  tupleBar._tuple = null;
+  $('#src-viewer-tuple-readable').textContent = 'Click a cell to pull through its tuple.';
+  const btn = $('#src-viewer-tuple-copy');
+  if (btn) btn.disabled = true;
+  const wrap = $('#src-viewer-table-wrap');
+  if (!wrap) return;
+  wrap.querySelectorAll('td.selected, td.same-row, td.same-col, td.selected-row').forEach(el => {
+    el.classList.remove('selected', 'same-row', 'same-col', 'selected-row');
+  });
+  wrap.querySelectorAll('th.same-col').forEach(el => el.classList.remove('same-col'));
+}
+
+function selectCellTuple(td) {
+  const tupleBar = $('#src-viewer-tuple');
+  const wrap = $('#src-viewer-table-wrap');
+  if (!tupleBar || !wrap || !tupleBar._headers || !tupleBar._src) return;
+  const row = Number(td.dataset.row);
+  const colIdx = Number(td.dataset.colIdx);
+  if (!Number.isFinite(row) || !Number.isFinite(colIdx)) return;
+  const colName = tupleBar._headers[colIdx] ?? '';
+  const value = td.textContent;
+  const tuple = { src: tupleBar._src.name, row, col: colName, value };
+  tupleBar._tuple = tuple;
+
+  wrap.querySelectorAll('td.selected, td.same-row, td.same-col, td.selected-row').forEach(el => {
+    el.classList.remove('selected', 'same-row', 'same-col', 'selected-row');
+  });
+  wrap.querySelectorAll('th.same-col').forEach(el => el.classList.remove('same-col'));
+
+  td.classList.add('selected');
+  const tr = td.closest('tr');
+  if (tr) {
+    tr.querySelectorAll('td').forEach(c => {
+      if (c === td) return;
+      if (c.classList.contains('rowno')) c.classList.add('selected-row');
+      else c.classList.add('same-row');
+    });
+  }
+  wrap.querySelectorAll(`tbody td[data-col-idx="${colIdx}"]`).forEach(c => {
+    if (c !== td) c.classList.add('same-col');
+  });
+  const th = wrap.querySelector(`thead th[data-col-idx="${colIdx}"]`);
+  if (th) th.classList.add('same-col');
+
+  tupleBar.classList.remove('is-empty');
+  const valTxt = value === '' ? '∅' : `"${value}"`;
+  $('#src-viewer-tuple-readable').innerHTML =
+    `${escapeHtml(tuple.src)} · row <b>${row}</b> · ${escapeHtml(String(colName)).toUpperCase()} = <b>${escapeHtml(valTxt)}</b>`;
+  const btn = $('#src-viewer-tuple-copy');
+  if (btn) btn.disabled = false;
+
+  document.dispatchEvent(new CustomEvent('proveo:cell-tuple', { detail: tuple }));
+}
+
+function wireCellTuple() {
+  const wrap = $('#src-viewer-table-wrap');
+  if (wrap) {
+    wrap.addEventListener('click', (e) => {
+      const td = e.target.closest('td');
+      if (!td || td.classList.contains('rowno')) return;
+      if (!wrap.contains(td)) return;
+      selectCellTuple(td);
+    });
+  }
+  const btn = $('#src-viewer-tuple-copy');
+  if (btn) {
+    btn.addEventListener('click', async () => {
+      const tuple = $('#src-viewer-tuple')._tuple;
+      if (!tuple) return;
+      const json = JSON.stringify({ kind: 'cell', ...tuple });
+      try {
+        await navigator.clipboard.writeText(json);
+        showToast('tuple copied');
+      } catch {
+        showToast('copy failed');
+      }
+    });
   }
 }
 function hideSourceViewer() { $('#src-viewer').hidden = true; }
@@ -6023,6 +6178,7 @@ async function init() {
   wireSelectionToolbar();
   wireCiteModal();
   wireSourceViewer();
+  wireCellTuple();
   wireWorkspace();
   updateWorkspaceIndicator();
   // Try to resume a stored Matrix session in the background — don't block boot.
