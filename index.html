@@ -3579,6 +3579,7 @@
     <div class="topright">
       <span id="boot-status" style="font-family: var(--font-mono); font-size: 10.5px; color: var(--color-text-secondary); margin-right: 4px;">booting…</span>
       <button id="stage1-badge" hidden title="DEF proposals awaiting review" style="font-family: var(--font-mono); font-size: 10.5px; color: var(--color-amber, #BA7517); margin-right: 6px; background: transparent; border: 1px solid currentColor; border-radius: 3px; padding: 2px 6px; cursor: pointer;">0 await review</button>
+      <button id="ruleset-btn" title="Ruleset history" style="font-family: var(--font-mono); font-size: 10.5px; color: var(--color-text-secondary); margin-right: 6px; background: transparent; border: 0.5px solid var(--color-border-tertiary); border-radius: 3px; padding: 2px 6px; cursor: pointer;"><span id="ruleset-label">rs_v1</span></button>
       <div class="srcbadge"><div class="statdot statdot-green"></div>3 indexed</div>
       <button class="ws-btn" id="ws-btn" title="Workspace / Matrix">
         <span class="ws-dot" id="ws-dot"></span>
@@ -4166,6 +4167,30 @@
   </div>
   <div class="up-panel-body" id="up-panel-body"></div>
   <div class="up-panel-foot" id="up-panel-foot">Uploads can take a while — feel free to keep working.</div>
+</div>
+
+<!-- ===== STAGE 7 MODAL ===== -->
+<!-- Shared modal shell with three tabs (7b pending review, 7c ruleset
+     history, 7a per-entity loop). Rendered dynamically from the fold
+     state; buttons emit direct/inferred EVAs and merge/revert RECs. -->
+<div id="stage7-modal" class="cite-modal" hidden>
+  <div class="cite-modal-backdrop" id="stage7-backdrop"></div>
+  <div class="cite-modal-body" style="width:min(880px,94vw); max-height:86vh;">
+    <div class="cite-modal-head">
+      <div>
+        <div class="cite-modal-title" id="stage7-title">Pending review</div>
+        <div class="cite-modal-sub" id="stage7-sub">Model proposals awaiting a verdict.</div>
+      </div>
+      <button class="rphead-close" id="stage7-close">×</button>
+    </div>
+    <div id="stage7-tabs" style="display:flex; gap:12px; padding:10px 22px; border-bottom:0.5px solid var(--color-border-tertiary); font-family:var(--font-mono); font-size:11px; text-transform:uppercase; letter-spacing:0.06em;">
+      <button class="s7tab" data-tab="queue" style="background:transparent; border:0; color:var(--color-text-primary); cursor:pointer; padding:4px 0; border-bottom:1.5px solid var(--color-text-primary);">Pending</button>
+      <button class="s7tab" data-tab="changelog" style="background:transparent; border:0; color:var(--color-text-secondary); cursor:pointer; padding:4px 0;">Ruleset history</button>
+      <button class="s7tab" data-tab="prompts" style="background:transparent; border:0; color:var(--color-text-secondary); cursor:pointer; padding:4px 0;">Prompt proposals</button>
+      <button class="s7tab" data-tab="entity" style="background:transparent; border:0; color:var(--color-text-secondary); cursor:pointer; padding:4px 0;">Entity loop</button>
+    </div>
+    <div id="stage7-body" style="flex:1; overflow:auto; padding:14px 22px 18px;"></div>
+  </div>
 </div>
 
 <!-- Matrix client SDK (loaded from CDN, exposes window.matrixcs).
@@ -6860,7 +6885,8 @@ function installFoldResult(s) {
     ruleSetVersion: s.ruleSetVersion || currentRuleSetVersion(),
     pendingConsistencyEvas: s.pendingConsistencyEvas || [],
     staleCounts: s.staleCounts || { boundary: 0, type: 0, link: 0 },
-    staleSources: Array.isArray(s.staleSources) ? s.staleSources : []
+    staleSources: Array.isArray(s.staleSources) ? s.staleSources : [],
+    promptProposals: Array.isArray(s.promptProposals) ? s.promptProposals : []
   };
   // Adopt the fold's authoritative rule_set_version so subsequent DEFs
   // (and the next rewrite pass) stamp the correct version.
@@ -6876,7 +6902,8 @@ let LAST_FOLD_STATE = {
   ruleSetVersion: INITIAL_RULESET_VERSION,
   pendingConsistencyEvas: [],
   staleCounts: { boundary: 0, type: 0, link: 0 },
-  staleSources: []
+  staleSources: [],
+  promptProposals: []
 };
 
 // After a refold, drain any system-consistency EVAs the fold detected
@@ -7042,6 +7069,10 @@ self.addEventListener('message', (ev) => {
   const alreadyRewritten = new Set();
   let   ruleSetVersion = 'rs_v1';
   const pendingConsistencyEvas = [];
+  // Stage 3i — prompt-addition proposal queue. Fold clusters rejects
+  // by (surface_lower, source_id, wrong_target_entity_id); if a cluster
+  // hits ≥5 rejects, a proposal string is surfaced for human approval.
+  const promptProposals = [];
 
   for (const raw of events) {
     let evt;
@@ -7611,13 +7642,61 @@ self.addEventListener('message', (ev) => {
     }
   })();
 
+  // ---------- Stage 3i: prompt-addition proposal clustering ----------
+  // Spec: ≥5 rejects of the same error pattern cluster by
+  // (surface_pattern, context_pattern, wrong_target) produce a human-
+  // review proposal for a workspace-level prompt addition. We key the
+  // cluster on (surface.toLowerCase(), source_id, wrong_target_entity_id)
+  // — source_id is a reasonable proxy for "context pattern" at this
+  // fidelity. The approval flow lives in the main thread (Stage 7 UI).
+  (function detectPromptProposals() {
+    const byCluster = new Map();
+    for (const eventId of Object.keys(evaPressure)) {
+      const p = evaPressure[eventId];
+      if (!p || !p.target || p.target.subtype !== 'link') continue;
+      const rejects = p.events.filter(e => e.verdict === 'reject');
+      if (!rejects.length) continue;
+      const surface = (p.target.surface || '').toLowerCase();
+      const wrong   = p.target.entity_id || 'null';
+      const source  = p.target.source_id || '*';
+      const key     = surface + '|' + source + '|' + wrong;
+      const bucket  = byCluster.get(key) || {
+        surface: p.target.surface || '',
+        source_id: p.target.source_id || null,
+        wrong_target: wrong,
+        rejects: [],
+        weight: 0
+      };
+      bucket.rejects.push(...rejects.map(e => e.event_id));
+      bucket.weight += rejects.reduce((s, e) => s + e.weight, 0);
+      byCluster.set(key, bucket);
+    }
+    for (const bucket of byCluster.values()) {
+      if (bucket.rejects.length < 5) continue;
+      promptProposals.push({
+        key: bucket.surface + '|' + (bucket.source_id || '*') + '|' + bucket.wrong_target,
+        surface: bucket.surface,
+        source_id: bucket.source_id,
+        wrong_target: bucket.wrong_target,
+        reject_count: bucket.rejects.length,
+        evidence_weight: bucket.weight,
+        triggered_by: bucket.rejects,
+        proposed_text: 'When evaluating "' + bucket.surface + '"' +
+          (bucket.source_id ? ' in ' + bucket.source_id : '') +
+          ', do not resolve to ' + bucket.wrong_target +
+          '. This is a repeated reporter correction (' + bucket.rejects.length + ' rejects).'
+      });
+    }
+  })();
+
   self.postMessage({
     type: 'state',
     claims, sources, G, M, S, mentions, entityIndex,
     D, pendingReview, amberMentions, defCounts,
     evaPressure, recEvents, alreadyRewritten: Array.from(alreadyRewritten),
     ruleSetVersion, pendingConsistencyEvas,
-    staleCounts, staleSources: Array.from(staleSources)
+    staleCounts, staleSources: Array.from(staleSources),
+    promptProposals
   });
 });
 `;
@@ -7661,7 +7740,8 @@ async function fold() {
           ruleSetVersion: ev.data.ruleSetVersion || 'rs_v1',
           pendingConsistencyEvas: ev.data.pendingConsistencyEvas || [],
           staleCounts: ev.data.staleCounts || { boundary: 0, type: 0, link: 0 },
-          staleSources: Array.isArray(ev.data.staleSources) ? ev.data.staleSources : []
+          staleSources: Array.isArray(ev.data.staleSources) ? ev.data.staleSources : [],
+          promptProposals: Array.isArray(ev.data.promptProposals) ? ev.data.promptProposals : []
         });
       }
     };
@@ -7691,14 +7771,278 @@ let DEF_COUNTS = { boundary: 0, type: 0, link: 0, coref: 0, alias: 0 };
 // Stage 1 populates the count from DEF-link review-band events and
 // DEF-alias proposals; the queue interaction itself is Stage 2 work.
 function refreshStage1Badge() {
-  const el = typeof document !== 'undefined' && document.getElementById
-    ? document.getElementById('stage1-badge')
-    : null;
-  if (!el) return;
+  if (typeof document === 'undefined' || !document.getElementById) return;
+  const el = document.getElementById('stage1-badge');
   const n = Array.isArray(PENDING_REVIEW) ? PENDING_REVIEW.length : 0;
-  if (!n) { el.hidden = true; return; }
-  el.hidden = false;
-  el.textContent = `${n} DEF${n === 1 ? '' : 's'} await review`;
+  if (el) {
+    if (!n) el.hidden = true;
+    else { el.hidden = false; el.textContent = `${n} DEF${n === 1 ? '' : 's'} await review`; }
+  }
+  const rs = document.getElementById('ruleset-label');
+  if (rs) rs.textContent = RULE_SET_VERSION;
+}
+
+/* ======================================================================
+   STAGE 7 — UI surfaces
+   ----------------------------------------------------------------------
+   One shared modal with four tabs — covers 7a (per-entity loop), 7b
+   (pending EVA queue), 7c (ruleset changelog), and the Stage 3i prompt
+   approval flow. 7d (resistance profile dashboard) is deferred.
+====================================================================== */
+
+function stage7Open(tab) {
+  const modal = document.getElementById('stage7-modal');
+  if (!modal) return;
+  modal.hidden = false;
+  stage7SetTab(tab || 'queue');
+}
+
+function stage7Close() {
+  const modal = document.getElementById('stage7-modal');
+  if (modal) modal.hidden = true;
+}
+
+function stage7SetTab(tab) {
+  const buttons = document.querySelectorAll('#stage7-tabs .s7tab');
+  buttons.forEach(b => {
+    const active = b.dataset.tab === tab;
+    b.style.color = active ? 'var(--color-text-primary)' : 'var(--color-text-secondary)';
+    b.style.borderBottom = active ? '1.5px solid var(--color-text-primary)' : '0';
+  });
+  const body = document.getElementById('stage7-body');
+  const title = document.getElementById('stage7-title');
+  const sub   = document.getElementById('stage7-sub');
+  if (!body || !title || !sub) return;
+  if (tab === 'queue')     { title.textContent = 'Pending review';     sub.textContent = 'Model proposals awaiting a verdict. Ripping through 50 in 60 seconds is the design point.'; body.innerHTML = renderStage7Queue(); }
+  else if (tab === 'changelog') { title.textContent = 'Ruleset history'; sub.textContent = 'Every ⊛REC event that rewrote the encoding layer.'; body.innerHTML = renderStage7Changelog(); }
+  else if (tab === 'prompts')   { title.textContent = 'Prompt proposals'; sub.textContent = 'Stage 3i — repeated reject patterns the model should learn to avoid. Human approval required.'; body.innerHTML = renderStage7Prompts(); }
+  else if (tab === 'entity')    { title.textContent = 'Entity loop';   sub.textContent = 'Per-entity DEF/EVA/REC counts.';           body.innerHTML = renderStage7Entity(); }
+  wireStage7BodyClicks();
+}
+
+function escapeHtmlSafe(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function renderStage7Queue() {
+  const rows = (PENDING_REVIEW || []).slice(0, 50);
+  if (!rows.length) return '<div style="font-size:12.5px; color:var(--color-text-secondary);">No pending proposals.</div>';
+  const parts = [];
+  parts.push('<div style="display:flex; flex-direction:column; gap:10px;">');
+  for (const r of rows) {
+    const p = r.payload || {};
+    const kind = r.kind;
+    const eid = kind === 'alias' ? p.candidate_canonical_id : p.entity_id;
+    const label = kind === 'alias'
+      ? `Alias proposal: <strong>${escapeHtmlSafe(p.surface)}</strong> → ${escapeHtmlSafe(eid || 'null')}`
+      : `Low-confidence link: <strong>${escapeHtmlSafe(p.mention_id || '')}</strong> → ${escapeHtmlSafe(eid || 'null')}`;
+    const rationale = p.rationale ? escapeHtmlSafe(p.rationale) : '';
+    const conf = typeof p.confidence === 'number' ? p.confidence.toFixed(2) : '—';
+    const band = p.band || '—';
+    parts.push(`
+      <div class="s7-row" data-event-id="${escapeHtmlSafe(r.event_id)}" data-kind="${escapeHtmlSafe(kind)}" style="border:0.5px solid var(--color-border-tertiary); border-radius:4px; padding:10px 12px;">
+        <div style="font-size:13px; margin-bottom:3px;">${label}</div>
+        <div style="font-family:var(--font-mono); font-size:10.5px; color:var(--color-text-secondary);">conf ${conf} · band ${escapeHtmlSafe(band)} · ${escapeHtmlSafe(p.rule_set_version || '')}</div>
+        ${rationale ? `<div style="font-size:11.5px; color:var(--color-text-secondary); margin-top:4px;">${rationale}</div>` : ''}
+        <div style="display:flex; gap:6px; margin-top:8px;">
+          <button class="btn-sm" data-verdict="confirm">Confirm</button>
+          <button class="btn-sm" data-verdict="reject">Reject</button>
+          <button class="btn-sm" data-verdict="defer">Defer</button>
+        </div>
+      </div>`);
+  }
+  parts.push('</div>');
+  return parts.join('');
+}
+
+function renderStage7Changelog() {
+  const recs = Object.values(LAST_FOLD_STATE.recEvents || {}).slice().sort((a, b) => (a.ts < b.ts ? 1 : -1));
+  if (!recs.length) return '<div style="font-size:12.5px; color:var(--color-text-secondary);">No ⊛REC events yet. Accumulated evaluation pressure will populate this timeline.</div>';
+  const parts = ['<div style="display:flex; flex-direction:column; gap:8px;">'];
+  for (const rec of recs.slice(0, 100)) {
+    const t   = rec.ts ? new Date(rec.ts).toLocaleString() : '';
+    const kind = rec.rewrite_type || 'rewrite';
+    const target = rec.target && (rec.target.entity_id || rec.target.reverts) || '';
+    const change = rec.change ? escapeHtmlSafe(JSON.stringify(rec.change)) : '';
+    const evidence = Array.isArray(rec.triggered_by) ? rec.triggered_by.length : 0;
+    parts.push(`
+      <div style="border-left:2px solid var(--color-border-tertiary); padding:6px 0 6px 12px;">
+        <div style="font-family:var(--font-mono); font-size:11px; color:var(--color-text-secondary);">${escapeHtmlSafe(t)} · ${escapeHtmlSafe(kind)} · ${escapeHtmlSafe(String(target))}</div>
+        <div style="font-size:12px; margin-top:2px;">${change}</div>
+        <div style="font-family:var(--font-mono); font-size:10.5px; color:var(--color-text-secondary); margin-top:2px;">triggered by ${evidence} ⊨EVA · weight ${typeof rec.evidence_weight === 'number' ? rec.evidence_weight.toFixed(2) : '—'}</div>
+      </div>`);
+  }
+  parts.push('</div>');
+  return parts.join('');
+}
+
+function renderStage7Prompts() {
+  const proposals = LAST_FOLD_STATE.promptProposals || [];
+  if (!proposals.length) return '<div style="font-size:12.5px; color:var(--color-text-secondary);">No prompt proposals. A cluster of ≥5 rejects on the same surface/source/target produces one.</div>';
+  const parts = ['<div style="display:flex; flex-direction:column; gap:12px;">'];
+  for (const p of proposals) {
+    parts.push(`
+      <div class="s7-prompt" data-key="${escapeHtmlSafe(p.key)}" style="border:0.5px solid var(--color-border-tertiary); border-radius:4px; padding:12px;">
+        <div style="font-size:12.5px; margin-bottom:6px;"><strong>${escapeHtmlSafe(p.surface)}</strong> · ${escapeHtmlSafe(p.reject_count)} rejects · weight ${p.evidence_weight.toFixed(2)}</div>
+        <div style="font-size:12px; font-family:var(--font-mono); background:var(--color-background-secondary, #f5f3ef); padding:8px; border-radius:3px; margin-bottom:8px;">${escapeHtmlSafe(p.proposed_text)}</div>
+        <div style="display:flex; gap:6px;">
+          <button class="btn-sm btn-sm-primary" data-action="approve">Approve &amp; add to prompt</button>
+          <button class="btn-sm" data-action="dismiss">Dismiss</button>
+        </div>
+      </div>`);
+  }
+  parts.push('</div>');
+  return parts.join('');
+}
+
+function renderStage7Entity() {
+  const counts = computeEntityLoopCounts();
+  const rows = Object.entries(counts).sort((a, b) => b[1].defs - a[1].defs);
+  if (!rows.length) return '<div style="font-size:12.5px; color:var(--color-text-secondary);">No entity activity yet.</div>';
+  const parts = ['<div style="display:flex; flex-direction:column; gap:6px;">'];
+  for (const [entityId, c] of rows) {
+    const entity = ENTITIES[entityId] || {};
+    parts.push(`
+      <div style="display:flex; justify-content:space-between; align-items:baseline; padding:6px 0; border-bottom:0.5px solid var(--color-border-tertiary);">
+        <div>
+          <div style="font-size:13px;">${escapeHtmlSafe(entity.canonical || entityId)}</div>
+          <div style="font-family:var(--font-mono); font-size:10.5px; color:var(--color-text-secondary);">${escapeHtmlSafe(entityId)}</div>
+        </div>
+        <div style="font-family:var(--font-mono); font-size:11px; color:var(--color-text-secondary);">
+          ${c.defs} DEFs · ${c.confirms} confirms · ${c.rejects} rejects · ${c.reframes} reframes
+        </div>
+      </div>`);
+  }
+  parts.push('</div>');
+  return parts.join('');
+}
+
+// Helper for 7a. Walks D_VIEW + LAST_FOLD_STATE.evaPressure and sums
+// per-entity DEF/EVA counts. Reframes / confirms / rejects come off
+// the pressure buckets; DEF count comes from link DEFs keyed by entity.
+function computeEntityLoopCounts() {
+  const out = {};
+  const bump = (eid, k) => {
+    if (!eid) return;
+    const e = out[eid] = out[eid] || { defs: 0, confirms: 0, rejects: 0, reframes: 0, defers: 0 };
+    e[k]++;
+  };
+  for (const [obsId, d] of Object.entries(D_VIEW || {})) {
+    if (obsId === '__coref' || obsId === '__aliases' || !d || !d.link) continue;
+    if (d.link.entity_id) bump(d.link.entity_id, 'defs');
+  }
+  for (const p of Object.values(LAST_FOLD_STATE.evaPressure || {})) {
+    if (!p.target || !p.target.entity_id) continue;
+    const eid = p.target.entity_id;
+    for (const e of p.events) {
+      if (e.verdict === 'confirm') bump(eid, 'confirms');
+      else if (e.verdict === 'reject') bump(eid, 'rejects');
+      else if (e.verdict === 'reframe') bump(eid, 'reframes');
+      else if (e.verdict === 'defer') bump(eid, 'defers');
+    }
+  }
+  return out;
+}
+
+// Delegated click handler for buttons inside the modal body.
+function wireStage7BodyClicks() {
+  const body = document.getElementById('stage7-body');
+  if (!body) return;
+  body.onclick = async (ev) => {
+    const verdictBtn = ev.target.closest('[data-verdict]');
+    if (verdictBtn) {
+      const row = verdictBtn.closest('[data-event-id]');
+      if (!row) return;
+      const eventId = row.dataset.eventId;
+      const kind    = row.dataset.kind;
+      const verdict = verdictBtn.dataset.verdict;
+      const site    = kind === 'alias'
+        ? 'proposal:' + eventId
+        : 'claim:';
+      try {
+        await emitDirectEva({ targetEvent: eventId, targetSite: site, verdict, agent: 'human:reporter' });
+        installFoldResult(await fold());
+        if (await drainConsistencyEvas() > 0) installFoldResult(await fold());
+        await runRewriteEngine();
+        stage7SetTab('queue');
+      } catch (err) {
+        console.error('[stage7] EVA emit failed', err);
+      }
+      return;
+    }
+    const promptBtn = ev.target.closest('[data-action]');
+    if (promptBtn) {
+      const promptEl = promptBtn.closest('.s7-prompt');
+      if (!promptEl) return;
+      const key = promptEl.dataset.key;
+      const proposal = (LAST_FOLD_STATE.promptProposals || []).find(p => p.key === key);
+      if (!proposal) return;
+      if (promptBtn.dataset.action === 'approve') {
+        await approvePromptProposal(proposal);
+      } else {
+        await dismissPromptProposal(proposal);
+      }
+      stage7SetTab('prompts');
+      return;
+    }
+  };
+}
+
+// Stage 3i — approve a queued prompt proposal. Appends to the
+// workspace-level prompt_additions list stored under ENTITIES._workspace,
+// bumps the ruleset, and emits a REC-prompt_addition event with the
+// triggering EVA evidence (Stage 5 gate enforces triggered_by).
+async function approvePromptProposal(proposal) {
+  if (!ENTITIES._workspace) ENTITIES._workspace = { prompt_additions: [], dismissed_prompts: [] };
+  if (!Array.isArray(ENTITIES._workspace.prompt_additions)) ENTITIES._workspace.prompt_additions = [];
+  ENTITIES._workspace.prompt_additions.push({
+    text: proposal.proposed_text,
+    approved_at: new Date().toISOString(),
+    approved_by: 'human:reporter',
+    key: proposal.key
+  });
+  await saveEntitiesTable();
+  const prev = currentRuleSetVersion();
+  const next = bumpRuleSetVersion();
+  await emitRecEvent(`ruleset:${next}`, {
+    rewrite_type: 'prompt_addition',
+    previous_version: prev,
+    target: { workspace: '_workspace' },
+    change: { append_to_prompt: proposal.proposed_text, key: proposal.key },
+    triggered_by: proposal.triggered_by || [],
+    evidence_weight: proposal.evidence_weight || 0,
+    agent: 'human:reporter',
+    approval: { approved_by: 'human:reporter', at: new Date().toISOString() }
+  });
+  installFoldResult(await fold());
+}
+
+// Dismissing a proposal records a no-op note on the workspace so the
+// same cluster doesn't keep resurfacing. No REC is emitted.
+async function dismissPromptProposal(proposal) {
+  if (!ENTITIES._workspace) ENTITIES._workspace = { prompt_additions: [], dismissed_prompts: [] };
+  if (!Array.isArray(ENTITIES._workspace.dismissed_prompts)) ENTITIES._workspace.dismissed_prompts = [];
+  ENTITIES._workspace.dismissed_prompts.push({ key: proposal.key, dismissed_at: new Date().toISOString() });
+  await saveEntitiesTable();
+}
+
+function wireStage7Controls() {
+  if (typeof document === 'undefined') return;
+  const badge = document.getElementById('stage1-badge');
+  if (badge) badge.addEventListener('click', () => stage7Open('queue'));
+  const rulesetBtn = document.getElementById('ruleset-btn');
+  if (rulesetBtn) rulesetBtn.addEventListener('click', () => stage7Open('changelog'));
+  const close = document.getElementById('stage7-close');
+  if (close) close.addEventListener('click', stage7Close);
+  const backdrop = document.getElementById('stage7-backdrop');
+  if (backdrop) backdrop.addEventListener('click', stage7Close);
+  const tabs = document.querySelectorAll('#stage7-tabs .s7tab');
+  tabs.forEach(btn => btn.addEventListener('click', () => stage7SetTab(btn.dataset.tab)));
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') stage7Close();
+  });
 }
 
 // Developer surface: expose Stage 1/2/3 state on window for
@@ -14602,6 +14946,7 @@ async function init() {
   wireSelectionToolbar();
   wireSourceViewer();
   wireAnchorDrawer();
+  wireStage7Controls();
   loadEvidenceBench();
   renderEvidenceBench();
   wireEvidenceDnd();
