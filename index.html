@@ -4042,7 +4042,9 @@ async function confirmCitation() {
    - Real caret (no decorative <span class="cursor">)
    - Toolbar with Bold/Italic/H2/Quote/List/Link + keyboard shortcuts
    - Paragraphs (<p>) on Enter instead of <div>
-   - Broadcast edits to Matrix room for real-time collab (see matrixCollab)
+   - Broadcast edits via Matrix to-device messages (see matrixCollab) —
+     nothing is written to the room timeline; local draft is the source
+     of truth (storage.saveArticle).
 ====================================================================== */
 let saveArticleTimer = null;
 function scheduleArticleSave() {
@@ -4260,32 +4262,47 @@ function wireEditor() {
 /* ======================================================================
    MATRIX COLLAB — presence + real-time document sync + remote cursors
    ----------------------------------------------------------------------
-   Transport is Matrix (not WebRTC). The room already pins members as
-   collaborators, so we reuse it for ephemeral presence and document
-   state. Two event types are emitted:
+   Transport is Matrix `sendToDevice` (ephemeral, device-to-device) —
+   borrowed from EO-DB's peer-sync pattern. Nothing we emit lands in the
+   room timeline, so the room isn't polluted by editor traffic.
 
-     net.proveo.article.state   Timeline event, debounced @ ~1.2s.
-                                Full snapshot { title, body_html, rev,
-                                origin_device }. Durable — joins apply
-                                the latest one they see.
+   The persisted source of truth stays local (storage.saveArticle). The
+   workspace room is only used to discover which devices/users should
+   receive ephemeral updates.
 
-     net.proveo.cursor          Timeline event, throttled @ ~180ms.
-                                Lightweight { offset, range_len, rev,
-                                origin_device } for remote caret paint.
-                                Stale after 6s and cleaned up.
+   Event types (all sent via sendToDevice, never sendEvent):
 
-   Cursor positioning uses character offsets over innerText rather than
-   DOM ranges so that remote DOM diverges are tolerated. We don't try
-   to do CRDT merges — last-writer-wins on snapshot. A locally-edited
-   document gets priority while the user is actively typing (within 2s
-   of last input) so remote updates don't clobber their caret.
+     net.proveo.hello    Sent on attach. Announces our rev so peers can
+                         reply with a fresher state if they have one.
+
+     net.proveo.state    Debounced (~1.2s) full snapshot
+                         { title, body_html, rev, origin_device, ts }.
+
+     net.proveo.cursor   Throttled (~180ms) caret position
+                         { offset, rev, origin_device, ts }.
+
+   Last-writer-wins per peer revision. A 2s local-edit guard stops
+   remote state from clobbering the caret while the user is typing.
 ====================================================================== */
-const COLLAB_EVENT_STATE = 'net.proveo.article.state';
+const COLLAB_EVENT_STATE = 'net.proveo.state';
 const COLLAB_EVENT_CURSOR = 'net.proveo.cursor';
+const COLLAB_EVENT_HELLO = 'net.proveo.hello';
 const COLLAB_SNAPSHOT_DEBOUNCE_MS = 1200;
 const COLLAB_CURSOR_THROTTLE_MS = 180;
 const COLLAB_CURSOR_STALE_MS = 6000;
 const COLLAB_LOCAL_EDIT_BLOCK_MS = 2000;
+
+/* Build the Map<userId, Map<deviceId, content>> structure sendToDevice
+   expects. deviceId "*" means "all devices of that user". */
+function buildToDeviceMap(targets, content) {
+  const outer = new Map();
+  for (const { userId, deviceId } of targets) {
+    let inner = outer.get(userId);
+    if (!inner) { inner = new Map(); outer.set(userId, inner); }
+    inner.set(deviceId || '*', content);
+  }
+  return outer;
+}
 
 const matrixCollab = {
   roomId: null,
@@ -4295,7 +4312,7 @@ const matrixCollab = {
   snapshotTimer: null,
   cursorLastSentAt: 0,
   cursorTimer: null,
-  timelineListener: null,
+  toDeviceListener: null,
   memberListener: null,
   remoteCursors: new Map(),   // userId -> { offset, color, name, at, el }
   peerRevs: new Map(),        // userId -> last seen remote rev
@@ -4310,18 +4327,18 @@ const matrixCollab = {
     const client = matrix.client;
     if (!client) return;
 
-    this.timelineListener = (event, room) => {
-      if (!room || room.roomId !== this.roomId) return;
+    this.toDeviceListener = (event) => {
       const type = event.getType();
-      if (type !== COLLAB_EVENT_STATE && type !== COLLAB_EVENT_CURSOR) return;
+      if (type !== COLLAB_EVENT_STATE && type !== COLLAB_EVENT_CURSOR && type !== COLLAB_EVENT_HELLO) return;
       const sender = event.getSender();
-      if (sender === matrix.userId) return; // ignore our own echoes
+      if (sender === matrix.userId && event.getContent()?.origin_device === this.deviceId) return;
       const content = event.getContent() || {};
-      if (content.origin_device === this.deviceId) return;
+      if (content.room_id && content.room_id !== this.roomId) return;
       if (type === COLLAB_EVENT_STATE) this.applyRemoteState(sender, content);
-      else this.applyRemoteCursor(sender, content);
+      else if (type === COLLAB_EVENT_CURSOR) this.applyRemoteCursor(sender, content);
+      else if (type === COLLAB_EVENT_HELLO) this.handleHello(sender, content);
     };
-    client.on('Room.timeline', this.timelineListener);
+    client.on('toDeviceEvent', this.toDeviceListener);
 
     this.memberListener = (event, member) => {
       if (!member || !this.roomId) return;
@@ -4339,15 +4356,16 @@ const matrixCollab = {
     // Periodic cleanup of stale cursors
     this._cleanupInterval = setInterval(() => this.cleanupStale(), 1500);
 
-    // Catch-up: replay the most recent state event from the room timeline
-    this.catchUp();
+    // Announce: ask peers (including our own other devices) to share
+    // their latest state if fresher than ours.
+    this.sendHello().catch(err => console.warn('[collab] hello failed', err));
   },
 
   detach() {
     const client = matrix.client;
-    if (client && this.timelineListener) client.removeListener('Room.timeline', this.timelineListener);
+    if (client && this.toDeviceListener) client.removeListener('toDeviceEvent', this.toDeviceListener);
     if (client && this.memberListener) client.removeListener('RoomMember.membership', this.memberListener);
-    this.timelineListener = null;
+    this.toDeviceListener = null;
     this.memberListener = null;
     this.roomId = null;
     clearTimeout(this.snapshotTimer);
@@ -4373,6 +4391,80 @@ const matrixCollab = {
     renderPresence();
   },
 
+  /* Targets = every joined member (including our own user so our other
+     devices receive the message too). deviceId '*' = all their devices. */
+  peerTargets({ includeSelf = true } = {}) {
+    if (!matrix.client || !this.roomId) return [];
+    const room = matrix.client.getRoom(this.roomId);
+    if (!room) return [];
+    const members = room.getJoinedMembers?.() || [];
+    const me = matrix.userId;
+    return members
+      .filter(m => includeSelf || m.userId !== me)
+      .map(m => ({ userId: m.userId, deviceId: '*' }));
+  },
+
+  async sendToDeviceSafe(type, content) {
+    const targets = this.peerTargets({ includeSelf: true });
+    if (!targets.length || !matrix.client) return;
+    try {
+      const map = buildToDeviceMap(targets, content);
+      await matrix.client.sendToDevice(type, map);
+    } catch (err) {
+      // Older SDKs accept a nested plain object instead of Map
+      try {
+        const obj = {};
+        for (const { userId, deviceId } of targets) {
+          obj[userId] = obj[userId] || {};
+          obj[userId][deviceId || '*'] = content;
+        }
+        await matrix.client.sendToDevice(type, obj);
+      } catch (err2) {
+        throw err2;
+      }
+    }
+  },
+
+  async sendHello() {
+    await this.sendToDeviceSafe(COLLAB_EVENT_HELLO, {
+      room_id: this.roomId,
+      rev: this.rev,
+      origin_device: this.deviceId,
+      ts: Date.now()
+    });
+  },
+
+  /* A peer just joined and announced their rev. If we have a fresher
+     local state, push it to them. */
+  async handleHello(sender, content) {
+    if (!this.roomId) return;
+    if (content.origin_device === this.deviceId) return;
+    if (this.rev > 0 && this.rev >= (content.rev || 0)) {
+      // Send our current snapshot directly to the asker's device(s).
+      const body = $('#article-body');
+      const title = $('.article-title');
+      if (!body || !title) return;
+      const snapshot = {
+        room_id: this.roomId,
+        title: title.innerText.trim(),
+        body_html: body.innerHTML,
+        rev: this.rev,
+        origin_device: this.deviceId,
+        ts: Date.now()
+      };
+      const target = [{ userId: sender, deviceId: content.origin_device || '*' }];
+      try {
+        const map = buildToDeviceMap(target, snapshot);
+        await matrix.client.sendToDevice(COLLAB_EVENT_STATE, map);
+      } catch (err) {
+        try {
+          const obj = { [sender]: { [content.origin_device || '*']: snapshot } };
+          await matrix.client.sendToDevice(COLLAB_EVENT_STATE, obj);
+        } catch {}
+      }
+    }
+  },
+
   scheduleBroadcast() {
     this.lastLocalEditAt = Date.now();
     if (!this.roomId || !matrix.client) return;
@@ -4388,6 +4480,7 @@ const matrixCollab = {
     if (!body || !title) return;
     this.rev += 1;
     const content = {
+      room_id: this.roomId,
       title: title.innerText.trim(),
       body_html: body.innerHTML,
       rev: this.rev,
@@ -4395,7 +4488,7 @@ const matrixCollab = {
       ts: Date.now()
     };
     try {
-      await matrix.client.sendEvent(this.roomId, COLLAB_EVENT_STATE, content);
+      await this.sendToDeviceSafe(COLLAB_EVENT_STATE, content);
       setSyncStatus('synced', 'synced · live');
     } catch (err) {
       console.warn('[collab] state broadcast failed', err);
@@ -4421,13 +4514,14 @@ const matrixCollab = {
     const offset = getBodyCaretOffset();
     if (offset == null) return;
     const content = {
+      room_id: this.roomId,
       offset,
       rev: this.rev,
       origin_device: this.deviceId,
       ts: Date.now()
     };
     try {
-      await matrix.client.sendEvent(this.roomId, COLLAB_EVENT_CURSOR, content);
+      await this.sendToDeviceSafe(COLLAB_EVENT_CURSOR, content);
     } catch (err) {
       // silent — cursor events are best-effort
     }
@@ -4529,21 +4623,6 @@ const matrixCollab = {
       if (now > until) { this.editingUntil.delete(uid); changed = true; }
     }
     if (changed) renderPresence();
-  },
-
-  catchUp() {
-    if (!matrix.client || !this.roomId) return;
-    const room = matrix.client.getRoom(this.roomId);
-    if (!room) return;
-    const timeline = room.getLiveTimeline?.().getEvents?.() || [];
-    // Walk backwards for the most recent state snapshot from another device
-    for (let i = timeline.length - 1; i >= 0; i--) {
-      const ev = timeline[i];
-      if (ev.getType() !== COLLAB_EVENT_STATE) continue;
-      if (ev.getSender() === matrix.userId) continue;
-      this.applyRemoteState(ev.getSender(), ev.getContent() || {});
-      break;
-    }
   }
 };
 
