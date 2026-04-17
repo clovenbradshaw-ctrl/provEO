@@ -3048,7 +3048,7 @@
       <div class="sadd-stack">
         <div class="sadd" id="sadd-btn">+ add source</div>
         <div class="sadd-row">
-          <div class="sarc" id="sarc-btn" title="Import files and auto-publish them to Archive.org">↑ file → archive</div>
+          <div class="sarc" id="sarc-btn" title="Import files and publish them to Archive.org after confirmation">↑ file → archive</div>
           <div class="sarc" id="sarc-url-btn" title="Fetch a web page and auto-publish a snapshot to Archive.org">↗ url → archive</div>
         </div>
       </div>
@@ -3398,18 +3398,22 @@
   </div>
 </div>
 
-<!-- ===== AUTO-ARCHIVE CONSENT MODAL (shown once, then remembered) ===== -->
+<!-- ===== ARCHIVE CONFIRMATION MODAL (shown every batch) ===== -->
 <div id="arcauto-modal" class="cite-modal" hidden>
   <div class="cite-modal-backdrop" id="arcauto-backdrop"></div>
   <div class="ws-modal-body">
     <div class="cite-modal-head">
       <div>
-        <div class="cite-modal-title">Auto-archive to Archive.org</div>
-        <div class="cite-modal-sub">Every file you import with the <strong>↑ archive</strong> button will be uploaded directly to Archive.org as a permanent public record. Acknowledge once to enable:</div>
+        <div class="cite-modal-title">Publish to Archive.org?</div>
+        <div class="cite-modal-sub">These files will be uploaded directly to Archive.org as a <strong>permanent public record</strong>. Review the list and confirm all three warnings to continue.</div>
       </div>
       <button class="rphead-close" id="arcauto-close">×</button>
     </div>
     <div class="ws-section">
+      <div class="ws-form-row">
+        <label id="arcauto-files-label">Files to publish</label>
+        <ul id="arcauto-files" class="cite-pick-note" style="margin:0;padding-left:18px;max-height:140px;overflow:auto"></ul>
+      </div>
       <div class="ws-form-row">
         <label>Consent (required)</label>
         <label class="ws-toggle"><input type="checkbox" id="arc-consent-permanence"> <span>I understand these uploads are <strong>permanent</strong> on Archive.org.</span></label>
@@ -3419,9 +3423,9 @@
       <div id="arcauto-err" class="ws-err" hidden></div>
     </div>
     <div class="cite-modal-actions">
-      <span class="cite-pick-note">You can revoke this later by clearing site data.</span>
+      <span class="cite-pick-note">Uploads to Archive.org are permanent.</span>
       <button class="btn-sm" id="arcauto-cancel">Cancel</button>
-      <button class="btn-sm btn-sm-primary" id="arcauto-confirm">Enable auto-archive</button>
+      <button class="btn-sm btn-sm-primary" id="arcauto-confirm">Publish to Archive.org</button>
     </div>
   </div>
 </div>
@@ -3447,11 +3451,17 @@
         <label class="ws-toggle"><input type="checkbox" id="urlarc-strip" checked> Strip scripts from snapshot</label>
         <label class="ws-toggle"><input type="checkbox" id="urlarc-banner" checked> Add provenance banner</label>
       </div>
+      <div class="ws-form-row">
+        <label>Consent (required)</label>
+        <label class="ws-toggle"><input type="checkbox" id="urlarc-consent-permanence"> <span>I understand this upload is <strong>permanent</strong> on Archive.org.</span></label>
+        <label class="ws-toggle"><input type="checkbox" id="urlarc-consent-privacy"> <span>No <strong>private information</strong> remains in the page I'm publishing.</span></label>
+        <label class="ws-toggle"><input type="checkbox" id="urlarc-consent-rights"> <span>I have the <strong>rights</strong> to publish this content.</span></label>
+      </div>
       <div id="urlarc-err" class="ws-err" hidden></div>
       <div id="urlarc-progress" class="cite-pick-note" style="margin-top:6px" hidden></div>
     </div>
     <div class="cite-modal-actions">
-      <span class="cite-pick-note">The archive.org copy is permanent.</span>
+      <span class="cite-pick-note">Uploads to Archive.org are permanent.</span>
       <button class="btn-sm" id="urlarc-cancel">Cancel</button>
       <button class="btn-sm btn-sm-primary" id="urlarc-confirm">Fetch & archive</button>
     </div>
@@ -5642,23 +5652,29 @@ async function handleUpload(files) {
 }
 
 /* ----------------------------------------------------------------------
-   Auto-archive: a dedicated import entry point that skips the per-file
-   destination modal and pushes every chosen file straight to Archive.org
-   via the PROVeo webhook. Gated behind a one-time consent modal so we
-   don't silently publish on the user's behalf.
+   Archive-on-import: a dedicated import entry point that pushes every
+   chosen file to Archive.org via the PROVeo webhook. Each batch requires
+   fresh confirmation — we never silently publish on the user's behalf,
+   even after a prior acknowledgment.
 ---------------------------------------------------------------------- */
-const LS_AUTO_ARCHIVE_CONSENT = 'nl.autoArchiveConsent.v1';
-
-function hasAutoArchiveConsent() {
-  try { return localStorage.getItem(LS_AUTO_ARCHIVE_CONSENT) === 'true'; } catch { return false; }
-}
-
-function promptAutoArchiveConsent() {
+function promptArchiveUploadConfirm(files) {
   return new Promise((resolve) => {
     const modal = $('#arcauto-modal');
     ['arc-consent-permanence','arc-consent-privacy','arc-consent-rights']
       .forEach(id => { const el = $('#'+id); if (el) el.checked = false; });
     $('#arcauto-err').hidden = true;
+
+    const list = $('#arcauto-files');
+    if (list) {
+      list.innerHTML = '';
+      const label = $('#arcauto-files-label');
+      if (label) label.textContent = `Files to publish (${files.length})`;
+      for (const f of files) {
+        const li = document.createElement('li');
+        li.textContent = `${f.name} · ${humanSize(f.size)}`;
+        list.appendChild(li);
+      }
+    }
     modal.hidden = false;
 
     const cleanup = () => {
@@ -5681,7 +5697,6 @@ function promptAutoArchiveConsent() {
         err.textContent = 'All three acknowledgments are required.';
         return;
       }
-      try { localStorage.setItem(LS_AUTO_ARCHIVE_CONSENT, 'true'); } catch {}
       cleanup();
       resolve(true);
     };
@@ -5701,10 +5716,8 @@ function isHtmlFile(name, mime) {
 async function handleAutoArchiveUpload(files) {
   const list = Array.from(files || []);
   if (!list.length) return;
-  if (!hasAutoArchiveConsent()) {
-    const ok = await promptAutoArchiveConsent();
-    if (!ok) { showToast('auto-archive cancelled'); return; }
-  }
+  const ok = await promptArchiveUploadConfirm(list);
+  if (!ok) { showToast('archive upload cancelled'); return; }
 
   const btn = $('#sarc-btn');
   const prevLabel = btn ? btn.textContent : null;
@@ -6002,10 +6015,6 @@ async function buildArchiveVariants(body, url, { stripScripts = true, addBanner 
 }
 
 async function handleUrlArchive(url, { stripScripts, addBanner } = {}, progress) {
-  if (!hasAutoArchiveConsent()) {
-    const ok = await promptAutoArchiveConsent();
-    if (!ok) { showToast('url-archive cancelled'); return null; }
-  }
   if (progress) progress('fetching page…');
   const { body, statusCode, contentType } = await pageProxyFetch(url);
   if (!body || typeof body !== 'string') throw new Error('empty response from proxy');
@@ -6061,6 +6070,8 @@ function openUrlArchiveModal() {
   $('#urlarc-url').value = '';
   $('#urlarc-strip').checked = true;
   $('#urlarc-banner').checked = true;
+  ['urlarc-consent-permanence','urlarc-consent-privacy','urlarc-consent-rights']
+    .forEach(id => { const el = $('#'+id); if (el) el.checked = false; });
   $('#urlarc-err').hidden = true;
   $('#urlarc-progress').hidden = true;
   modal.hidden = false;
@@ -6083,6 +6094,15 @@ function openUrlArchiveModal() {
     if (!url) {
       const err = $('#urlarc-err');
       err.hidden = false; err.textContent = 'Enter a valid URL.';
+      return;
+    }
+    const consentOk = $('#urlarc-consent-permanence').checked
+                   && $('#urlarc-consent-privacy').checked
+                   && $('#urlarc-consent-rights').checked;
+    if (!consentOk) {
+      const err = $('#urlarc-err');
+      err.hidden = false;
+      err.textContent = 'All three acknowledgments are required.';
       return;
     }
     const stripScripts = $('#urlarc-strip').checked;
