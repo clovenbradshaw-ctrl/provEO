@@ -14657,7 +14657,8 @@ function clipRenderDrawer() {
       <div class="clip-item-text">${escapeHtml(item.text)}</div>
       <div class="clip-item-meta">${chips.join('')}</div>
       <div class="clip-item-actions">
-        <button class="clip-action is-primary" data-action="copy-text">Copy text</button>
+        <button class="clip-action is-primary" data-action="insert">Insert</button>
+        <button class="clip-action" data-action="copy-text">Copy text</button>
         <button class="clip-action" data-action="copy-cite">Copy with citation</button>
         <button class="clip-action" data-action="copy-json">Copy JSON</button>
         <button class="clip-action" data-action="view">View source</button>
@@ -14908,6 +14909,23 @@ function wireClipboard() {
     });
   }
 
+  // Caret in #article-body is lost the moment a drawer button takes focus,
+  // so snapshot the range on mousedown for the Insert action (same pattern
+  // the pill uses above) and restore it on click if the browser collapsed it.
+  let pendingInsertRange = null;
+  $('#clip-drawer-list').addEventListener('mousedown', (e) => {
+    const btn = e.target.closest('[data-action="insert"]');
+    if (!btn) return;
+    const body = $('#article-body');
+    const sel = window.getSelection?.();
+    if (body && sel && sel.rangeCount) {
+      const r = sel.getRangeAt(0);
+      if (body.contains(r.commonAncestorContainer)) {
+        pendingInsertRange = r.cloneRange();
+      }
+    }
+  });
+
   $('#clip-drawer-list').addEventListener('click', async (e) => {
     const actBtn = e.target.closest('[data-action]');
     if (!actBtn) return;
@@ -14917,7 +14935,31 @@ function wireClipboard() {
     const id = itemEl.dataset.id;
     const item = CLIPBOARD.find(x => x.id === id);
     if (!item) return;
-    if (action === 'copy-text') {
+    if (action === 'insert') {
+      const body = $('#article-body');
+      const sel = window.getSelection?.();
+      if (body && pendingInsertRange) {
+        const live = sel && sel.rangeCount ? sel.getRangeAt(0) : null;
+        if (!live || !body.contains(live.commonAncestorContainer)) {
+          try { sel.removeAllRanges(); sel.addRange(pendingInsertRange); } catch {}
+        }
+      }
+      pendingInsertRange = null;
+      const chain = provChainFromSource(item.provenance || {}, item.text);
+      const next = provChainAppendHop(chain, { kind: 'paste', into: 'article' });
+      try {
+        const claimId = await provInsertGroundedFromChain(next);
+        if (claimId) {
+          clipToast('Inserted with provenance');
+          clipCloseDrawer();
+        } else {
+          clipToast('Insert failed — open an article first');
+        }
+      } catch (err) {
+        console.warn('[proveo] clipboard insert failed', err);
+        clipToast('Insert failed');
+      }
+    } else if (action === 'copy-text') {
       const chain = provChainFromSource(item.provenance || {}, item.text);
       const ok = await clipCopyToSystem(item.text, chain);
       clipToast(ok ? 'Copied text (with provenance)' : 'Copy failed');
