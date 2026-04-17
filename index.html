@@ -276,6 +276,13 @@
     letter-spacing: -0.01em;
     margin-bottom: 20px;
     outline: none;
+    caret-color: var(--color-text-primary);
+    min-height: 1.2em;
+  }
+  .article-title:empty::before {
+    content: attr(data-placeholder);
+    color: var(--color-text-tertiary);
+    pointer-events: none;
   }
   .article-title:focus {
     outline: none;
@@ -285,9 +292,193 @@
     font-size: 16px;
     line-height: 1.72;
     letter-spacing: -0.003em;
+    outline: none;
+    caret-color: var(--color-text-primary);
+    min-height: 3em;
+    position: relative;
+  }
+  .article-body:empty::before,
+  .article-body:has(> p:only-child:empty)::before {
+    content: attr(data-placeholder);
+    color: var(--color-text-tertiary);
+    pointer-events: none;
+    position: absolute;
+    font-style: italic;
   }
   .article-body p { margin-bottom: 16px; }
   .article-body p:last-child { margin-bottom: 0; }
+  .article-body h2 {
+    font-family: var(--font-serif);
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.3;
+    margin: 24px 0 12px;
+    letter-spacing: -0.01em;
+  }
+  .article-body h3 {
+    font-family: var(--font-serif);
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1.35;
+    margin: 20px 0 10px;
+  }
+  .article-body blockquote {
+    border-left: 3px solid var(--color-border-secondary);
+    padding: 2px 0 2px 16px;
+    margin: 16px 0;
+    color: var(--color-text-secondary);
+    font-style: italic;
+  }
+  .article-body ul, .article-body ol { margin: 0 0 16px 24px; padding: 0; }
+  .article-body li { margin-bottom: 6px; }
+  .article-body a { color: var(--teal-text, #0f7a6a); text-decoration: underline; }
+  .article-body code {
+    font-family: var(--font-mono);
+    font-size: 0.92em;
+    background: var(--color-bg-secondary, rgba(0,0,0,0.04));
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  .article-body pre {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    background: var(--color-bg-secondary, rgba(0,0,0,0.04));
+    padding: 12px 14px;
+    border-radius: 4px;
+    overflow-x: auto;
+    margin: 16px 0;
+  }
+  .article-body hr {
+    border: none;
+    border-top: 0.5px solid var(--color-border-secondary);
+    margin: 24px 0;
+  }
+
+  /* ---------- EDITOR TOOLBAR ---------- */
+  .editor-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    gap: 2px;
+    align-items: center;
+    padding: 6px 0;
+    margin-bottom: 8px;
+    background: var(--color-bg, #fafaf7);
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    flex-wrap: wrap;
+  }
+  .tbtn {
+    background: transparent;
+    border: 0.5px solid transparent;
+    color: var(--color-text-secondary);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    min-width: 28px;
+    height: 28px;
+    padding: 0 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.1s, color 0.1s, border-color 0.1s;
+  }
+  .tbtn:hover {
+    background: var(--color-bg-secondary, rgba(0,0,0,0.04));
+    color: var(--color-text-primary);
+    border-color: var(--color-border-tertiary);
+  }
+  .tbtn.active {
+    background: var(--amber-fill, rgba(220,170,60,0.15));
+    color: var(--color-text-primary);
+    border-color: var(--color-border-secondary);
+  }
+  .tbtn b { font-family: var(--font-serif); font-weight: 700; }
+  .tbtn i { font-family: var(--font-serif); font-style: italic; font-weight: 500; }
+  .tbar-sep {
+    width: 1px;
+    height: 16px;
+    background: var(--color-border-tertiary);
+    margin: 0 4px;
+  }
+  .tbar-status {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-text-tertiary);
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .tbar-status .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--color-text-tertiary);
+  }
+  .tbar-status .dot.synced { background: var(--teal-mid, #3a9d8a); }
+  .tbar-status .dot.syncing { background: var(--amber-mid); animation: pulse 1.4s ease-in-out infinite; }
+  .tbar-status .dot.offline { background: var(--color-text-tertiary); }
+
+  /* ---------- PRESENCE ---------- */
+  .presence-bar {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    padding: 4px 0;
+    margin-left: 8px;
+  }
+  .presence-bar:empty { display: none; }
+  .pchip {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--color-border-secondary);
+    color: #fff;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-transform: uppercase;
+    border: 1.5px solid transparent;
+    position: relative;
+    transition: border-color 0.2s;
+  }
+  .pchip.editing { border-color: currentColor; }
+  .pchip.editing::after {
+    content: '';
+    position: absolute;
+    bottom: -2px; right: -2px;
+    width: 7px; height: 7px;
+    background: var(--teal-mid, #3a9d8a);
+    border: 1.5px solid var(--color-bg, #fafaf7);
+    border-radius: 50%;
+  }
+
+  /* ---------- REMOTE CURSORS ---------- */
+  .remote-cursor {
+    position: absolute;
+    width: 2px;
+    pointer-events: none;
+    z-index: 5;
+    transition: top 0.12s, left 0.12s, height 0.12s;
+  }
+  .remote-cursor .rc-flag {
+    position: absolute;
+    top: -15px;
+    left: -1px;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 600;
+    color: #fff;
+    padding: 1px 5px;
+    border-radius: 3px 3px 3px 0;
+    white-space: nowrap;
+    line-height: 1.3;
+    letter-spacing: 0.03em;
+  }
 
   /* Claim annotations */
   .g, .conflict, .absent {
@@ -1769,13 +1960,38 @@
     <section class="mode-panel active" id="mode-write">
       <div class="center">
         <div class="editor-wrap">
+          <div class="editor-toolbar" id="editor-toolbar" role="toolbar" aria-label="Formatting">
+            <button class="tbtn" data-cmd="bold" title="Bold (⌘B)" aria-label="Bold"><b>B</b></button>
+            <button class="tbtn" data-cmd="italic" title="Italic (⌘I)" aria-label="Italic"><i>I</i></button>
+            <button class="tbtn" data-cmd="underline" title="Underline (⌘U)" aria-label="Underline"><span style="text-decoration:underline">U</span></button>
+            <button class="tbtn" data-cmd="strikeThrough" title="Strikethrough" aria-label="Strikethrough"><span style="text-decoration:line-through">S</span></button>
+            <span class="tbar-sep"></span>
+            <button class="tbtn" data-block="h2" title="Heading" aria-label="Heading 2">H2</button>
+            <button class="tbtn" data-block="h3" title="Subheading" aria-label="Heading 3">H3</button>
+            <button class="tbtn" data-block="blockquote" title="Quote" aria-label="Blockquote">❝</button>
+            <button class="tbtn" data-block="pre" title="Code block" aria-label="Code block">&lt;/&gt;</button>
+            <span class="tbar-sep"></span>
+            <button class="tbtn" data-cmd="insertUnorderedList" title="Bulleted list" aria-label="Bulleted list">•</button>
+            <button class="tbtn" data-cmd="insertOrderedList" title="Numbered list" aria-label="Numbered list">1.</button>
+            <button class="tbtn" data-cmd="link" title="Link (⌘K)" aria-label="Insert link">🔗</button>
+            <span class="tbar-sep"></span>
+            <button class="tbtn" data-cmd="removeFormat" title="Clear formatting" aria-label="Clear formatting">✕</button>
+            <button class="tbtn" data-cmd="undo" title="Undo (⌘Z)" aria-label="Undo">↶</button>
+            <button class="tbtn" data-cmd="redo" title="Redo (⇧⌘Z)" aria-label="Redo">↷</button>
+            <div class="presence-bar" id="presence-bar"></div>
+            <div class="tbar-status">
+              <span id="tbar-wordcount">0 words</span>
+              <span class="dot offline" id="tbar-sync-dot"></span>
+              <span id="tbar-sync-label">local</span>
+            </div>
+          </div>
           <div class="article-meta">
             <span>Untitled draft</span>
             <span class="sep">·</span>
             <span class="counts" id="counts-meta"></span>
           </div>
-          <div class="article-title" contenteditable="true" spellcheck="false">The Private Police and the Public Budget<span class="cursor"></span></div>
-          <div class="article-body" id="article-body"></div>
+          <div class="article-title" contenteditable="true" spellcheck="false" data-placeholder="Untitled">The Private Police and the Public Budget</div>
+          <div class="article-body" id="article-body" data-placeholder="Start writing… claims will be folded as you cite sources."></div>
         </div>
         <div class="statusbar">
           <div class="sstat"><div class="sstat-dot" style="background: var(--amber-mid)"></div><span class="sstat-n" id="stat-g">0</span> grounded</div>
@@ -1974,6 +2190,24 @@
           <label>Members</label>
           <div id="ws-members" class="ws-member-list"></div>
         </div>
+        <div class="ws-form-row">
+          <label>Encryption</label>
+          <div class="ws-section-sub" id="ws-e2ee-status" style="margin:0 0 8px">Establishing key…</div>
+          <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap">
+            <button class="btn-sm" id="ws-e2ee-rotate" title="Generate a new room key and share it with all current members">Rotate key</button>
+            <button class="btn-sm" id="ws-e2ee-toggle-advanced" type="button">Advanced…</button>
+          </div>
+          <div id="ws-e2ee-advanced" hidden style="margin-top:10px; padding:10px; border:0.5px dashed var(--color-border-tertiary); border-radius:4px">
+            <div class="ws-section-sub" style="margin:0 0 6px">
+              Optional: set a <strong>shared passphrase</strong> for this room. The passphrase never leaves your device — every member must type the same string. This overrides auto-key sharing and protects against a malicious homeserver that could otherwise see the auto-exchanged key.
+            </div>
+            <div style="display:flex; gap:6px; align-items:center">
+              <input id="ws-e2ee-pass" class="ws-input" type="password" autocomplete="off" placeholder="shared passphrase (out-of-band)" style="flex:1">
+              <button class="btn-sm" id="ws-e2ee-save">Save</button>
+              <button class="btn-sm" id="ws-e2ee-clear" title="Clear passphrase → revert to auto-shared key">Clear</button>
+            </div>
+          </div>
+        </div>
         <label class="ws-toggle">
           <input type="checkbox" id="toggle-sample-in"> Show built-in sample article &amp; sources
         </label>
@@ -2030,7 +2264,7 @@
 
 <!-- Matrix client SDK (loaded from CDN, exposes window.matrixcs).
      Loaded lazily so the app still works offline; checks for window.matrixcs before use. -->
-<script src="https://cdn.jsdelivr.net/npm/matrix-js-sdk@31.0.0/dist/browser-matrix.min.js" crossorigin="anonymous" referrerpolicy="no-referrer" onerror="console.warn('[matrix] SDK failed to load — Matrix features will be unavailable')"></script>
+<script src="https://cdn.jsdelivr.net/npm/matrix-js-sdk@34.11.0/lib/browser-matrix.min.js" crossorigin="anonymous" referrerpolicy="no-referrer" onerror="this.onerror=null;console.warn('[matrix] jsdelivr failed, trying unpkg');var s=document.createElement('script');s.src='https://unpkg.com/matrix-js-sdk@34.11.0/lib/browser-matrix.min.js';s.crossOrigin='anonymous';s.referrerPolicy='no-referrer';s.onerror=function(){console.warn('[matrix] SDK failed to load — Matrix features will be unavailable')};document.head.appendChild(s)"></script>
 
 <script>
 /* ===========================================================================
@@ -3822,6 +4056,13 @@ async function confirmCitation() {
 
 /* ======================================================================
    ARTICLE EDITOR — contenteditable + debounced persistence
+   ----------------------------------------------------------------------
+   - Real caret (no decorative <span class="cursor">)
+   - Toolbar with Bold/Italic/H2/Quote/List/Link + keyboard shortcuts
+   - Paragraphs (<p>) on Enter instead of <div>
+   - Broadcast edits via Matrix to-device messages (see matrixCollab) —
+     nothing is written to the room timeline; local draft is the source
+     of truth (storage.saveArticle).
 ====================================================================== */
 let saveArticleTimer = null;
 function scheduleArticleSave() {
@@ -3848,11 +4089,10 @@ async function loadPersistedArticle() {
     const title = $('.article-title');
     if (data.body) body.innerHTML = data.body;
     if (data.title && title) {
-      // preserve the cursor span if present in the seed
-      const cursor = title.querySelector('.cursor');
       title.textContent = data.title;
-      if (cursor) title.appendChild(cursor);
     }
+    // strip any legacy decorative cursor spans
+    document.querySelectorAll('.article-title .cursor, #article-body .cursor').forEach(el => el.remove());
     // rebind claim click handlers
     body.querySelectorAll('[data-id]').forEach(el => {
       el.addEventListener('click', () => showClaim(el.dataset.id));
@@ -3863,19 +4103,1109 @@ async function loadPersistedArticle() {
   }
 }
 
+function updateWordCount() {
+  const body = $('#article-body');
+  const el = $('#tbar-wordcount');
+  if (!body || !el) return;
+  const text = (body.innerText || '').trim();
+  const words = text ? text.split(/\s+/).length : 0;
+  el.textContent = `${words} word${words === 1 ? '' : 's'}`;
+}
+
+function setSyncStatus(state, label) {
+  const dot = $('#tbar-sync-dot');
+  const lab = $('#tbar-sync-label');
+  if (!dot || !lab) return;
+  dot.classList.remove('synced', 'syncing', 'offline');
+  dot.classList.add(state);
+  lab.textContent = label;
+}
+
+/* Toolbar command execution. Uses execCommand for broad browser support;
+   falls back to Selection/Range API for insertions that execCommand mishandles. */
+function isActiveCmd(cmd) {
+  try { return document.queryCommandState(cmd); } catch { return false; }
+}
+function currentBlockTag() {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return null;
+  let node = sel.getRangeAt(0).startContainer;
+  const body = $('#article-body');
+  if (!body || !body.contains(node)) return null;
+  if (node.nodeType === 3) node = node.parentNode;
+  while (node && node !== body) {
+    const tag = node.nodeName.toLowerCase();
+    if (['p','h1','h2','h3','h4','blockquote','pre','li'].includes(tag)) return tag;
+    node = node.parentNode;
+  }
+  return null;
+}
+function refreshToolbarState() {
+  const tb = $('#editor-toolbar');
+  if (!tb) return;
+  tb.querySelectorAll('.tbtn[data-cmd]').forEach(b => {
+    const cmd = b.dataset.cmd;
+    if (['bold','italic','underline','strikeThrough','insertUnorderedList','insertOrderedList'].includes(cmd)) {
+      b.classList.toggle('active', isActiveCmd(cmd));
+    }
+  });
+  const block = currentBlockTag();
+  tb.querySelectorAll('.tbtn[data-block]').forEach(b => {
+    b.classList.toggle('active', b.dataset.block === block);
+  });
+}
+
+function runToolbarCmd(cmd) {
+  const body = $('#article-body');
+  if (!body) return;
+  body.focus();
+  if (cmd === 'link') {
+    const url = prompt('Link URL:', 'https://');
+    if (!url) return;
+    document.execCommand('createLink', false, url);
+    return;
+  }
+  document.execCommand(cmd, false, null);
+}
+function runToolbarBlock(tag) {
+  const body = $('#article-body');
+  if (!body) return;
+  body.focus();
+  const current = currentBlockTag();
+  // Toggle: clicking the active block resets to paragraph
+  const target = current === tag ? 'p' : tag;
+  document.execCommand('formatBlock', false, target);
+}
+
 function wireEditor() {
   const body = $('#article-body');
   const title = $('.article-title');
+  const toolbar = $('#editor-toolbar');
+  if (!body || !title) return;
+
   body.setAttribute('contenteditable', 'true');
   body.setAttribute('spellcheck', 'false');
-  body.addEventListener('input', scheduleArticleSave);
-  title.addEventListener('input', scheduleArticleSave);
-  // prevent pasting HTML: convert to plain text
+  // Use <p> as the default block on Enter (Firefox/Chromium-safe)
+  try { document.execCommand('defaultParagraphSeparator', false, 'p'); } catch {}
+
+  // Strip any legacy decorative cursor spans in current DOM
+  document.querySelectorAll('.article-title .cursor, #article-body .cursor').forEach(el => el.remove());
+
+  const onEdit = () => {
+    scheduleArticleSave();
+    updateWordCount();
+    refreshToolbarState();
+    matrixCollab.scheduleBroadcast();
+  };
+
+  body.addEventListener('input', onEdit);
+  title.addEventListener('input', onEdit);
+
+  // Enter in the title moves focus into the body instead of inserting a line break.
+  title.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      body.focus();
+      // Place caret at start of body
+      const sel = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(body);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  });
+
+  // Keyboard shortcuts in the body
+  body.addEventListener('keydown', (e) => {
+    const meta = e.metaKey || e.ctrlKey;
+    if (!meta) return;
+    const k = e.key.toLowerCase();
+    if (k === 'b') { e.preventDefault(); runToolbarCmd('bold'); refreshToolbarState(); }
+    else if (k === 'i') { e.preventDefault(); runToolbarCmd('italic'); refreshToolbarState(); }
+    else if (k === 'u') { e.preventDefault(); runToolbarCmd('underline'); refreshToolbarState(); }
+    else if (k === 'k') { e.preventDefault(); runToolbarCmd('link'); }
+  });
+
+  // Ensure body always has at least one <p> so Enter produces paragraphs cleanly
+  body.addEventListener('focus', () => {
+    if (!body.innerHTML.trim()) {
+      body.innerHTML = '<p><br></p>';
+      const sel = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(body.firstChild);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  });
+
+  // Plain-text paste
   body.addEventListener('paste', (e) => {
     e.preventDefault();
     const t = (e.clipboardData || window.clipboardData).getData('text/plain');
     document.execCommand('insertText', false, t);
   });
+  title.addEventListener('paste', (e) => {
+    e.preventDefault();
+    const t = (e.clipboardData || window.clipboardData).getData('text/plain');
+    document.execCommand('insertText', false, t.replace(/\n+/g, ' '));
+  });
+
+  // Toolbar wiring — prevent mousedown stealing selection from the editor
+  toolbar?.addEventListener('mousedown', (e) => {
+    if (e.target.closest('.tbtn')) e.preventDefault();
+  });
+  toolbar?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.tbtn');
+    if (!btn) return;
+    if (btn.dataset.cmd) runToolbarCmd(btn.dataset.cmd);
+    else if (btn.dataset.block) runToolbarBlock(btn.dataset.block);
+    refreshToolbarState();
+    scheduleArticleSave();
+    updateWordCount();
+    matrixCollab.scheduleBroadcast();
+  });
+
+  // Track selection for toolbar active states + remote cursor broadcast
+  document.addEventListener('selectionchange', () => {
+    refreshToolbarState();
+    matrixCollab.scheduleCursorBroadcast();
+  });
+
+  updateWordCount();
+  refreshToolbarState();
+}
+
+/* ======================================================================
+   MATRIX COLLAB — presence + real-time document sync + remote cursors
+   ----------------------------------------------------------------------
+   Transport is Matrix `sendToDevice` (ephemeral, device-to-device) —
+   borrowed from EO-DB's peer-sync pattern. Nothing we emit lands in the
+   room timeline, so the room isn't polluted by editor traffic.
+
+   The persisted source of truth stays local (storage.saveArticle). The
+   workspace room is only used to discover which devices/users should
+   receive ephemeral updates.
+
+   Event types (all sent via sendToDevice, never sendEvent):
+
+     net.proveo.hello    Sent on attach. Announces our rev so peers can
+                         reply with a fresher state if they have one.
+
+     net.proveo.state    Debounced (~1.2s) full snapshot
+                         { title, body_html, rev, origin_device, ts }.
+
+     net.proveo.cursor   Throttled (~180ms) caret position
+                         { offset, rev, origin_device, ts }.
+
+   Last-writer-wins per peer revision. A 2s local-edit guard stops
+   remote state from clobbering the caret while the user is typing.
+====================================================================== */
+const COLLAB_EVENT_STATE = 'net.proveo.state';
+const COLLAB_EVENT_CURSOR = 'net.proveo.cursor';
+const COLLAB_EVENT_HELLO = 'net.proveo.hello';
+const COLLAB_EVENT_KEY_REQUEST = 'net.proveo.key.request';
+const COLLAB_EVENT_KEY_GRANT = 'net.proveo.key.grant';
+const COLLAB_SNAPSHOT_DEBOUNCE_MS = 1200;
+const COLLAB_CURSOR_THROTTLE_MS = 180;
+const COLLAB_CURSOR_STALE_MS = 6000;
+const COLLAB_LOCAL_EDIT_BLOCK_MS = 2000;
+const COLLAB_KEY_WAIT_MS = 2500;  // wait for a peer's key.grant before minting our own
+
+/* Build the Map<userId, Map<deviceId, content>> structure sendToDevice
+   expects. deviceId "*" means "all devices of that user". */
+function buildToDeviceMap(targets, content) {
+  const outer = new Map();
+  for (const { userId, deviceId } of targets) {
+    let inner = outer.get(userId);
+    if (!inner) { inner = new Map(); outer.set(userId, inner); }
+    inner.set(deviceId || '*', content);
+  }
+  return outer;
+}
+
+/* ----------------------------------------------------------------------
+   APPLICATION-LAYER E2EE (AES-256-GCM via WebCrypto) — automatic
+   ----------------------------------------------------------------------
+   Matrix's native olm/Rust crypto requires loading a separate WASM blob
+   and an IndexedDB keystore — heavy for a single-file CDN app. Instead,
+   we ship our own AES-256-GCM envelope with an automatic key-exchange
+   protocol that runs over to-device messages:
+
+     Join flow (matrixCollab.attach):
+       1. If a manual passphrase is stored → derive key, skip exchange.
+       2. Else if a stored raw room-key exists → import it, skip exchange.
+       3. Else broadcast net.proveo.key.request to every joined member's
+          devices (including our own other devices).
+       4. Wait up to COLLAB_KEY_WAIT_MS for a net.proveo.key.grant. If one
+          arrives, adopt it and persist.
+       5. If no grant arrives in time, mint a fresh random 256-bit key,
+          persist it, broadcast a net.proveo.key.grant so peers who come
+          online later can fetch it from us.
+
+     Convergence rule: a peer's grant with an older key_ts wins (every
+     device eventually adopts the earliest-minted key). Ties are broken
+     by key-bytes lexicographic order.
+
+     Envelope (borrowed from EO-DB EncryptedPeerPayload):
+       { v: 1, alg: 'aes-256-gcm', fp, iv, ct }
+     where `fp` = SHA-256(key)[:16 hex] so peers confirm they share the
+     same key without transmitting it.
+
+   Caveats: key-exchange messages themselves are plaintext to the
+   homeserver (there's no pre-shared secret to protect them). A manual
+   passphrase (never on the wire) defeats that attack if the server is
+   untrusted.
+---------------------------------------------------------------------- */
+const LS_E2EE_PREFIX = 'nl.e2ee.v1.';          // stores passphrase
+const LS_E2EE_KEY_PREFIX = 'nl.e2ee.key.v1.';  // stores raw auto-key
+const E2EE_ALG = 'aes-256-gcm';
+const E2EE_PBKDF2_ITERS = 200000;
+
+function toB64(buf) {
+  const bytes = new Uint8Array(buf);
+  let s = '';
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
+function fromB64(str) {
+  const bin = atob(str);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+function toHex(buf) {
+  const bytes = new Uint8Array(buf);
+  let s = '';
+  for (let i = 0; i < bytes.length; i++) s += bytes[i].toString(16).padStart(2, '0');
+  return s;
+}
+
+const collabCrypto = {
+  key: null,              // CryptoKey
+  keyRaw: null,           // Uint8Array(32)
+  fingerprint: null,      // hex short-hash of the key
+  roomId: null,
+  mode: 'none',           // 'none' | 'auto' | 'passphrase'
+  keyTs: 0,               // minting timestamp (ms) — used for convergence
+  mintedBy: null,         // originating deviceId (informational)
+
+  async _installRaw(raw, roomId, mode, keyTs, mintedBy) {
+    if (!globalThis.crypto?.subtle) {
+      console.warn('[e2ee] WebCrypto unavailable');
+      return false;
+    }
+    if (!(raw instanceof Uint8Array) || raw.byteLength !== 32) {
+      throw new Error('room key must be exactly 32 bytes');
+    }
+    this.key = await crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+    this.keyRaw = raw;
+    this.roomId = roomId;
+    this.mode = mode;
+    this.keyTs = keyTs || Date.now();
+    this.mintedBy = mintedBy || null;
+    const fpBuf = await crypto.subtle.digest('SHA-256', raw);
+    this.fingerprint = toHex(fpBuf).slice(0, 16);
+    return true;
+  },
+
+  async derive(passphrase, roomId) {
+    this.clear();
+    if (!passphrase) return false;
+    if (!globalThis.crypto?.subtle) {
+      console.warn('[e2ee] WebCrypto unavailable');
+      return false;
+    }
+    const enc = new TextEncoder();
+    const material = await crypto.subtle.importKey(
+      'raw', enc.encode(passphrase),
+      { name: 'PBKDF2' }, false, ['deriveBits']
+    );
+    const bits = await crypto.subtle.deriveBits(
+      { name: 'PBKDF2', salt: enc.encode('proveo:' + roomId), iterations: E2EE_PBKDF2_ITERS, hash: 'SHA-256' },
+      material, 256
+    );
+    return this._installRaw(new Uint8Array(bits), roomId, 'passphrase', Date.now(), null);
+  },
+
+  async importAutoKey(rawB64, roomId, keyTs, mintedBy) {
+    this.clear();
+    const raw = fromB64(rawB64);
+    return this._installRaw(raw, roomId, 'auto', keyTs, mintedBy);
+  },
+
+  async mintAutoKey(roomId, mintedBy) {
+    this.clear();
+    const raw = crypto.getRandomValues(new Uint8Array(32));
+    return this._installRaw(raw, roomId, 'auto', Date.now(), mintedBy);
+  },
+
+  exportRawKeyB64() {
+    return this.keyRaw ? toB64(this.keyRaw) : null;
+  },
+
+  clear() {
+    this.key = null;
+    this.keyRaw = null;
+    this.fingerprint = null;
+    this.roomId = null;
+    this.mode = 'none';
+    this.keyTs = 0;
+    this.mintedBy = null;
+  },
+
+  enabled() { return !!this.key; },
+
+  async encrypt(obj) {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const plaintext = new TextEncoder().encode(JSON.stringify(obj));
+    const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, this.key, plaintext);
+    // Envelope shape borrowed from EO-DB's EncryptedPeerPayload with a
+    // `v` version marker for forward-compat with future format changes.
+    return { v: 1, alg: E2EE_ALG, fp: this.fingerprint, iv: toB64(iv), ct: toB64(ct) };
+  },
+
+  async decrypt(envelope) {
+    if (!envelope || envelope.alg !== E2EE_ALG) throw new Error('not an e2ee envelope');
+    if (envelope.v && envelope.v !== 1) throw new Error('unknown envelope version: ' + envelope.v);
+    if (envelope.fp !== this.fingerprint) throw new Error('key fingerprint mismatch');
+    const iv = fromB64(envelope.iv);
+    const ct = fromB64(envelope.ct);
+    const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, this.key, ct);
+    return JSON.parse(new TextDecoder().decode(plaintext));
+  },
+
+  /* A message body is "sealed" if it has alg+fp+iv+ct fields. Anything
+     else is treated as plaintext for back-compat with unencrypted peers. */
+  isSealed(content) {
+    return !!(content && content.alg === E2EE_ALG && content.fp && content.iv && content.ct);
+  }
+};
+
+function loadStoredPassphrase(roomId) {
+  try { return localStorage.getItem(LS_E2EE_PREFIX + roomId) || ''; } catch { return ''; }
+}
+function storePassphrase(roomId, passphrase) {
+  try {
+    if (passphrase) localStorage.setItem(LS_E2EE_PREFIX + roomId, passphrase);
+    else localStorage.removeItem(LS_E2EE_PREFIX + roomId);
+  } catch {}
+}
+
+function loadStoredAutoKey(roomId) {
+  try {
+    const raw = localStorage.getItem(LS_E2EE_KEY_PREFIX + roomId);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function storeAutoKey(roomId, payload) {
+  try {
+    if (payload) localStorage.setItem(LS_E2EE_KEY_PREFIX + roomId, JSON.stringify(payload));
+    else localStorage.removeItem(LS_E2EE_KEY_PREFIX + roomId);
+  } catch {}
+}
+
+async function applyE2eePassphrase(roomId, passphrase) {
+  if (!passphrase) { collabCrypto.clear(); return false; }
+  const ok = await collabCrypto.derive(passphrase, roomId);
+  return ok;
+}
+
+function renderE2eeStatus() {
+  const status = $('#ws-e2ee-status');
+  if (!status) return;
+  const dot = $('#tbar-sync-dot');
+  const pass = $('#ws-e2ee-pass');
+  if (collabCrypto.enabled()) {
+    const mode = collabCrypto.mode === 'passphrase' ? 'Passphrase-derived' : 'Auto-shared';
+    const mintedStr = collabCrypto.mintedBy ? ` · minted by ${escapeHtml(collabCrypto.mintedBy.slice(0, 10))}` : '';
+    status.innerHTML = `🔒 Encrypted (${mode}) · fp <span style="font-family:var(--font-mono)">${collabCrypto.fingerprint}</span>${mintedStr}`;
+    if (dot) dot.setAttribute('data-e2ee', '1');
+  } else {
+    status.textContent = '⚠ Unencrypted — no key established yet.';
+    if (dot) dot.removeAttribute('data-e2ee');
+  }
+  if (pass && matrix.activeRoomId) pass.value = loadStoredPassphrase(matrix.activeRoomId);
+  const labelEl = $('#tbar-sync-label');
+  if (labelEl && collabCrypto.enabled() && !labelEl.textContent.includes('🔒')) {
+    labelEl.textContent = '🔒 ' + labelEl.textContent;
+  }
+}
+
+const matrixCollab = {
+  roomId: null,
+  deviceId: null,
+  rev: 0,                // local revision counter (monotonic per device)
+  lastLocalEditAt: 0,
+  snapshotTimer: null,
+  cursorLastSentAt: 0,
+  cursorTimer: null,
+  toDeviceListener: null,
+  memberListener: null,
+  remoteCursors: new Map(),   // userId -> { offset, color, name, at, el }
+  peerRevs: new Map(),        // userId -> last seen remote rev
+  editingUntil: new Map(),    // userId -> timestamp when they stopped editing
+
+  async attach(roomId) {
+    this.detach();
+    this.roomId = roomId;
+    this.deviceId = matrix.client?.getDeviceId?.() || 'local';
+    this.rev = 0;
+    this._keyWaitResolve = null;
+    this._keyWaitTimer = null;
+
+    const client = matrix.client;
+    if (!client) return;
+
+    this.toDeviceListener = async (event) => {
+      const type = event.getType();
+      const isCollabEvent = [
+        COLLAB_EVENT_STATE, COLLAB_EVENT_CURSOR, COLLAB_EVENT_HELLO,
+        COLLAB_EVENT_KEY_REQUEST, COLLAB_EVENT_KEY_GRANT
+      ].includes(type);
+      if (!isCollabEvent) return;
+      const sender = event.getSender();
+      let content = event.getContent() || {};
+
+      // Key exchange messages are always plaintext (there's no shared
+      // key yet when we exchange them). Everything else must be sealed
+      // once a key exists.
+      const isKeyExchange = (type === COLLAB_EVENT_KEY_REQUEST || type === COLLAB_EVENT_KEY_GRANT);
+
+      if (!isKeyExchange) {
+        if (collabCrypto.isSealed(content)) {
+          if (!collabCrypto.enabled()) {
+            console.warn('[e2ee] sealed message received but no key yet; will request');
+            // Nudge: ask for the room key so we can catch up
+            this.sendKeyRequest().catch(() => {});
+            return;
+          }
+          try {
+            content = await collabCrypto.decrypt(content);
+          } catch (err) {
+            console.warn('[e2ee] decrypt failed', err.message);
+            return;
+          }
+        } else if (collabCrypto.enabled()) {
+          // We require encryption, peer sent plaintext — drop.
+          console.warn('[e2ee] rejected plaintext from', sender, '— room requires encryption');
+          return;
+        }
+      }
+
+      if (sender === matrix.userId && content.origin_device === this.deviceId) return;
+      if (content.room_id && content.room_id !== this.roomId) return;
+
+      if (type === COLLAB_EVENT_STATE) this.applyRemoteState(sender, content);
+      else if (type === COLLAB_EVENT_CURSOR) this.applyRemoteCursor(sender, content);
+      else if (type === COLLAB_EVENT_HELLO) this.handleHello(sender, content);
+      else if (type === COLLAB_EVENT_KEY_REQUEST) this.handleKeyRequest(sender, content);
+      else if (type === COLLAB_EVENT_KEY_GRANT) this.handleKeyGrant(sender, content);
+    };
+    client.on('toDeviceEvent', this.toDeviceListener);
+
+    this.memberListener = (event, member) => {
+      if (!member || !this.roomId) return;
+      const room = client.getRoom(this.roomId);
+      if (!room) return;
+      if (member.roomId !== this.roomId) return;
+      this.syncRoomMembers();
+    };
+    client.on('RoomMember.membership', this.memberListener);
+
+    this.syncRoomMembers();
+    renderPresence();
+    setSyncStatus('synced', 'live · ' + (matrix.client?.getRoom(roomId)?.name || 'room'));
+
+    // Periodic cleanup of stale cursors
+    this._cleanupInterval = setInterval(() => this.cleanupStale(), 1500);
+
+    // Automatic key establishment. Passphrase override wins if set;
+    // otherwise reuse any locally-stored room key; otherwise ask peers
+    // and fall back to minting one if no peer responds in time.
+    await this.establishKey(roomId);
+
+    // Announce our rev so peers can push a fresher state if they have one.
+    this.sendHello().catch(err => console.warn('[collab] hello failed', err));
+  },
+
+  async establishKey(roomId) {
+    // 1) Manual passphrase override
+    const pass = loadStoredPassphrase(roomId);
+    if (pass) {
+      try { await collabCrypto.derive(pass, roomId); }
+      catch (err) { console.warn('[e2ee] passphrase derive failed', err); }
+      renderE2eeStatus();
+      if (collabCrypto.enabled()) return;
+    }
+    // 2) Stored auto-key from a previous session
+    const stored = loadStoredAutoKey(roomId);
+    if (stored && stored.key_b64) {
+      try {
+        await collabCrypto.importAutoKey(stored.key_b64, roomId, stored.key_ts, stored.minted_by);
+        renderE2eeStatus();
+        // Still broadcast a grant so late-joiners can fetch from us
+        this.broadcastKeyGrant().catch(() => {});
+        return;
+      } catch (err) {
+        console.warn('[e2ee] stored auto-key invalid, will re-exchange', err);
+      }
+    }
+    // 3) Ask peers. If nobody responds, mint our own.
+    await this.requestOrMintKey(roomId);
+    renderE2eeStatus();
+  },
+
+  async requestOrMintKey(roomId) {
+    await this.sendKeyRequest();
+    // Wait for a grant — resolved early by handleKeyGrant, or by timeout.
+    await new Promise(resolve => {
+      this._keyWaitResolve = resolve;
+      this._keyWaitTimer = setTimeout(resolve, COLLAB_KEY_WAIT_MS);
+    });
+    clearTimeout(this._keyWaitTimer);
+    this._keyWaitTimer = null;
+    this._keyWaitResolve = null;
+    if (collabCrypto.enabled()) return;
+    // No peer responded — we're first. Mint and broadcast so stragglers
+    // can grab it when they arrive.
+    await collabCrypto.mintAutoKey(roomId, this.deviceId);
+    storeAutoKey(roomId, {
+      key_b64: collabCrypto.exportRawKeyB64(),
+      key_ts: collabCrypto.keyTs,
+      minted_by: this.deviceId
+    });
+    this.broadcastKeyGrant().catch(() => {});
+  },
+
+  async sendKeyRequest() {
+    if (!this.roomId || !matrix.client) return;
+    const content = {
+      room_id: this.roomId,
+      origin_device: this.deviceId,
+      ts: Date.now()
+    };
+    const targets = this.peerTargets({ includeSelf: true });
+    if (!targets.length) return;
+    try {
+      const map = buildToDeviceMap(targets, content);
+      await matrix.client.sendToDevice(COLLAB_EVENT_KEY_REQUEST, map);
+    } catch (err) {
+      try {
+        const obj = {};
+        for (const t of targets) { obj[t.userId] = obj[t.userId] || {}; obj[t.userId][t.deviceId || '*'] = content; }
+        await matrix.client.sendToDevice(COLLAB_EVENT_KEY_REQUEST, obj);
+      } catch (err2) { console.warn('[e2ee] key request failed', err2); }
+    }
+  },
+
+  async sendKeyGrantTo(targetUserId, targetDeviceId) {
+    if (!collabCrypto.enabled() || !this.roomId || !matrix.client) return;
+    // Only auto-mode keys are shareable; passphrase-derived keys never
+    // travel over the wire.
+    if (collabCrypto.mode !== 'auto') return;
+    const content = {
+      room_id: this.roomId,
+      origin_device: this.deviceId,
+      key_b64: collabCrypto.exportRawKeyB64(),
+      key_ts: collabCrypto.keyTs,
+      minted_by: collabCrypto.mintedBy || this.deviceId,
+      fp: collabCrypto.fingerprint,
+      ts: Date.now()
+    };
+    const target = [{ userId: targetUserId, deviceId: targetDeviceId || '*' }];
+    try {
+      const map = buildToDeviceMap(target, content);
+      await matrix.client.sendToDevice(COLLAB_EVENT_KEY_GRANT, map);
+    } catch (err) {
+      try {
+        const obj = { [targetUserId]: { [targetDeviceId || '*']: content } };
+        await matrix.client.sendToDevice(COLLAB_EVENT_KEY_GRANT, obj);
+      } catch (err2) { console.warn('[e2ee] key grant failed', err2); }
+    }
+  },
+
+  async broadcastKeyGrant() {
+    if (!collabCrypto.enabled() || collabCrypto.mode !== 'auto') return;
+    if (!this.roomId || !matrix.client) return;
+    const content = {
+      room_id: this.roomId,
+      origin_device: this.deviceId,
+      key_b64: collabCrypto.exportRawKeyB64(),
+      key_ts: collabCrypto.keyTs,
+      minted_by: collabCrypto.mintedBy || this.deviceId,
+      fp: collabCrypto.fingerprint,
+      ts: Date.now()
+    };
+    const targets = this.peerTargets({ includeSelf: true });
+    if (!targets.length) return;
+    try {
+      const map = buildToDeviceMap(targets, content);
+      await matrix.client.sendToDevice(COLLAB_EVENT_KEY_GRANT, map);
+    } catch (err) {
+      try {
+        const obj = {};
+        for (const t of targets) { obj[t.userId] = obj[t.userId] || {}; obj[t.userId][t.deviceId || '*'] = content; }
+        await matrix.client.sendToDevice(COLLAB_EVENT_KEY_GRANT, obj);
+      } catch (err2) { console.warn('[e2ee] key broadcast failed', err2); }
+    }
+  },
+
+  async handleKeyRequest(sender, content) {
+    if (!collabCrypto.enabled() || collabCrypto.mode !== 'auto') return;
+    await this.sendKeyGrantTo(sender, content.origin_device);
+  },
+
+  async handleKeyGrant(sender, content) {
+    if (!content.key_b64 || !content.room_id) return;
+    if (content.room_id !== this.roomId) return;
+    if (collabCrypto.mode === 'passphrase') return; // manual override wins
+
+    // If we have no key yet, adopt theirs.
+    if (!collabCrypto.enabled()) {
+      try {
+        await collabCrypto.importAutoKey(content.key_b64, this.roomId, content.key_ts, content.minted_by);
+        storeAutoKey(this.roomId, {
+          key_b64: content.key_b64,
+          key_ts: content.key_ts,
+          minted_by: content.minted_by
+        });
+        renderE2eeStatus();
+        showToast('encryption established · fp ' + collabCrypto.fingerprint);
+        if (this._keyWaitResolve) { this._keyWaitResolve(); this._keyWaitResolve = null; }
+      } catch (err) { console.warn('[e2ee] importing granted key failed', err); }
+      return;
+    }
+
+    // Convergence: if their key is the same, no-op. If different, keep
+    // the earlier one (or lexicographically smaller on a tie).
+    if (content.fp === collabCrypto.fingerprint) return;
+    const theirEarlier =
+      content.key_ts < collabCrypto.keyTs ||
+      (content.key_ts === collabCrypto.keyTs && content.key_b64 < (collabCrypto.exportRawKeyB64() || ''));
+    if (theirEarlier) {
+      console.warn('[e2ee] adopting earlier-minted key from peer');
+      try {
+        await collabCrypto.importAutoKey(content.key_b64, this.roomId, content.key_ts, content.minted_by);
+        storeAutoKey(this.roomId, {
+          key_b64: content.key_b64,
+          key_ts: content.key_ts,
+          minted_by: content.minted_by
+        });
+        renderE2eeStatus();
+        showToast('room key converged · fp ' + collabCrypto.fingerprint);
+      } catch (err) { console.warn('[e2ee] converging on peer key failed', err); }
+    } else {
+      // Our key is earlier — push it back so they converge on ours.
+      console.warn('[e2ee] peer has later key; broadcasting ours for convergence');
+      this.broadcastKeyGrant().catch(() => {});
+    }
+  },
+
+  async rotateAutoKey() {
+    if (!this.roomId) return;
+    if (collabCrypto.mode === 'passphrase') return; // can't rotate a passphrase key
+    await collabCrypto.mintAutoKey(this.roomId, this.deviceId);
+    storeAutoKey(this.roomId, {
+      key_b64: collabCrypto.exportRawKeyB64(),
+      key_ts: collabCrypto.keyTs,
+      minted_by: this.deviceId
+    });
+    renderE2eeStatus();
+    await this.broadcastKeyGrant();
+    showToast('key rotated · fp ' + collabCrypto.fingerprint);
+  },
+
+  detach() {
+    const client = matrix.client;
+    if (client && this.toDeviceListener) client.removeListener('toDeviceEvent', this.toDeviceListener);
+    if (client && this.memberListener) client.removeListener('RoomMember.membership', this.memberListener);
+    this.toDeviceListener = null;
+    this.memberListener = null;
+    this.roomId = null;
+    clearTimeout(this.snapshotTimer);
+    clearTimeout(this.cursorTimer);
+    clearInterval(this._cleanupInterval);
+    clearTimeout(this._keyWaitTimer);
+    if (this._keyWaitResolve) { this._keyWaitResolve(); this._keyWaitResolve = null; }
+    this._keyWaitTimer = null;
+    this.remoteCursors.forEach(c => c.el?.remove());
+    this.remoteCursors.clear();
+    this.peerRevs.clear();
+    this.editingUntil.clear();
+    renderPresence();
+    setSyncStatus('offline', 'local');
+  },
+
+  syncRoomMembers() {
+    if (!matrix.client || !this.roomId) return;
+    const room = matrix.client.getRoom(this.roomId);
+    if (!room) return;
+    matrix.members = (room.getJoinedMembers?.() || []).map(m => ({
+      userId: m.userId,
+      displayName: m.name || m.rawDisplayName || m.userId,
+      membership: m.membership
+    }));
+    renderPresence();
+  },
+
+  /* Targets = every joined member (including our own user so our other
+     devices receive the message too). deviceId '*' = all their devices. */
+  peerTargets({ includeSelf = true } = {}) {
+    if (!matrix.client || !this.roomId) return [];
+    const room = matrix.client.getRoom(this.roomId);
+    if (!room) return [];
+    const members = room.getJoinedMembers?.() || [];
+    const me = matrix.userId;
+    return members
+      .filter(m => includeSelf || m.userId !== me)
+      .map(m => ({ userId: m.userId, deviceId: '*' }));
+  },
+
+  async sendToDeviceSafe(type, content) {
+    const targets = this.peerTargets({ includeSelf: true });
+    if (!targets.length || !matrix.client) return;
+    // Seal content if e2ee is on. The envelope itself is unencrypted
+    // metadata — it carries only the algorithm, IV, fingerprint, and
+    // ciphertext; no document content, no cursor offset.
+    let payload = content;
+    if (collabCrypto.enabled()) {
+      try { payload = await collabCrypto.encrypt(content); }
+      catch (err) { console.warn('[e2ee] encrypt failed', err); return; }
+    }
+    try {
+      const map = buildToDeviceMap(targets, payload);
+      await matrix.client.sendToDevice(type, map);
+    } catch (err) {
+      // Older SDKs accept a nested plain object instead of Map
+      try {
+        const obj = {};
+        for (const { userId, deviceId } of targets) {
+          obj[userId] = obj[userId] || {};
+          obj[userId][deviceId || '*'] = payload;
+        }
+        await matrix.client.sendToDevice(type, obj);
+      } catch (err2) {
+        throw err2;
+      }
+    }
+  },
+
+  async sendHello() {
+    await this.sendToDeviceSafe(COLLAB_EVENT_HELLO, {
+      room_id: this.roomId,
+      rev: this.rev,
+      origin_device: this.deviceId,
+      ts: Date.now()
+    });
+  },
+
+  /* A peer just joined and announced their rev. If we have a fresher
+     local state, push it to them. */
+  async handleHello(sender, content) {
+    if (!this.roomId) return;
+    if (content.origin_device === this.deviceId) return;
+    if (this.rev > 0 && this.rev >= (content.rev || 0)) {
+      // Send our current snapshot directly to the asker's device(s).
+      const body = $('#article-body');
+      const title = $('.article-title');
+      if (!body || !title) return;
+      const snapshot = {
+        room_id: this.roomId,
+        title: title.innerText.trim(),
+        body_html: body.innerHTML,
+        rev: this.rev,
+        origin_device: this.deviceId,
+        ts: Date.now()
+      };
+      let payload = snapshot;
+      if (collabCrypto.enabled()) {
+        try { payload = await collabCrypto.encrypt(snapshot); }
+        catch (err) { console.warn('[e2ee] encrypt failed in hello-reply', err); return; }
+      }
+      const target = [{ userId: sender, deviceId: content.origin_device || '*' }];
+      try {
+        const map = buildToDeviceMap(target, payload);
+        await matrix.client.sendToDevice(COLLAB_EVENT_STATE, map);
+      } catch (err) {
+        try {
+          const obj = { [sender]: { [content.origin_device || '*']: payload } };
+          await matrix.client.sendToDevice(COLLAB_EVENT_STATE, obj);
+        } catch {}
+      }
+    }
+  },
+
+  scheduleBroadcast() {
+    this.lastLocalEditAt = Date.now();
+    if (!this.roomId || !matrix.client) return;
+    clearTimeout(this.snapshotTimer);
+    setSyncStatus('syncing', 'syncing…');
+    this.snapshotTimer = setTimeout(() => this.broadcastState(), COLLAB_SNAPSHOT_DEBOUNCE_MS);
+  },
+
+  async broadcastState() {
+    if (!this.roomId || !matrix.client) return;
+    const body = $('#article-body');
+    const title = $('.article-title');
+    if (!body || !title) return;
+    this.rev += 1;
+    const content = {
+      room_id: this.roomId,
+      title: title.innerText.trim(),
+      body_html: body.innerHTML,
+      rev: this.rev,
+      origin_device: this.deviceId,
+      ts: Date.now()
+    };
+    try {
+      await this.sendToDeviceSafe(COLLAB_EVENT_STATE, content);
+      setSyncStatus('synced', 'synced · live');
+    } catch (err) {
+      console.warn('[collab] state broadcast failed', err);
+      setSyncStatus('offline', 'offline');
+    }
+  },
+
+  scheduleCursorBroadcast() {
+    if (!this.roomId || !matrix.client) return;
+    const now = Date.now();
+    const elapsed = now - this.cursorLastSentAt;
+    if (elapsed >= COLLAB_CURSOR_THROTTLE_MS) {
+      this.broadcastCursor();
+    } else {
+      clearTimeout(this.cursorTimer);
+      this.cursorTimer = setTimeout(() => this.broadcastCursor(), COLLAB_CURSOR_THROTTLE_MS - elapsed);
+    }
+  },
+
+  async broadcastCursor() {
+    if (!this.roomId || !matrix.client) return;
+    this.cursorLastSentAt = Date.now();
+    const offset = getBodyCaretOffset();
+    if (offset == null) return;
+    const content = {
+      room_id: this.roomId,
+      offset,
+      rev: this.rev,
+      origin_device: this.deviceId,
+      ts: Date.now()
+    };
+    try {
+      await this.sendToDeviceSafe(COLLAB_EVENT_CURSOR, content);
+    } catch (err) {
+      // silent — cursor events are best-effort
+    }
+  },
+
+  applyRemoteState(sender, content) {
+    if (!content || typeof content.body_html !== 'string') return;
+    // Ignore old revisions from a given peer
+    const lastRev = this.peerRevs.get(sender) || 0;
+    if (typeof content.rev === 'number' && content.rev < lastRev) return;
+    this.peerRevs.set(sender, content.rev || 0);
+
+    // Mark peer as actively editing
+    this.editingUntil.set(sender, Date.now() + 3500);
+    renderPresence();
+
+    // If the local user was just typing, defer the remote apply to avoid
+    // clobbering their caret. The remote will re-send soon.
+    if (Date.now() - this.lastLocalEditAt < COLLAB_LOCAL_EDIT_BLOCK_MS) return;
+
+    const body = $('#article-body');
+    const title = $('.article-title');
+    if (!body || !title) return;
+
+    if (body.innerHTML !== content.body_html) {
+      const savedCaret = getBodyCaretOffset();
+      body.innerHTML = content.body_html;
+      // Rebind claim handlers on the re-parsed DOM
+      body.querySelectorAll('[data-id]').forEach(el => {
+        el.addEventListener('click', () => showClaim(el.dataset.id));
+      });
+      if (savedCaret != null) setBodyCaretOffset(savedCaret);
+    }
+    if (typeof content.title === 'string' && title.innerText.trim() !== content.title) {
+      title.textContent = content.title;
+    }
+    updateWordCount();
+    // Re-paint any remote cursors against the new DOM
+    this.remoteCursors.forEach((c, uid) => this.paintCursor(uid));
+    setSyncStatus('synced', 'synced · live');
+  },
+
+  applyRemoteCursor(sender, content) {
+    if (typeof content.offset !== 'number') return;
+    const color = colorForUser(sender);
+    const name = displayNameForUser(sender);
+    let entry = this.remoteCursors.get(sender);
+    if (!entry) {
+      entry = { offset: 0, color, name, at: 0, el: null };
+      this.remoteCursors.set(sender, entry);
+    }
+    entry.offset = content.offset;
+    entry.color = color;
+    entry.name = name;
+    entry.at = Date.now();
+    this.editingUntil.set(sender, Date.now() + 3500);
+    this.paintCursor(sender);
+    renderPresence();
+  },
+
+  paintCursor(userId) {
+    const body = $('#article-body');
+    if (!body) return;
+    const entry = this.remoteCursors.get(userId);
+    if (!entry) return;
+    const coords = offsetToCoords(body, entry.offset);
+    if (!coords) return;
+    if (!entry.el) {
+      entry.el = document.createElement('div');
+      entry.el.className = 'remote-cursor';
+      const flag = document.createElement('span');
+      flag.className = 'rc-flag';
+      entry.el.appendChild(flag);
+      body.appendChild(entry.el);
+    }
+    const parentRect = body.getBoundingClientRect();
+    entry.el.style.top = (coords.top - parentRect.top + body.scrollTop) + 'px';
+    entry.el.style.left = (coords.left - parentRect.left + body.scrollLeft) + 'px';
+    entry.el.style.height = (coords.height || 18) + 'px';
+    entry.el.style.background = entry.color;
+    entry.el.style.color = entry.color;
+    const flag = entry.el.querySelector('.rc-flag');
+    if (flag) {
+      flag.textContent = entry.name;
+      flag.style.background = entry.color;
+    }
+  },
+
+  cleanupStale() {
+    const now = Date.now();
+    for (const [uid, entry] of this.remoteCursors.entries()) {
+      if (now - entry.at > COLLAB_CURSOR_STALE_MS) {
+        entry.el?.remove();
+        this.remoteCursors.delete(uid);
+      }
+    }
+    let changed = false;
+    for (const [uid, until] of this.editingUntil.entries()) {
+      if (now > until) { this.editingUntil.delete(uid); changed = true; }
+    }
+    if (changed) renderPresence();
+  }
+};
+
+function getBodyCaretOffset() {
+  const body = $('#article-body');
+  const sel = window.getSelection();
+  if (!body || !sel || !sel.rangeCount) return null;
+  const range = sel.getRangeAt(0);
+  if (!body.contains(range.startContainer)) return null;
+  const preRange = range.cloneRange();
+  preRange.selectNodeContents(body);
+  preRange.setEnd(range.startContainer, range.startOffset);
+  return preRange.toString().length;
+}
+
+function setBodyCaretOffset(offset) {
+  const body = $('#article-body');
+  if (!body) return;
+  const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+  let remaining = offset;
+  let target = null, targetOffset = 0;
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    const len = node.nodeValue.length;
+    if (remaining <= len) { target = node; targetOffset = remaining; break; }
+    remaining -= len;
+  }
+  if (!target) {
+    // put caret at end
+    const range = document.createRange();
+    range.selectNodeContents(body);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    return;
+  }
+  const range = document.createRange();
+  range.setStart(target, targetOffset);
+  range.collapse(true);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+/* Map a character offset in the body's innerText to viewport coords. */
+function offsetToCoords(body, offset) {
+  const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+  let remaining = offset;
+  let target = null, targetOffset = 0;
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    const len = node.nodeValue.length;
+    if (remaining <= len) { target = node; targetOffset = remaining; break; }
+    remaining -= len;
+  }
+  const range = document.createRange();
+  if (target) {
+    range.setStart(target, targetOffset);
+    range.setEnd(target, targetOffset);
+  } else {
+    range.selectNodeContents(body);
+    range.collapse(false);
+  }
+  const rects = range.getClientRects();
+  let rect = rects.length ? rects[0] : range.getBoundingClientRect();
+  if (!rect || (!rect.top && !rect.height)) rect = body.getBoundingClientRect();
+  return { top: rect.top, left: rect.left, height: rect.height || 18 };
+}
+
+/* Stable per-user color so the same peer keeps the same cursor color. */
+const USER_COLOR_PALETTE = [
+  '#c97b3a', '#3a8fc9', '#3a9d8a', '#b8475a', '#7a5bc9',
+  '#c9953a', '#4a8a3a', '#3a6ec9', '#a93aa9', '#c94a7a'
+];
+function colorForUser(userId) {
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) hash = (hash * 31 + userId.charCodeAt(i)) | 0;
+  return USER_COLOR_PALETTE[Math.abs(hash) % USER_COLOR_PALETTE.length];
+}
+function displayNameForUser(userId) {
+  const m = matrix.members.find(x => x.userId === userId);
+  if (m && m.displayName) return m.displayName.slice(0, 24);
+  // Strip @ and :homeserver
+  const stripped = userId.replace(/^@/, '').split(':')[0];
+  return stripped.slice(0, 24);
+}
+function initialsForUser(userId) {
+  const name = displayNameForUser(userId);
+  const parts = name.split(/[\s._-]+/).filter(Boolean);
+  if (!parts.length) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+function renderPresence() {
+  const bar = $('#presence-bar');
+  if (!bar) return;
+  if (!matrix.activeRoomId || !matrix.members.length) {
+    bar.innerHTML = '';
+    return;
+  }
+  const now = Date.now();
+  const chips = matrix.members
+    .filter(m => m.userId !== matrix.userId)
+    .map(m => {
+      const color = colorForUser(m.userId);
+      const editing = (matrixCollab.editingUntil.get(m.userId) || 0) > now;
+      return `<span class="pchip${editing ? ' editing' : ''}" style="background:${color};color:${color}" title="${escapeHtml(m.userId)}${editing ? ' · editing' : ''}">${escapeHtml(initialsForUser(m.userId))}</span>`;
+    });
+  bar.innerHTML = chips.join('');
 }
 
 /* ======================================================================
@@ -4188,6 +5518,9 @@ async function matrixStart(session) {
 }
 
 async function matrixLogout() {
+  matrixCollab.detach();
+  collabCrypto.clear();
+  renderE2eeStatus();
   try { if (matrix.client) await matrix.client.logout(); } catch (e) { console.warn('[matrix] logout failed', e); }
   try { if (matrix.client) matrix.client.stopClient(); } catch {}
   matrix.client = null;
@@ -4216,7 +5549,7 @@ function refreshRooms() {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function selectWorkspaceRoom(roomId, { silent = false } = {}) {
+async function selectWorkspaceRoom(roomId, { silent = false } = {}) {
   if (!matrix.client) return;
   const room = matrix.client.getRoom(roomId);
   if (!room) return;
@@ -4228,8 +5561,13 @@ function selectWorkspaceRoom(roomId, { silent = false } = {}) {
     membership: m.membership
   }));
   try { localStorage.setItem(LS_MX_ROOM, roomId); } catch {}
+
   updateWorkspaceIndicator();
   renderWorkspaceModal();
+  renderE2eeStatus();
+  // matrixCollab.attach now handles encryption setup on its own
+  // (passphrase override → stored auto-key → request-or-mint).
+  matrixCollab.attach(roomId).catch(err => console.warn('[collab] attach failed', err));
   if (!silent) showToast(`workspace: ${room.name || roomId}`);
 }
 
@@ -4359,6 +5697,54 @@ function wireWorkspace() {
   });
   $('#toggle-sample').addEventListener('change', e => setSampleData(e.target.checked));
   $('#toggle-sample-in').addEventListener('change', e => setSampleData(e.target.checked));
+
+  // E2EE controls
+  const passEl = $('#ws-e2ee-pass');
+  $('#ws-e2ee-toggle-advanced')?.addEventListener('click', () => {
+    const panel = $('#ws-e2ee-advanced');
+    if (!panel) return;
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden && passEl && matrix.activeRoomId) {
+      passEl.value = loadStoredPassphrase(matrix.activeRoomId);
+      setTimeout(() => passEl.focus(), 0);
+    }
+  });
+  $('#ws-e2ee-rotate')?.addEventListener('click', async () => {
+    if (!matrix.activeRoomId) { showToast('pick a workspace room first'); return; }
+    if (collabCrypto.mode === 'passphrase') {
+      showToast('passphrase mode — clear the passphrase to rotate the auto-key');
+      return;
+    }
+    if (!confirm('Rotate the room key? All current members need to be online to adopt it cleanly.')) return;
+    await matrixCollab.rotateAutoKey();
+  });
+  $('#ws-e2ee-save')?.addEventListener('click', async () => {
+    if (!matrix.activeRoomId) { showToast('pick a workspace room first'); return; }
+    const pass = passEl.value.trim();
+    if (!pass) { showToast('passphrase is empty — use Clear to disable'); return; }
+    storePassphrase(matrix.activeRoomId, pass);
+    const ok = await applyE2eePassphrase(matrix.activeRoomId, pass);
+    renderE2eeStatus();
+    if (ok) {
+      showToast('passphrase active · fp ' + collabCrypto.fingerprint);
+      matrixCollab.sendHello?.().catch(() => {});
+    } else {
+      showToast('e2ee setup failed — see console');
+    }
+  });
+  $('#ws-e2ee-clear')?.addEventListener('click', async () => {
+    if (!matrix.activeRoomId) return;
+    storePassphrase(matrix.activeRoomId, '');
+    if (passEl) passEl.value = '';
+    collabCrypto.clear();
+    renderE2eeStatus();
+    showToast('passphrase cleared · switching back to auto-shared key');
+    // Re-establish so the auto-key comes back online
+    await matrixCollab.establishKey(matrix.activeRoomId);
+  });
+  passEl?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') $('#ws-e2ee-save').click();
+  });
 }
 
 async function bootMatrixIfPossible() {
