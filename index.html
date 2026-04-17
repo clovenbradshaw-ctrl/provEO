@@ -2582,7 +2582,7 @@
         <div style="display:flex; flex-direction:column; gap:8px;">
           <label class="ws-toggle"><input type="radio" name="updest" value="local"> <div><strong>Local only</strong><div class="ws-section-sub" style="margin:0">Stays in this browser. No one else can see it.</div></div></label>
           <label class="ws-toggle"><input type="radio" name="updest" value="gated"> <div><strong>Gated — Matrix room</strong><div class="ws-section-sub" style="margin:0">Uploaded to the active workspace room. Visible only to room members.</div></div></label>
-          <label class="ws-toggle"><input type="radio" name="updest" value="public"> <div><strong>Public — Archive.org</strong><div class="ws-section-sub" style="margin:0">Permanent public record. Redacted copy goes to Archive.org; original stays in the Matrix room if there are redactions.</div></div></label>
+          <label class="ws-toggle"><input type="radio" name="updest" value="public"> <div><strong>Public — Archive.org</strong><div class="ws-section-sub" style="margin:0">Permanent public record. Uploaded as-is — censor locally before uploading if needed.</div></div></label>
         </div>
       </div>
       <div class="ws-form-row" id="updest-title-row" hidden>
@@ -4298,8 +4298,7 @@ async function handleUpload(files) {
           archive_identifier: proveo?.archive?.identifier || null,
           matrix_mxc: proveo?.matrix?.mxc || null,
           matrix_room_id: proveo?.matrix?.room_id || null,
-          sha256: proveo?.archive?.redacted_sha256 || proveo?.matrix?.original_sha256
-                  || extraction?.doc_sha256 || null,
+          sha256: extraction?.doc_sha256 || null,
           // PDF audit: how the text we just indexed was actually
           // obtained, page by page. Travels in the append-only log.
           extraction
@@ -6399,15 +6398,15 @@ function wireSourceViewer() {
 /* ======================================================================
    PROVeo WEBHOOK + UPLOAD DESTINATION
    ----------------------------------------------------------------------
-   PROVeo is an external n8n workflow that handles redaction, Archive.org
-   dedup + upload, and Matrix media sync. Schema per the workflow:
+   PROVeo is an external n8n workflow that handles Archive.org dedup +
+   upload and Matrix media sync. Schema per the workflow:
      body: { visibility: 'public'|'gated', kind, mime, filename, title,
              description, license, parent_identifier?, claim_id?,
-             redactions?, matrix_room_id?, consent_acknowledged? }
+             matrix_room_id?, consent_acknowledged? }
      binary: the file bytes
    Frontend just posts multipart/form-data; backend returns archive_url +
-   matrix mxc + hashes. Storing those on the source lets later exports
-   carry the provenance forward.
+   matrix mxc. Any censoring or redaction happens in the client before
+   upload — the backend does not do crypto or content transforms.
 ====================================================================== */
 const PROVEO_URL = 'https://n8n.intelechia.com/webhook/PROVeo';
 const LS_UPLOAD_DEST = 'nl.uploadDest.v1';
@@ -6428,7 +6427,7 @@ function loadProveoSettingsIntoModal() {
 }
 
 /* Sends a source to the PROVeo webhook. Returns the parsed JSON response. */
-async function uploadViaProveo(file, visibility, { title, description, redactions } = {}) {
+async function uploadViaProveo(file, visibility, { title, description } = {}) {
   const fd = new FormData();
   fd.append('data', file, file.name);
   fd.append('visibility', visibility);
@@ -6438,14 +6437,11 @@ async function uploadViaProveo(file, visibility, { title, description, redaction
   fd.append('title', title || file.name);
   if (description) fd.append('description', description);
   fd.append('license', 'CC-BY-4.0');
-  if (redactions && redactions.length) {
-    fd.append('redactions', JSON.stringify(redactions));
-  }
   if (visibility === 'public') {
     fd.append('consent_acknowledged', JSON.stringify(['permanence', 'privacy', 'rights']));
   }
-  if (visibility === 'gated' || (redactions && redactions.length)) {
-    if (!matrix.activeRoomId) throw new Error('Pick a Matrix workspace room before uploading to a gated/redacted destination.');
+  if (visibility === 'gated') {
+    if (!matrix.activeRoomId) throw new Error('Pick a Matrix workspace room before uploading to a gated destination.');
     fd.append('matrix_room_id', matrix.activeRoomId);
   }
   const res = await fetch(PROVEO_URL, { method: 'POST', body: fd });
