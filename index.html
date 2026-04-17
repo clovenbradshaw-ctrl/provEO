@@ -2386,6 +2386,32 @@
     border-radius: var(--border-radius-md);
     background: var(--color-background-primary);
   }
+  .src-viewer-media.is-html {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    padding: 12px;
+    gap: 8px;
+    overflow: hidden;
+  }
+  .src-viewer-media.is-html .src-viewer-html-frame {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 320px;
+    height: auto;
+  }
+  .src-viewer-html-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 2px 2px 10px;
+    font-size: 12px;
+  }
+  .src-viewer-html-actions .bin-download {
+    color: var(--color-text-secondary);
+    text-decoration: underline;
+  }
   .src-viewer-binary {
     display: flex;
     flex-direction: column;
@@ -7596,6 +7622,230 @@ function captureHighlightForBench() {
   showToast('evidence saved to bench');
 }
 
+/* HTML-preview selection wiring. Rendered HTML sources live in a sandboxed
+   iframe (see showSourceViewer). The parent owns the clip pill, anchor drawer,
+   and provenance copy chain, so we bridge the iframe's window.getSelection()
+   back into those surfaces. Listeners are attached per iframe load so stale
+   handlers don't survive a viewer switch. */
+function wireHtmlIframeSelection(iframe) {
+  const doc = iframe.contentDocument;
+  const win = iframe.contentWindow;
+  if (!doc || !win) return;
+
+  // Force selectable text regardless of the source page's own CSS.
+  try {
+    const s = doc.createElement('style');
+    s.setAttribute('data-proveo-preview', '1');
+    s.textContent = `
+      html, body, * {
+        user-select: text !important;
+        -webkit-user-select: text !important;
+      }
+      ::selection { background: rgba(255, 193, 82, 0.45); }
+    `;
+    (doc.head || doc.documentElement).appendChild(s);
+  } catch {}
+
+  doc.addEventListener('mouseup', () => {
+    const body = $('#src-viewer').querySelector('.src-viewer-body');
+    if (body && body.classList.contains('is-selecting')) {
+      setTimeout(() => captureViewerHtmlSelection(iframe), 0);
+      return;
+    }
+    if (highlightMode) setTimeout(() => captureHighlightFromIframe(iframe), 0);
+  });
+
+  doc.addEventListener('copy', (e) => {
+    const sel = win.getSelection?.();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+    const text = sel.toString();
+    if (!text) return;
+    const prov = clipBuildProvenanceForHtml();
+    if (!prov) return;
+    const chain = provChainFromSource(prov, text);
+    provWriteToClipboardEvent(e, chain);
+  });
+
+  doc.addEventListener('selectionchange', () => {
+    clearTimeout(wireHtmlIframeSelection._t);
+    wireHtmlIframeSelection._t = setTimeout(() => clipPositionPillFromIframe(iframe), 50);
+  });
+
+  doc.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { clipHidePill(); return; }
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'c' || e.key === 'C')) {
+      const sel = win.getSelection?.();
+      if (sel && !sel.isCollapsed) {
+        e.preventDefault();
+        clipAddFromIframeSelection(iframe);
+      }
+    }
+  });
+
+  // Clicking inside the iframe collapses the parent selection, which would
+  // leave the clip pill orphaned. Hide it proactively on mousedown.
+  doc.addEventListener('mousedown', () => clipHidePill());
+}
+
+function activeHtmlIframe() {
+  const modal = $('#src-viewer');
+  if (!modal || modal.hidden) return null;
+  return modal.querySelector('.src-viewer-html-frame');
+}
+
+function clipBuildProvenanceForHtml() {
+  const modal = $('#src-viewer');
+  if (!modal || modal.hidden) return null;
+  const src = modal._currentSrc;
+  if (!src) return null;
+  const audit = src.extraction || null;
+  return {
+    sourceId: src.id,
+    sourceName: src.name,
+    sourceKind: src.kind || null,
+    mime: src.mime || null,
+    sha256: src.sha256 || audit?.doc_sha256 || null,
+    destination: src.destination || null,
+    archive_url: src.archive_url || null,
+    source_url: src.source_url || null,
+    matrix_mxc: src.matrix_mxc || null,
+    extractionEngine: audit?.engine || null,
+    ocrEngine: audit?.ocr_engine || null,
+  };
+}
+
+function clipPositionPillFromIframe(iframe) {
+  const pill = $('#clip-select-pill');
+  if (!pill) return;
+  const win = iframe.contentWindow;
+  if (!win) { pill.hidden = true; return; }
+  const sel = win.getSelection?.();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) { pill.hidden = true; return; }
+  const modal = $('#src-viewer');
+  if (!modal || modal.hidden) { pill.hidden = true; return; }
+  const range = sel.getRangeAt(0);
+  const rects = range.getClientRects();
+  const last = rects[rects.length - 1];
+  if (!last || (last.width === 0 && last.height === 0)) { pill.hidden = true; return; }
+  const frameRect = iframe.getBoundingClientRect();
+  pill.hidden = false;
+  pill.style.left = (frameRect.left + last.right) + 'px';
+  pill.style.top  = (frameRect.top  + last.top)   + 'px';
+}
+
+function clipAddFromIframeSelection(iframe) {
+  const win = iframe.contentWindow;
+  if (!win) return;
+  const sel = win.getSelection?.();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+  const text = sel.toString().trim();
+  if (!text) return;
+  const prov = clipBuildProvenanceForHtml();
+  if (!prov) { clipToast('Select text inside a source to save it'); return; }
+  const item = {
+    id: 'clip_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36),
+    text,
+    length: text.length,
+    createdAt: new Date().toISOString(),
+    provenance: prov,
+  };
+  CLIPBOARD.unshift(item);
+  if (CLIPBOARD.length > CLIPBOARD_MAX) CLIPBOARD.length = CLIPBOARD_MAX;
+  saveClipboard();
+  clipUpdateFab();
+  const fab = $('#clip-fab');
+  if (fab) {
+    fab.classList.remove('just-added');
+    void fab.offsetWidth;
+    fab.classList.add('just-added');
+  }
+  clipToast('Saved to clipboard');
+  clipHidePill();
+  try { sel.removeAllRanges(); } catch {}
+  const d = $('#clip-drawer');
+  if (d && !d.hidden) clipRenderDrawer();
+}
+
+function captureViewerHtmlSelection(iframe) {
+  if (!drawerState.active || drawerState.substate !== 'target-picker') return;
+  const win = iframe.contentWindow;
+  const doc = iframe.contentDocument;
+  if (!win || !doc) return;
+  const sel = win.getSelection?.();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+  const range = sel.getRangeAt(0);
+  const text = sel.toString();
+  if (!text.trim()) return;
+  const bodyEl = doc.body || doc.documentElement;
+  let start = 0, end = 0;
+  try {
+    const preRange = range.cloneRange();
+    preRange.selectNodeContents(bodyEl);
+    preRange.setEnd(range.startContainer, range.startOffset);
+    start = preRange.toString().length;
+    end   = start + text.length;
+  } catch {}
+  const full = bodyEl.textContent || '';
+  const src = USER_SOURCES[drawerState.sourceId] || SOURCES.find(s => s.id === drawerState.sourceId);
+  if (!src) return;
+  const before = contextBefore(full, start);
+  const after  = contextAfter(full, end);
+  const spanLabel = locatorLabel(src, { start, end }, full);
+  drawerState.target = {
+    kind: 'quote',
+    src: src.name,
+    sourceId: src.id,
+    start, end,
+    text,
+    before,
+    after,
+    spanLabel,
+    highlight: text,
+  };
+  drawerState.substate = 'confirm';
+  renderDrawer();
+}
+
+function captureHighlightFromIframe(iframe) {
+  const viewer = $('#src-viewer');
+  if (!viewer || viewer.hidden) return;
+  const win = iframe.contentWindow;
+  const doc = iframe.contentDocument;
+  if (!win || !doc) return;
+  const sel = win.getSelection?.();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+  const range = sel.getRangeAt(0);
+  const text = sel.toString();
+  if (!text.trim()) return;
+  const bodyEl = doc.body || doc.documentElement;
+  const full = bodyEl.textContent || '';
+  let start = 0, end = 0;
+  try {
+    const preRange = range.cloneRange();
+    preRange.selectNodeContents(bodyEl);
+    preRange.setEnd(range.startContainer, range.startOffset);
+    start = preRange.toString().length;
+    end   = start + text.length;
+  } catch {}
+  const title = $('#src-viewer-title').textContent;
+  const srcEntry = Object.values(USER_SOURCES).find(s => s.name === title)
+                || SOURCES.find(s => s.name === title);
+  if (!srcEntry) return;
+  const before = contextBefore(full, start);
+  const after  = contextAfter(full, end);
+  const spanLabel = locatorLabel(srcEntry, { start, end }, full);
+  addEvidenceChip({
+    src: srcEntry.name,
+    sourceId: srcEntry.id,
+    start, end,
+    highlight: text,
+    before, after,
+    spanLabel,
+  });
+  try { sel.removeAllRanges(); } catch {}
+  showToast('evidence saved to bench');
+}
+
 /* Commit a text-range selection in the source viewer as the drawer target. */
 function captureViewerTextSelection() {
   if (!drawerState.active || drawerState.substate !== 'target-picker') return;
@@ -9209,7 +9459,10 @@ function revokeSrcViewerMedia() {
     _srcViewerMediaUrl = null;
   }
   const mediaEl = $('#src-viewer-media');
-  if (mediaEl) mediaEl.innerHTML = '';
+  if (mediaEl) {
+    mediaEl.innerHTML = '';
+    mediaEl.classList.remove('is-html');
+  }
 }
 
 /* showSourceViewer(id, { scrollTo, selecting })
@@ -9233,7 +9486,9 @@ async function showSourceViewer(id, opts = {}) {
   if (src.archive_url) destBits.push(`<a href="${escapeHtml(src.archive_url)}" target="_blank" rel="noopener" style="color:var(--teal-text); text-decoration:underline">archive.org ↗</a>`);
   if (src.matrix_mxc) destBits.push(`matrix: <span style="font-family:var(--font-mono)">${escapeHtml(src.matrix_mxc)}</span>`);
   if (src.sha256) destBits.push(`sha256: <span style="font-family:var(--font-mono)">${escapeHtml(src.sha256.slice(0, 16))}…</span>`);
-  $('#src-viewer-sub').innerHTML = `${(src.kind || 'txt').toUpperCase()} · ${escapeHtml(src.meta || '')}${destBits.length ? ' · ' + destBits.join(' · ') : ''}`;
+  const isHtmlMime = /^text\/html/i.test(src.mime || '');
+  const kindLabel = isHtmlMime ? 'HTML' : (src.kind || 'txt').toUpperCase();
+  $('#src-viewer-sub').innerHTML = `${kindLabel} · ${escapeHtml(src.meta || '')}${destBits.length ? ' · ' + destBits.join(' · ') : ''}`;
   const textEl = $('#src-viewer-text');
   const pdfWrap = $('#src-viewer-pdf-wrap');
   const mediaEl = $('#src-viewer-media');
@@ -9299,6 +9554,24 @@ async function showSourceViewer(id, opts = {}) {
             mediaEl.innerHTML = `<video src="${_srcViewerMediaUrl}" controls preload="metadata"></video>`;
           } else if (kind === 'audio') {
             mediaEl.innerHTML = `<audio src="${_srcViewerMediaUrl}" controls preload="metadata"></audio>`;
+          } else if (/^text\/html/i.test(src.mime || '')) {
+            // In-app HTML preview. Scripts are already stripped by the
+            // archive pipeline; sandbox allow-same-origin gives the parent
+            // DOM access so selection → clip-pill / drawer / copy all keep
+            // provenance. Archived pages can be read without downloading.
+            mediaEl.classList.add('is-html');
+            mediaEl.innerHTML = '';
+            const iframe = document.createElement('iframe');
+            iframe.title = src.name;
+            iframe.className = 'src-viewer-html-frame';
+            iframe.setAttribute('sandbox', 'allow-same-origin');
+            iframe.addEventListener('load', () => wireHtmlIframeSelection(iframe));
+            iframe.src = _srcViewerMediaUrl;
+            mediaEl.appendChild(iframe);
+            const dlBar = document.createElement('div');
+            dlBar.className = 'src-viewer-html-actions';
+            dlBar.innerHTML = `<a class="bin-download" href="${_srcViewerMediaUrl}" download="${escapeHtml(src.name)}">Download original</a>`;
+            mediaEl.appendChild(dlBar);
           } else {
             const dl = _srcViewerMediaUrl;
             const label = (src.mime || 'application/octet-stream') + ' · ' + humanSize(src.size || blob.size || 0);
@@ -11180,7 +11453,13 @@ function clipBuildProvenance(range) {
 }
 function clipAddFromSelection() {
   const sel = window.getSelection?.();
-  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    // Parent selection is empty — the user may be selecting inside an HTML
+    // preview iframe, whose selection is scoped to its own window.
+    const iframe = activeHtmlIframe();
+    if (iframe) return clipAddFromIframeSelection(iframe);
+    return;
+  }
   const text = sel.toString().trim();
   if (!text) return;
   const range = sel.getRangeAt(0);
@@ -11213,7 +11492,13 @@ function clipPositionPill() {
   const sel = window.getSelection?.();
   const pill = $('#clip-select-pill');
   if (!pill) return;
-  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) { pill.hidden = true; return; }
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    // Defer to the iframe preview if it has an active selection.
+    const iframe = activeHtmlIframe();
+    if (iframe) { clipPositionPillFromIframe(iframe); return; }
+    pill.hidden = true;
+    return;
+  }
   const modal = $('#src-viewer');
   if (!modal || modal.hidden) { pill.hidden = true; return; }
   const range = sel.getRangeAt(0);
