@@ -128,6 +128,22 @@
     align-items: center;
     gap: 6px;
   }
+
+  /* Pulse the thing we scrolled to in the source viewer — used by
+     .source-chip → showSourceViewer({scrollTo}). */
+  .pulse-target { animation: pulse-target 1.4s ease-out 1; }
+  @keyframes pulse-target {
+    0%   { box-shadow: 0 0 0 0 var(--amber-mid); background-color: var(--amber-fill); }
+    60%  { box-shadow: 0 0 0 10px rgba(199, 141, 44, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(199, 141, 44, 0); }
+  }
+  .src-viewer-hit {
+    background: var(--amber-fill);
+    color: var(--amber-text);
+    padding: 1px 2px;
+    border-radius: 2px;
+    box-shadow: inset 0 -2px 0 var(--amber-mid);
+  }
   .srcbadge .statdot {
     width: 6px;
     height: 6px;
@@ -227,6 +243,41 @@
   .sadd:hover {
     border-color: var(--color-text-primary);
     color: var(--color-text-primary);
+  }
+  .sadd-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 8px 10px 10px;
+  }
+  .sadd-stack .sadd { margin: 0; }
+  .sadd-row {
+    display: flex;
+    gap: 6px;
+  }
+  .sadd-row .sarc { flex: 1; min-width: 0; }
+  .sarc {
+    padding: 9px 8px;
+    border: 0.5px dashed var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    text-align: center;
+    font-size: 11.5px;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color 0.12s, color 0.12s, background 0.12s;
+  }
+  .sarc:hover {
+    border-color: var(--teal-mid);
+    color: var(--teal-text);
+    background: var(--teal-fill);
+  }
+  .sarc.is-busy {
+    border-style: solid;
+    border-color: var(--teal-mid);
+    color: var(--teal-text);
+    background: var(--teal-fill);
+    cursor: default;
   }
 
   /* ---------- CENTER AREA ---------- */
@@ -511,6 +562,98 @@
     background: var(--blue-fill);
   }
 
+  /* ---------- EVIDENCE BENCH ---------- */
+  .evidence-bench {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 0.5px dashed var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    margin-bottom: 14px;
+    background: var(--color-background-secondary);
+    flex-wrap: wrap;
+  }
+  .evidence-bench[hidden] { display: none; }
+  .evidence-bench .bench-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+  }
+  .bench-chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    flex: 1;
+  }
+  .bench-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px 4px 10px;
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    cursor: grab;
+    max-width: 260px;
+    transition: border-color 0.12s, box-shadow 0.12s;
+  }
+  .bench-chip:hover { border-color: var(--color-text-primary); }
+  .bench-chip.dragging { opacity: 0.5; }
+  .bench-chip-src {
+    font-weight: 600;
+    color: var(--color-text-primary);
+    flex-shrink: 0;
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .bench-chip-text {
+    color: var(--color-text-secondary);
+    font-family: var(--font-serif);
+    font-size: 11.5px;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .bench-chip-del {
+    background: transparent;
+    border: 0;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    padding: 0 4px;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .bench-chip-del:hover { color: var(--red-text); }
+
+  /* Source viewer header actions + highlight-mode toggle */
+  .src-viewer-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #src-viewer-hl-toggle {
+    font-size: 10.5px;
+    padding: 3px 8px;
+  }
+  #src-viewer-hl-toggle.active {
+    background: var(--amber-fill);
+    color: var(--amber-text);
+    border-color: var(--amber-mid);
+  }
+  .src-viewer-body.is-highlight-mode #src-viewer-text {
+    cursor: text;
+    background: color-mix(in srgb, var(--amber-fill) 30%, var(--color-background-primary));
+  }
+
   /* ---------- STATUS BAR ---------- */
   .statusbar {
     height: 34px;
@@ -540,7 +683,7 @@
     border-radius: 50%;
   }
 
-  /* ---------- RIGHT PANEL (PROVENANCE) ---------- */
+  /* ---------- RIGHT PANEL (PROVENANCE + ANCHOR DRAWER) ---------- */
   .right-panel {
     width: 400px;
     flex-shrink: 0;
@@ -548,6 +691,228 @@
     display: flex;
     flex-direction: column;
     background: var(--color-background-primary);
+  }
+  /* Drawer mode: swap the provenance inspector for the anchor drawer. */
+  .right-panel[data-mode="provenance"] .rp-drawer { display: none; }
+  .right-panel[data-mode="sourcing"] .rp-empty,
+  .right-panel[data-mode="sourcing"] .rp-content { display: none; }
+  .right-panel[data-mode="sourcing"] .rp-drawer { display: flex; }
+  .rp-drawer {
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+  }
+  .drawer-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 16px;
+  }
+  .drawer-claim {
+    background: var(--color-background-secondary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    padding: 10px 12px;
+    margin-bottom: 14px;
+  }
+  .drawer-claim-text {
+    font-family: var(--font-serif);
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--color-text-primary);
+    margin-top: 4px;
+  }
+  .drawer-label {
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    margin-bottom: 6px;
+  }
+  .drawer-section { margin-bottom: 14px; }
+  .drawer-hint {
+    margin-top: 10px;
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--color-text-secondary);
+  }
+  .drawer-src-item {
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: border-color 0.12s, background 0.12s;
+    background: var(--color-background-primary);
+  }
+  .drawer-src-item:hover {
+    border-color: var(--color-text-primary);
+    background: var(--color-background-secondary);
+  }
+  .drawer-src-name { font-family: var(--font-mono); font-size: 12px; font-weight: 500; }
+  .drawer-src-meta { font-size: 10.5px; color: var(--color-text-secondary); margin-top: 3px; }
+  .drawer-source-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 11px;
+    background: var(--color-background-secondary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+  }
+  .drawer-source-change {
+    margin-left: auto;
+    background: transparent;
+    border: 0;
+    color: var(--color-text-tertiary);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    cursor: pointer;
+  }
+  .drawer-source-change:hover { color: var(--color-text-primary); }
+  .drawer-target-view {
+    background: var(--color-background-secondary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    padding: 10px 12px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+  }
+  .drawer-target-meta {
+    font-size: 10.5px;
+    color: var(--color-text-secondary);
+    margin-top: 4px;
+  }
+  .drawer-empty {
+    padding: 20px 12px;
+    text-align: center;
+    color: var(--color-text-secondary);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  .drawer-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 0.5px solid var(--color-border-tertiary);
+  }
+
+  /* Absence form */
+  .drawer-input {
+    width: 100%;
+    padding: 7px 9px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    background: var(--color-background-primary);
+    color: var(--color-text-primary);
+    box-sizing: border-box;
+  }
+  .drawer-input:focus { outline: none; border-color: var(--color-text-primary); }
+  .drawer-textarea { resize: vertical; min-height: 50px; font-family: var(--font-sans); }
+  .drawer-radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .drawer-radio {
+    display: grid;
+    grid-template-columns: 16px 1fr;
+    grid-template-rows: auto auto;
+    gap: 0 8px;
+    align-items: start;
+    padding: 8px 10px;
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    cursor: pointer;
+    transition: border-color 0.12s, background 0.12s;
+  }
+  .drawer-radio:hover { border-color: var(--color-text-primary); }
+  .drawer-radio input { grid-row: 1 / 3; margin-top: 3px; }
+  .drawer-radio-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+  }
+  .drawer-radio-note {
+    font-size: 10.5px;
+    color: var(--color-text-secondary);
+  }
+  .drawer-scan-row {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 4px;
+  }
+  .drawer-scan-row .drawer-scan-src { flex: 1; max-width: 180px; }
+  .drawer-scan-row .drawer-scan-note { flex: 2; }
+  .drawer-scan-del {
+    width: 24px;
+    background: transparent;
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: 3px;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+  }
+  .drawer-scan-del:hover { color: var(--red-text); }
+  .drawer-empty-inline {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    padding: 4px 2px;
+  }
+  .btn-sm-primary {
+    background: var(--color-text-primary);
+    color: var(--color-background-primary);
+    border-color: var(--color-text-primary);
+    margin-left: auto;
+  }
+  .btn-sm-primary:hover { background: var(--color-text-primary); opacity: 0.88; }
+
+  /* Source viewer — selection-mode cues */
+  .src-viewer-body.is-selecting #src-viewer-text { cursor: text; }
+  .src-viewer-body.is-selecting .src-viewer-table-wrap td:not(.rowno) { cursor: crosshair; }
+  .src-viewer-body.is-selecting .src-viewer-table-wrap td.picked {
+    background: var(--amber-fill);
+    color: var(--amber-text);
+    box-shadow: inset 0 0 0 1.5px var(--amber-mid);
+    font-weight: 600;
+  }
+  .src-viewer-picker {
+    padding: 10px 16px;
+    border-top: 0.5px solid var(--color-border-tertiary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--color-background-secondary);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+  }
+  .src-viewer-picker[hidden] { display: none; }
+  .src-viewer-picker-label { color: var(--color-text-primary); }
+  .src-viewer-ops { display: flex; align-items: center; gap: 4px; }
+  .src-viewer-picker-ops-label {
+    color: var(--color-text-secondary);
+    font-size: 10.5px;
+    margin-right: 4px;
+  }
+  .src-viewer-op {
+    padding: 3px 8px;
+    border: 0.5px solid var(--color-border-secondary);
+    background: transparent;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    border-radius: 3px;
+    cursor: pointer;
+    color: var(--color-text-primary);
+  }
+  .src-viewer-op:hover { background: var(--color-background-tertiary); }
+  .src-viewer-op.picked-op {
+    background: var(--amber-fill);
+    color: var(--amber-text);
+    border-color: var(--amber-mid);
   }
   .rp-empty {
     flex: 1;
@@ -593,6 +958,7 @@
   }
   .rphead-title.type-grounded { color: var(--amber-text); }
   .rphead-title.type-conflict { color: var(--red-text); }
+  .rphead-title.type-concur { color: var(--teal-text); }
   .rphead-title.type-absent { color: var(--blue-text); }
   .rphead-close {
     font-size: 18px;
@@ -610,6 +976,39 @@
     overflow-y: auto;
     padding: 14px 16px;
   }
+  /* Drill-down breadcrumb — appears at the top of the provenance panel
+     when the user descends into a nested derivation. Segments before the
+     last are clickable; last is the current view. */
+  .prov-breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 0.5px dashed var(--color-border-tertiary);
+  }
+  .prov-breadcrumb .pb-seg {
+    padding: 2px 6px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+  }
+  .prov-breadcrumb .pb-seg[data-pb-idx]:hover {
+    background: var(--color-background-secondary);
+    color: var(--color-text-primary);
+  }
+  .prov-breadcrumb .pb-current {
+    color: var(--color-text-primary);
+    font-weight: 600;
+    cursor: default;
+  }
+  .prov-breadcrumb .pb-sep { color: var(--color-text-tertiary); }
+  .prov-breadcrumb .pb-val { color: var(--color-text-primary); font-weight: 600; }
+
   .prov-section { margin-bottom: 15px; }
   .prov-label {
     font-size: 9.5px;
@@ -949,6 +1348,36 @@
     border: 0.5px solid #F7C1C1;
     border-radius: var(--border-radius-md);
     overflow: hidden;
+  }
+  .conflict-stack.concur { border-color: #9FE1CB; }
+  .conflict-side.concur {
+    background: var(--teal-fill);
+    border-bottom: 0.5px solid #9FE1CB;
+  }
+  .conflict-side.concur:last-child { border-bottom: none; }
+  .conflict-side.concur .conflict-side-label { color: var(--teal-text); }
+
+  /* Link mode — while picking the second claim for a LINK, the article
+     highlights eligible claim spans and swaps cursor. */
+  .link-mode .g:not(.link-source),
+  .link-mode .conflict:not(.link-source) {
+    cursor: crosshair;
+    outline: 2px dashed var(--amber-mid);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+  .link-mode.link-concur .g:not(.link-source),
+  .link-mode.link-concur .conflict:not(.link-source) {
+    outline-color: var(--teal-mid);
+  }
+  .link-mode .link-source {
+    background: var(--amber-fill);
+    box-shadow: inset 0 0 0 2px var(--amber-mid);
+    border-radius: 3px;
+  }
+  .link-mode.link-concur .link-source {
+    background: var(--teal-fill);
+    box-shadow: inset 0 0 0 2px var(--teal-mid);
   }
   .conflict-side {
     padding: 10px 12px;
@@ -2600,7 +3029,6 @@
     <div class="topright">
       <span id="boot-status" style="font-family: var(--font-mono); font-size: 10.5px; color: var(--color-text-secondary); margin-right: 4px;">booting…</span>
       <div class="srcbadge"><div class="statdot statdot-green"></div>3 indexed</div>
-      <div class="srcbadge"><div class="statdot statdot-amber"></div>1 indexing</div>
       <button class="ws-btn" id="ws-btn" title="Workspace / Matrix">
         <span class="ws-dot" id="ws-dot"></span>
         <span id="ws-label">Local workspace</span>
@@ -2615,7 +3043,13 @@
     <aside class="sources">
       <div class="spanel-head">Sources</div>
       <div class="slist" id="slist"></div>
-      <div class="sadd">+ add source</div>
+      <div class="sadd-stack">
+        <div class="sadd" id="sadd-btn">+ add source</div>
+        <div class="sadd-row">
+          <div class="sarc" id="sarc-btn" title="Import files and auto-publish them to Archive.org">↑ file → archive</div>
+          <div class="sarc" id="sarc-url-btn" title="Fetch a web page and auto-publish a snapshot to Archive.org">↗ url → archive</div>
+        </div>
+      </div>
     </aside>
 
     <!-- ===== WRITE MODE ===== -->
@@ -2647,6 +3081,7 @@
               <span id="tbar-sync-label">local</span>
             </div>
           </div>
+          <div class="evidence-bench" id="evidence-bench" hidden></div>
           <div class="article-meta">
             <span>Untitled draft</span>
             <span class="sep">·</span>
@@ -2668,7 +3103,7 @@
         </div>
       </div>
 
-      <aside class="right-panel">
+      <aside class="right-panel" id="right-panel" data-mode="provenance">
         <div class="rp-empty" id="rp-empty">
           <div class="rp-empty-inner">
             <div class="rp-empty-glyph">⊨</div>
@@ -2681,6 +3116,13 @@
             <button class="rphead-close" id="rp-close">×</button>
           </div>
           <div class="rpbody" id="rp-body"></div>
+        </div>
+        <div class="rp-drawer" id="rp-drawer">
+          <div class="rphead">
+            <span class="rphead-title" id="drawer-title">Anchor evidence</span>
+            <button class="rphead-close" id="drawer-close">×</button>
+          </div>
+          <div class="drawer-body" id="drawer-body"></div>
         </div>
       </aside>
     </section>
@@ -2716,43 +3158,10 @@
 </div>
 
 <input type="file" id="file-input" multiple style="display:none">
+<input type="file" id="file-input-archive" multiple style="display:none">
 
 <div id="cite-toolbar" class="cite-toolbar" hidden>
-  <button class="ct-btn" id="cite-btn">＋ Cite source</button>
-</div>
-
-<div id="cite-modal" class="cite-modal" hidden>
-  <div class="cite-modal-backdrop" id="cite-backdrop"></div>
-  <div class="cite-modal-body">
-    <div class="cite-modal-head">
-      <div>
-        <div class="cite-modal-title">Cite source</div>
-        <div class="cite-modal-sub">Link a claim in your draft to a source span.</div>
-      </div>
-      <button class="rphead-close" id="cite-modal-close">×</button>
-    </div>
-    <div class="cite-selected-claim">
-      Claim: <span class="sel" id="cite-sel-text"></span>
-    </div>
-    <div class="cite-modal-grid">
-      <div class="cite-source-picker">
-        <div class="cite-picker-label">Sources</div>
-        <div id="cite-source-list"></div>
-      </div>
-      <div class="cite-snippet-picker">
-        <div class="cite-picker-head">
-          <div class="cite-picker-label">Find a matching span</div>
-          <input id="cite-search" class="cite-search" type="text" placeholder="Search within source…">
-        </div>
-        <div id="cite-snippet-list" class="cite-snippet-list"></div>
-      </div>
-    </div>
-    <div class="cite-modal-actions">
-      <span id="cite-pick-note" class="cite-pick-note">Pick a source and a matching span.</span>
-      <button class="btn-sm" id="cite-cancel">Cancel</button>
-      <button class="btn-sm btn-sm-primary" id="cite-confirm" disabled>Cite this span</button>
-    </div>
-  </div>
+  <button class="ct-btn" id="cite-btn">＋ Anchor evidence</button>
 </div>
 
 <!-- ===== SOURCE VIEWER MODAL ===== -->
@@ -2764,7 +3173,10 @@
         <div class="cite-modal-title" id="src-viewer-title">Source</div>
         <div class="cite-modal-sub" id="src-viewer-sub"></div>
       </div>
-      <button class="rphead-close" id="src-viewer-close">×</button>
+      <div class="src-viewer-head-actions">
+        <button class="btn-sm" id="src-viewer-hl-toggle" aria-pressed="false">Highlight mode</button>
+        <button class="rphead-close" id="src-viewer-close">×</button>
+      </div>
     </div>
     <div class="src-viewer-text" id="src-viewer-text"></div>
     <div class="src-viewer-pdf-wrap" id="src-viewer-pdf-wrap" hidden></div>
@@ -2777,7 +3189,22 @@
       <span class="src-viewer-tuple-spacer"></span>
       <button class="src-viewer-tuple-btn" id="src-viewer-tuple-copy" disabled>Copy JSON</button>
     </div>
-    <div class="src-viewer-hint">Tip: select text anywhere in this source and click <strong>＋ Save to clipboard</strong> to keep it with its provenance.</div>
+    <div class="src-viewer-hint">Tip: select text to <strong>＋ Save to clipboard</strong> or <strong>＋ Anchor evidence</strong> — either keeps its provenance.</div>
+    <div class="src-viewer-picker" id="src-viewer-picker" hidden>
+      <span class="src-viewer-picker-label" id="src-viewer-picker-label">Selection mode — pick your evidence</span>
+      <div class="src-viewer-ops" id="src-viewer-ops" hidden>
+        <span class="src-viewer-picker-ops-label">Aggregate</span>
+        <button class="src-viewer-op" data-op="SUM">SUM</button>
+        <button class="src-viewer-op" data-op="AVG">AVG</button>
+        <button class="src-viewer-op" data-op="COUNT">COUNT</button>
+        <button class="src-viewer-op" data-op="MIN">MIN</button>
+        <button class="src-viewer-op" data-op="MAX">MAX</button>
+        <button class="src-viewer-op" data-op="DIFF">DIFF</button>
+        <button class="src-viewer-op" data-op="RATIO">RATIO</button>
+      </div>
+      <span class="src-viewer-tuple-spacer"></span>
+      <button class="src-viewer-tuple-btn" id="src-viewer-use">Use selection</button>
+    </div>
   </div>
 </div>
 
@@ -2942,7 +3369,7 @@
         <div style="display:flex; flex-direction:column; gap:8px;">
           <label class="ws-toggle"><input type="radio" name="updest" value="local"> <div><strong>Local only</strong><div class="ws-section-sub" style="margin:0">Stays in this browser. No one else can see it.</div></div></label>
           <label class="ws-toggle"><input type="radio" name="updest" value="gated"> <div><strong>Gated — Matrix room</strong><div class="ws-section-sub" style="margin:0">Uploaded to the active workspace room. Visible only to room members.</div></div></label>
-          <label class="ws-toggle"><input type="radio" name="updest" value="public"> <div><strong>Public — Archive.org</strong><div class="ws-section-sub" style="margin:0">Permanent public record. Redacted copy goes to Archive.org; original stays in the Matrix room if there are redactions.</div></div></label>
+          <label class="ws-toggle"><input type="radio" name="updest" value="public"> <div><strong>Public — Archive.org</strong><div class="ws-section-sub" style="margin:0">Permanent public record. Uploaded as-is — censor locally before uploading if needed.</div></div></label>
         </div>
       </div>
       <div class="ws-form-row" id="updest-title-row" hidden>
@@ -2965,6 +3392,66 @@
       <span id="updest-note" class="cite-pick-note"></span>
       <button class="btn-sm" id="updest-cancel">Skip</button>
       <button class="btn-sm btn-sm-primary" id="updest-confirm">Upload</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== AUTO-ARCHIVE CONSENT MODAL (shown once, then remembered) ===== -->
+<div id="arcauto-modal" class="cite-modal" hidden>
+  <div class="cite-modal-backdrop" id="arcauto-backdrop"></div>
+  <div class="ws-modal-body">
+    <div class="cite-modal-head">
+      <div>
+        <div class="cite-modal-title">Auto-archive to Archive.org</div>
+        <div class="cite-modal-sub">Every file you import with the <strong>↑ archive</strong> button will be uploaded directly to Archive.org as a permanent public record. Acknowledge once to enable:</div>
+      </div>
+      <button class="rphead-close" id="arcauto-close">×</button>
+    </div>
+    <div class="ws-section">
+      <div class="ws-form-row">
+        <label>Consent (required)</label>
+        <label class="ws-toggle"><input type="checkbox" id="arc-consent-permanence"> <span>I understand these uploads are <strong>permanent</strong> on Archive.org.</span></label>
+        <label class="ws-toggle"><input type="checkbox" id="arc-consent-privacy"> <span>No <strong>private information</strong> remains in any file I'm publishing.</span></label>
+        <label class="ws-toggle"><input type="checkbox" id="arc-consent-rights"> <span>I have the <strong>rights</strong> to publish the content of these files.</span></label>
+      </div>
+      <div id="arcauto-err" class="ws-err" hidden></div>
+    </div>
+    <div class="cite-modal-actions">
+      <span class="cite-pick-note">You can revoke this later by clearing site data.</span>
+      <button class="btn-sm" id="arcauto-cancel">Cancel</button>
+      <button class="btn-sm btn-sm-primary" id="arcauto-confirm">Enable auto-archive</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== URL ARCHIVE MODAL ===== -->
+<div id="urlarc-modal" class="cite-modal" hidden>
+  <div class="cite-modal-backdrop" id="urlarc-backdrop"></div>
+  <div class="ws-modal-body">
+    <div class="cite-modal-head">
+      <div>
+        <div class="cite-modal-title">Archive a web page</div>
+        <div class="cite-modal-sub">Fetch the page through the PROVeo proxy, save a local copy (images as links), and upload a self-contained snapshot (images inlined) to Archive.org.</div>
+      </div>
+      <button class="rphead-close" id="urlarc-close">×</button>
+    </div>
+    <div class="ws-section">
+      <div class="ws-form-row">
+        <label for="urlarc-url">URL</label>
+        <input id="urlarc-url" class="ws-input" type="url" placeholder="https://example.com/article">
+      </div>
+      <div class="ws-form-row">
+        <label>Options</label>
+        <label class="ws-toggle"><input type="checkbox" id="urlarc-strip" checked> Strip scripts from snapshot</label>
+        <label class="ws-toggle"><input type="checkbox" id="urlarc-banner" checked> Add provenance banner</label>
+      </div>
+      <div id="urlarc-err" class="ws-err" hidden></div>
+      <div id="urlarc-progress" class="cite-pick-note" style="margin-top:6px" hidden></div>
+    </div>
+    <div class="cite-modal-actions">
+      <span class="cite-pick-note">The archive.org copy is permanent.</span>
+      <button class="btn-sm" id="urlarc-cancel">Cancel</button>
+      <button class="btn-sm btn-sm-primary" id="urlarc-confirm">Fetch & archive</button>
     </div>
   </div>
 </div>
@@ -3367,10 +3854,6 @@ function renderSources() {
   const pending = list.filter(s => !s.indexed).length;
   const badges = $$('.srcbadge');
   if (badges[0]) badges[0].innerHTML = `<div class="statdot statdot-green"></div>${indexed} indexed`;
-  if (badges[1]) {
-    if (pending > 0) { badges[1].style.display = ''; badges[1].innerHTML = `<div class="statdot statdot-amber"></div>${pending} indexing`; }
-    else { badges[1].style.display = 'none'; }
-  }
 
   // click to open source viewer (skipped on the × delete button via stopPropagation below)
   $$('[data-open-src]').forEach(el => {
@@ -3412,7 +3895,13 @@ function articleHtml({interactive = true} = {}) {
       if (!r.c) return escapeHtml(r.t);
       const claim = CLAIMS[r.c];
       if (!claim) return escapeHtml(r.t);
-      const cls = claim.type === 'grounded' ? 'g' : claim.type === 'conflict' ? 'conflict' : 'absent';
+      // Retracted claims unwrap to plain text — the claim event log is
+      // preserved but the article no longer carries the annotation.
+      if (claim.status === 'retracted') return escapeHtml(r.t);
+      const cls = claim.type === 'grounded' ? 'g'
+                : claim.type === 'conflict' ? 'conflict'
+                : claim.type === 'concur'   ? 'concur'
+                : 'absent';
       const attrs = interactive
         ? `class="${cls}" data-id="${r.c}"`
         : `class="${cls}"`;
@@ -3462,10 +3951,99 @@ function renderCounts() {
     `<span class="c-g">${g} grounded</span> · <span class="c-c">${c} conflict</span> · <span class="c-a">${a} absent</span>`;
 }
 
-/* ---- Claim detail panel ---- */
+/* ---- Claim detail panel ----
+   The panel walks a provenance tree for the selected claim. provPath is a
+   list of input indices that drill into nested derived provs; [] = root.
+   Breadcrumb at the top lets the user step back out. Leaves (quote/cell)
+   resolve to a source chip that opens the source at the cited target. */
+let provPath = [];
+
+/* Link mode — active while the user is picking a second claim for a
+   Contrast/Concur relation. Click on another grounded claim emits a
+   LINK event. Escape exits without creating a link. */
+let linkMode = { active: false, kind: null, fromId: null };
+
+function enterLinkMode(fromId, kind) {
+  linkMode = { active: true, kind, fromId };
+  document.body.classList.add('link-mode');
+  document.body.classList.toggle('link-concur', kind === 'concur');
+  // Mark the source claim so it doesn't look like a target
+  $$('.g, .conflict, .absent').forEach(el => el.classList.remove('link-source'));
+  $$(`[data-id="${fromId}"]`).forEach(el => el.classList.add('link-source'));
+  showToast(kind === 'concur'
+    ? 'Click another claim to concur. Esc to cancel.'
+    : 'Click another claim to contrast. Esc to cancel.');
+}
+
+function exitLinkMode() {
+  linkMode = { active: false, kind: null, fromId: null };
+  document.body.classList.remove('link-mode', 'link-concur');
+  $$('.g, .conflict, .absent').forEach(el => el.classList.remove('link-source'));
+}
+
+/* Handler called by showClaim when link mode is active — the click on a
+   claim span becomes the LINK target instead of opening the panel. */
+async function completeLink(targetId) {
+  const { fromId, kind } = linkMode;
+  if (!fromId || targetId === fromId) { exitLinkMode(); return; }
+  const newId = 'link_' + ulid().slice(-8);
+  await appendEventAndRefold({
+    op: 'LINK',
+    site: `claim:${newId}`,
+    resolution: 'Figure',
+    payload: { kind, claim_a: fromId, claim_b: targetId, reason: null },
+    author: 'human'
+  });
+  exitLinkMode();
+  renderCounts();
+  if ($('#mode-review').classList.contains('active')) renderReview();
+  showToast(kind === 'concur' ? 'concur recorded' : 'conflict recorded');
+  showClaim(newId);
+}
+
+function provAtPath(claim, path) {
+  let prov = claim.prov;
+  const trail = [{ label: shortClaimLabel(claim), result: null, prov }];
+  for (let i = 0; i < path.length; i++) {
+    if (!prov || !prov.inputs || !prov.inputs[path[i]]) break;
+    prov = prov.inputs[path[i]];
+    trail.push({ label: shortProvLabel(prov), result: null, prov });
+  }
+  return { prov, trail };
+}
+
+function shortClaimLabel(claim) {
+  // For the root breadcrumb: prefer the claim's rendered text
+  return claim.text;
+}
+function shortProvLabel(p) {
+  if (!p) return '';
+  if (p.kind === 'derived') return `${p.op}(${(p.inputs || []).length})`;
+  if (p.kind === 'cell')    return `row ${p.row}`;
+  if (p.kind === 'quote') {
+    const t = (p.highlight || '').trim();
+    return t.length > 22 ? `"${t.slice(0,20)}…"` : `"${t}"`;
+  }
+  if (p.kind === 'conflict') return 'conflict';
+  if (p.kind === 'absence')  return 'absence';
+  return p.kind || '';
+}
+function shortProvValue(p) {
+  if (!p) return '';
+  if (p.kind === 'derived') return p.result || '';
+  if (p.kind === 'cell')    return p.value || '';
+  if (p.kind === 'quote')   return '';
+  return '';
+}
+
 function showClaim(id, opts = {}) {
+  // If we're in link mode, a click on a claim span becomes the LINK
+  // target instead of opening the panel — claim/claim selection drives
+  // the second-hop pick.
+  if (linkMode.active) { completeLink(id); return; }
   const claim = CLAIMS[id];
   if (!claim) return;
+  if (selectedClaimId !== id) provPath = [];
   selectedClaimId = id;
 
   $$('.g, .conflict, .absent', $('#article-body')).forEach(el => el.classList.remove('active'));
@@ -3478,6 +4056,7 @@ function showClaim(id, opts = {}) {
   const typeLabels = {
     grounded: 'Grounded',
     conflict: 'Conflict',
+    concur:   'Concur',
     absent:   'Absent · NUL event'
   };
   const typeLabel = $('#rp-type-label');
@@ -3488,33 +4067,55 @@ function showClaim(id, opts = {}) {
     claim.conf >= 0.97 ? 'var(--teal-mid)' :
     claim.conf >= 0.85 ? 'var(--amber-mid)' : 'var(--red-mid)';
 
-  // Claim statement (always shown)
-  let body = `
-    <div class="prov-section">
-      <div class="prov-label">Claim</div>
-      <div class="prov-code">"${escapeHtml(claim.text)}"</div>
-    </div>
-  `;
+  const { prov: viewProv, trail } = provAtPath(claim, provPath);
 
-  // Provenance — dispatch on kind
-  body += renderProvenance(claim.prov, { topLevel: true });
+  // Breadcrumb — only shown when we've drilled into a derivation.
+  let body = '';
+  if (provPath.length > 0) {
+    const segs = trail.map((t, i) => {
+      const isLast = i === trail.length - 1;
+      const val = shortProvValue(t.prov);
+      const label = escapeHtml(t.label) + (val ? ` · <span class="pb-val">${escapeHtml(val)}</span>` : '');
+      return isLast
+        ? `<span class="pb-seg pb-current">${label}</span>`
+        : `<span class="pb-seg" data-pb-idx="${i}">${label}</span>`;
+    }).join('<span class="pb-sep">›</span>');
+    body += `<div class="prov-breadcrumb">${segs}</div>`;
+  }
 
-  // Confidence
-  body += `
-    <div class="prov-section">
-      <div class="prov-label">Confidence</div>
-      <div class="conf-bar-wrap">
-        <div class="conf-bar" style="width: ${Math.round(claim.conf * 100)}%; background: ${confColor};"></div>
+  // Claim statement — show claim text only at the root; below it we title
+  // the current view by the nested derivation's expression.
+  if (provPath.length === 0) {
+    body += `
+      <div class="prov-section">
+        <div class="prov-label">Claim</div>
+        <div class="prov-code">"${escapeHtml(claim.text)}"</div>
       </div>
-      <div class="conf-label">${claim.conf.toFixed(2)} · ${
-        claim.conf >= 0.97 ? 'mechanical' :
-        claim.conf >= 0.85 ? 'probabilistic' : 'weak'
-      }</div>
-    </div>
-  `;
+    `;
+  }
 
-  // Inspect fold events — collapsed affordance, the old traversal lives here
-  if (claim.trace && claim.trace.length) {
+  // Provenance at current depth
+  body += renderProvenance(viewProv, { topLevel: true });
+
+  // Confidence (always anchored to the claim, not the nested node)
+  if (provPath.length === 0) {
+    body += `
+      <div class="prov-section">
+        <div class="prov-label">Confidence</div>
+        <div class="conf-bar-wrap">
+          <div class="conf-bar" style="width: ${Math.round(claim.conf * 100)}%; background: ${confColor};"></div>
+        </div>
+        <div class="conf-label">${claim.conf.toFixed(2)} · ${
+          claim.conf >= 0.97 ? 'mechanical' :
+          claim.conf >= 0.85 ? 'probabilistic' : 'weak'
+        }</div>
+      </div>
+    `;
+  }
+
+  // Inspect fold events — only surface when there's something notable: a
+  // non-trivial trace, or a non-grounded claim type whose derivation matters.
+  if (provPath.length === 0 && claim.trace && (claim.trace.length > 2 || claim.type !== 'grounded')) {
     body += `
       <div class="inspect-fold" data-toggle="fold">
         <span id="fold-caret">▸</span> inspect fold events (${claim.trace.length})
@@ -3537,15 +4138,40 @@ function showClaim(id, opts = {}) {
     `;
   }
 
-  body += `
-    <div class="divider"></div>
-    <div class="prov-actions">
-      <button class="btn-sm">Correct</button>
-      <button class="btn-sm btn-sm-danger">Release</button>
-    </div>
-  `;
+  if (provPath.length === 0) {
+    // Grounded claims also offer relationship verbs: Contrast with…, Concur
+    // with…. Both enter link mode; clicking another claim emits a LINK.
+    const relVerbs = claim.type === 'grounded' ? `
+      <button class="qa" data-linkmode="conflict" data-id="${id}">Contrast with…</button>
+      <button class="qa" data-linkmode="concur"   data-id="${id}">Concur with…</button>
+    ` : '';
+    body += `
+      <div class="divider"></div>
+      <div class="prov-actions">${verbHtml(claim, id)}${relVerbs}</div>
+    `;
+  }
 
   $('#rp-body').innerHTML = body;
+
+  // wire verb buttons in the provenance panel — same dispatch as the
+  // review queue, just with a different render context.
+  $$('.prov-actions .qa', $('#rp-body')).forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      // Link mode buttons take a different path — they seed link mode
+      // and let the user click a second claim in the article.
+      if (btn.dataset.linkmode) {
+        enterLinkMode(id, btn.dataset.linkmode);
+        return;
+      }
+      await dispatchVerb(btn.dataset.id, btn.dataset.action);
+      renderCounts();
+      // If retracted, close the panel; otherwise re-render the panel.
+      const updated = CLAIMS[id];
+      if (!updated || updated.status === 'retracted') closeClaim();
+      else showClaim(id);
+    });
+  });
 
   // wire up the fold-events toggle
   const foldToggle = $('[data-toggle="fold"]', $('#rp-body'));
@@ -3558,16 +4184,62 @@ function showClaim(id, opts = {}) {
     });
   }
 
-  // wire up input-item drill-down (for derived prov)
-  $$('.input-item', $('#rp-body')).forEach(item => {
-    item.addEventListener('click', () => {
-      // Drill into nested derivation — in a real app this would navigate
-      // to a sub-panel; here we flash it to show the intent
-      item.style.transition = 'background 0.2s';
-      item.style.background = 'var(--amber-fill)';
-      setTimeout(() => item.style.background = '', 400);
+  // wire up breadcrumb: clicking a segment pops back to that depth
+  $$('.pb-seg[data-pb-idx]', $('#rp-body')).forEach(seg => {
+    seg.addEventListener('click', () => {
+      const depth = Number(seg.dataset.pbIdx);
+      provPath = provPath.slice(0, depth);
+      showClaim(id);
     });
   });
+
+  // wire up input-item drill-down: derived inputs push, leaves open source
+  $$('.input-item', $('#rp-body')).forEach(item => {
+    item.addEventListener('click', () => {
+      const idx = Number(item.dataset.inputIdx);
+      if (!Number.isFinite(idx)) return;
+      const input = (viewProv.inputs || [])[idx];
+      if (!input) return;
+      if (input.kind === 'derived') {
+        provPath = [...provPath, idx];
+        showClaim(id);
+        return;
+      }
+      // Leaf — open the source at the cited target
+      openSourceFromProv(input);
+    });
+  });
+
+  // wire up source-chip → open source viewer at cited span
+  $$('.source-chip[data-src-name]', $('#rp-body')).forEach(chip => {
+    chip.addEventListener('click', () => {
+      const name = chip.dataset.srcName;
+      const sid = resolveSourceIdByName(name);
+      if (!sid) { showToast('Source not in library'); return; }
+      const scrollTo = chip.dataset.scrollKind === 'cell'
+        ? { kind: 'cell', row: Number(chip.dataset.row), col: chip.dataset.col }
+        : chip.dataset.scrollKind === 'quote'
+          ? { kind: 'quote', highlight: chip.dataset.hl }
+          : null;
+      showSourceViewer(sid, { scrollTo });
+    });
+  });
+}
+
+/* Open the source viewer for a leaf prov node (cell/quote), targeting the
+   cited span. Used by both the source-chip on the current view and by
+   input-item leaves in a derived drill-down. */
+function openSourceFromProv(p) {
+  if (!p) return;
+  const sid = resolveSourceIdByName(p.src);
+  if (!sid) { showToast('Source not in library'); return; }
+  if (p.kind === 'cell') {
+    showSourceViewer(sid, { scrollTo: { kind: 'cell', row: p.row, col: p.col } });
+  } else if (p.kind === 'quote') {
+    showSourceViewer(sid, { scrollTo: { kind: 'quote', highlight: p.highlight } });
+  } else {
+    showSourceViewer(sid);
+  }
 }
 
 /* Render a provenance object. Returns HTML string. */
@@ -3578,7 +4250,13 @@ function renderProvenance(prov, { topLevel = false } = {}) {
     case 'quote':      return renderQuoteProv(prov, topLevel);
     case 'cell':       return renderCellProv(prov, topLevel);
     case 'derived':    return renderDerivedProv(prov, topLevel);
-    case 'conflict':   return renderConflictProv(prov, topLevel);
+    case 'conflict':
+      // A LINK-built conflict has claim_a/claim_b digests; the pre-seeded
+      // conflict shape has reported/source. Dispatch on which one's set.
+      return (prov.claim_a && prov.claim_b)
+        ? renderLinkProv(prov, 'conflict')
+        : renderConflictProv(prov, topLevel);
+    case 'concur':     return renderLinkProv(prov, 'concur');
     case 'absence':    return renderAbsenceProv(prov, topLevel);
     default: return `<div class="prov-section"><div class="prov-code">${escapeHtml(JSON.stringify(prov))}</div></div>`;
   }
@@ -3589,7 +4267,7 @@ function renderQuoteProv(p, topLevel) {
   return `
     <div class="prov-section">
       <div class="prov-label">Source quote</div>
-      <div class="source-chip">
+      <div class="source-chip" data-src-name="${escapeHtml(p.src)}" data-scroll-kind="quote" data-hl="${escapeHtml(p.highlight || '')}">
         <span class="source-chip-name">${escapeHtml(p.src)}</span>
         <span class="source-chip-loc">${p.page ? 'p.' + p.page : p.spanLabel}</span>
         <span class="source-chip-open">↗</span>
@@ -3626,7 +4304,7 @@ function renderCellProv(p, topLevel) {
   return `
     <div class="prov-section">
       <div class="prov-label">Source cell</div>
-      <div class="source-chip">
+      <div class="source-chip" data-src-name="${escapeHtml(p.src)}" data-scroll-kind="cell" data-row="${escapeHtml(String(p.row))}" data-col="${escapeHtml(p.col)}">
         <span class="source-chip-name">${escapeHtml(p.src)}</span>
         <span class="source-chip-loc">row ${p.row} · ${escapeHtml(p.col)}</span>
         <span class="source-chip-open">↗</span>
@@ -3731,6 +4409,29 @@ function renderConflictProv(p, topLevel) {
   `;
 }
 
+/* Render a conflict/concur built by a LINK event. Two claim digests,
+   symmetric layout — conflict in red, concur in teal. */
+function renderLinkProv(p, kind) {
+  const sideHtml = (digest, label) => `
+    <div class="conflict-side ${kind === 'concur' ? 'concur' : 'reported'}">
+      <div class="conflict-side-label">${label}</div>
+      <div class="conflict-side-value">${escapeHtml(digest.value || digest.text)}</div>
+      <div class="conflict-side-loc">${escapeHtml(digest.loc || digest.src)}</div>
+    </div>
+  `;
+  const header = kind === 'concur' ? 'Two claims agree' : 'Two claims disagree';
+  return `
+    <div class="prov-section">
+      <div class="prov-label">${header}</div>
+      <div class="conflict-stack ${kind}">
+        ${sideHtml(p.claim_a, 'Claim A')}
+        ${sideHtml(p.claim_b, 'Claim B')}
+      </div>
+      ${p.reason ? `<div class="conflict-side-loc" style="margin-top: 8px;">${escapeHtml(p.reason)}</div>` : ''}
+    </div>
+  `;
+}
+
 function renderAbsenceProv(p, topLevel) {
   return `
     <div class="prov-section">
@@ -3755,6 +4456,7 @@ function renderAbsenceProv(p, topLevel) {
 
 function closeClaim() {
   selectedClaimId = null;
+  provPath = [];
   $$('.g, .conflict, .absent', $('#article-body')).forEach(el => el.classList.remove('active'));
   $('#rp-empty').style.display = 'flex';
   $('#rp-content').classList.remove('visible');
@@ -3770,7 +4472,8 @@ function provSummary(claim) {
     case 'quote':    return 'direct quote';
     case 'cell':     return `cell value · ${p.col}`;
     case 'derived':  return p.op + '(' + (p.inputs || []).length + ' inputs)';
-    case 'conflict': return 'two sources disagree';
+    case 'conflict': return 'two claims disagree';
+    case 'concur':   return 'two claims agree';
     case 'absence':  return 'expected pattern not found';
     default: return '';
   }
@@ -3785,12 +4488,145 @@ function provLocator(claim) {
     case 'cell':     return `${p.src} · row ${p.row} · ${p.col}`;
     case 'derived':  return `derived · ${(p.inputs || []).length} inputs`;
     case 'conflict': {
+      if (p.claim_a && p.claim_b) return `${p.claim_a.loc || p.claim_a.src} ⟷ ${p.claim_b.loc || p.claim_b.src}`;
       const r = p.reported.kind === 'quote' ? `${p.reported.src}:p.${p.reported.page}` : `${p.reported.src}:row ${p.reported.row}`;
       const s = p.source.kind === 'cell' ? `${p.source.src}:row ${p.source.row}` : `${p.source.src}:p.${p.source.page}`;
       return `${r} ⟷ ${s}`;
     }
+    case 'concur':
+      return p.claim_a && p.claim_b ? `${p.claim_a.loc || p.claim_a.src} ≡ ${p.claim_b.loc || p.claim_b.src}` : '';
     case 'absence':  return `scanned ${p.scanned.length} sources · window ${p.window}`;
     default: return '';
+  }
+}
+
+/* ---- Typed review verbs ----
+   Each claim type has its own verb set. Verbs emit log events (EVA for
+   evaluations, REC for reframes) with a new_status payload; the fold
+   reads the log and resolves the claim's current reading. Nothing
+   overwrites the original claim — every review action is a new event.
+   retract/dissolve set status='retracted' and unwrap the span in the
+   article. reanchor/fill will (once the Anchor drawer lands in phase 3)
+   emit a REC with a replacement prov. */
+const VERBS = {
+  grounded: [
+    { label: 'Confirm',      action: 'confirm',     class: 'qa-confirm' },
+    { label: 'Re-anchor',    action: 'reanchor' },
+    { label: 'Retract',      action: 'retract',     class: 'qa-release' }
+  ],
+  conflict: [
+    { label: 'Resolve → A',  action: 'resolve_a',   class: 'qa-confirm' },
+    { label: 'Resolve → B',  action: 'resolve_b',   class: 'qa-confirm' },
+    { label: 'Hold both',    action: 'hold' },
+    { label: 'Dissolve',     action: 'dissolve',    class: 'qa-release' }
+  ],
+  concur: [
+    { label: 'Confirm concur', action: 'confirm',   class: 'qa-confirm' },
+    { label: 'Hold both',      action: 'hold' },
+    { label: 'Dissolve',       action: 'dissolve',  class: 'qa-release' }
+  ],
+  absent: [
+    { label: 'Confirm NUL',   action: 'confirm_nul', class: 'qa-confirm' },
+    { label: 'Fill',          action: 'fill' },
+    { label: 'Stop watching', action: 'stop',        class: 'qa-release' }
+  ]
+};
+
+/* Map a verb action to (op, new_status). Drawer-invoking verbs (reanchor,
+   fill) return null — they defer the event emission to the drawer's
+   confirm step. */
+function verbEvent(action) {
+  switch (action) {
+    case 'confirm':     return { op: 'EVA', new_status: 'confirmed' };
+    case 'confirm_nul': return { op: 'EVA', new_status: 'confirmed_nul' };
+    case 'resolve_a':   return { op: 'EVA', new_status: 'resolved_a' };
+    case 'resolve_b':   return { op: 'EVA', new_status: 'resolved_b' };
+    case 'hold':        return { op: 'EVA', new_status: 'held' };
+    case 'stop':        return { op: 'EVA', new_status: 'stopped' };
+    case 'retract':     return { op: 'REC', new_status: 'retracted' };
+    case 'dissolve':    return { op: 'REC', new_status: 'retracted' };
+    case 'reanchor':    return null;
+    case 'fill':        return null;
+    default:            return null;
+  }
+}
+
+function verbHtml(claim, id) {
+  const verbs = VERBS[claim.type] || [];
+  return verbs.map(v => {
+    const cls = v.class ? ` ${v.class}` : '';
+    return `<button class="qa${cls}" data-action="${v.action}" data-id="${id}">${escapeHtml(v.label)}</button>`;
+  }).join('');
+}
+
+/* Apply a verb. Emits a supersession event (EVA or REC) and refolds.
+   For retract, also unwraps the claim span in the article. For drawer
+   verbs (reanchor/fill) surfaces a placeholder until phase 3 lands. */
+async function dispatchVerb(claimId, action) {
+  const claim = CLAIMS[claimId];
+  if (!claim) return;
+  const mapping = verbEvent(action);
+  if (!mapping) {
+    // Drawer-invoking verbs. reanchor and fill both hand off to the
+    // anchor drawer with the claim's text pre-filled; on Anchor,
+    // confirmAnchor emits a REC against the existing claimId (instead
+    // of a fresh CITE).
+    pendingSelection = { range: null, text: claim.text };
+    openAnchorDrawer(claim.text);
+    drawerState.reanchorTargetId = claimId;
+    drawerState.reanchorType = action === 'fill' ? 'grounded' : claim.type;
+    return;
+  }
+  // Capture the ids of prior EVA events on this claim so supersession is
+  // explicit in the log. Retroactively overriding an evaluation is the
+  // expected path — flag the prior ones so downstream readers can trace
+  // the chain of interpretations.
+  const priorEvaIds = await priorEvaEventIds(claimId);
+  await appendEventAndRefold({
+    op: mapping.op,
+    site: `claim:${claimId}`,
+    resolution: 'Figure',
+    payload: {
+      action,
+      new_status: mapping.new_status,
+      supersedes: priorEvaIds
+    },
+    author: 'human'
+  });
+  if (mapping.new_status === 'retracted') {
+    unwrapClaimSpan(claimId);
+    await saveArticleNow();
+  }
+}
+
+/* Scan the log for prior EVA events targeting this claim — the ids
+   become the supersedes list on the newly emitted event. */
+async function priorEvaEventIds(claimId) {
+  try {
+    const events = await storage.readAll();
+    const site = `claim:${claimId}`;
+    const ids = [];
+    for (const raw of events) {
+      let e;
+      try { e = JSON.parse(raw); } catch { continue; }
+      if (e.op === 'EVA' && e.site === site) ids.push(e.id);
+    }
+    return ids;
+  } catch {
+    return [];
+  }
+}
+
+/* Unwrap a retracted claim's span back into a plain text node, so the
+   visible article no longer carries the annotation. The claim event log
+   is preserved — retraction is a supersession, not a delete. */
+function unwrapClaimSpan(claimId) {
+  const bodies = [$('#article-body'), $('#review-article')].filter(Boolean);
+  for (const root of bodies) {
+    root.querySelectorAll(`[data-id="${claimId}"]`).forEach(span => {
+      const textNode = document.createTextNode(span.textContent);
+      span.replaceWith(textNode);
+    });
   }
 }
 
@@ -3816,8 +4652,8 @@ function renderReview() {
 
   $('#qlist').innerHTML = queue.map(([id, c]) => {
     if (c.status !== 'pending') return '';
-    const tagMap = {grounded: 'prov-tag-amber', conflict: 'prov-tag-red', absent: 'prov-tag-blue'};
-    const label = {grounded: 'grounded', conflict: 'conflict', absent: 'absent'}[c.type];
+    const tagMap = {grounded: 'prov-tag-amber', conflict: 'prov-tag-red', concur: 'prov-tag-teal', absent: 'prov-tag-blue'};
+    const label = {grounded: 'grounded', conflict: 'conflict', concur: 'concur', absent: 'absent'}[c.type];
     const selected = selectedReviewId === id ? ' selected' : '';
 
     // Derive a short summary line and source locator from the provenance shape
@@ -3831,11 +4667,7 @@ function renderReview() {
         </div>
         <div class="qcard-text">"${escapeHtml(c.text)}" · ${escapeHtml(summary)}</div>
         <div class="qcard-source">${escapeHtml(locator)}</div>
-        <div class="qcard-actions">
-          <button class="qa qa-confirm" data-action="confirm" data-id="${id}">Confirm</button>
-          <button class="qa" data-action="correct" data-id="${id}">Correct</button>
-          <button class="qa qa-release" data-action="release" data-id="${id}">Release</button>
-        </div>
+        <div class="qcard-actions">${verbHtml(c, id)}</div>
       </div>
     `;
   }).join('') || `<div class="qempty">queue clear<br><span style="opacity:0.7">all claims resolved</span></div>`;
@@ -3843,23 +4675,7 @@ function renderReview() {
   $$('.qa', $('#qlist')).forEach(btn => {
     btn.addEventListener('click', async e => {
       e.stopPropagation();
-      const id = btn.dataset.id;
-      const action = btn.dataset.action;
-      // Mutations become log events; the fold recomputes CLAIMS.
-      // Confirm/release = EVA (evaluation); correct = REC (reframe).
-      const op = action === 'correct' ? 'REC' : 'EVA';
-      await appendEventAndRefold({
-        op,
-        site: `claim:${id}`,
-        resolution: 'Figure',
-        payload: {
-          action,
-          new_status: action === 'confirm' ? 'confirmed'
-                    : action === 'release' ? 'released'
-                    : 'corrected'
-        },
-        author: 'human'
-      });
+      await dispatchVerb(btn.dataset.id, btn.dataset.action);
       renderReview();
       renderCounts();
     });
@@ -4196,12 +5012,74 @@ self.addEventListener('message', (ev) => {
   const { type, events } = ev.data;
   if (type !== 'fold') return;
 
+  // Three projected views per the EO split:
+  //   G (Given-Log)  — observations: what was read, where
+  //   M (Meant-Graph)— interpretations: claims with π links into G
+  //   S (lattice)    — positional context (workspace, article, paragraph)
+  // CLAIMS is the render-ready projection of M (M + π resolved).
+  const G = {};
+  const M = {};
+  const S = {};
   const claims = {};
   const sources = {};
 
   for (const raw of events) {
     let evt;
     try { evt = JSON.parse(raw); } catch { continue; }
+
+    // OBS — a G-entry. An observation: someone read this content at this
+    // location at this time. The atomic unit of provenance.
+    if (evt.op === 'OBS' && evt.site && evt.site.startsWith('observation:')) {
+      const obsId = evt.site.slice('observation:'.length);
+      G[obsId] = {
+        id: obsId,
+        ts: evt.ts,
+        agent: evt.payload && evt.payload.agent,
+        mode: (evt.payload && evt.payload.mode) || 'direct_read',
+        source_id: evt.payload && evt.payload.source_id,
+        location: evt.payload && evt.payload.location,
+        content: evt.payload && evt.payload.content,
+        context: (evt.payload && evt.payload.context) || null
+      };
+      continue;
+    }
+
+    // CLAIM — an M-entry. An interpretation made in an article, linked
+    // back to observations by π (pi). Projects into CLAIMS for render.
+    if (evt.op === 'CLAIM' && evt.site && evt.site.startsWith('claim:')) {
+      const claimId = evt.site.slice('claim:'.length);
+      const p = evt.payload || {};
+      M[claimId] = {
+        id: claimId,
+        ts: evt.ts,
+        type: p.type || 'grounded',
+        text: p.text,
+        pi: p.pi || [],
+        position: p.position || null,
+        window: p.window || null,
+        conf: p.conf != null ? p.conf : 0.9,
+        prov_content: p.prov_content,
+        trace: p.trace || []
+      };
+      // Record S-lattice coordinate
+      if (p.position) {
+        const key = (p.position.workspace || 'local') + '/' + (p.position.article_id || 'draft') + '/' + (p.position.paragraph_id || '0');
+        (S[key] = S[key] || []).push(claimId);
+      }
+      // Render-ready projection
+      claims[claimId] = {
+        type: M[claimId].type,
+        text: M[claimId].text,
+        conf: M[claimId].conf,
+        status: 'pending',
+        prov: p.prov_content,
+        trace: M[claimId].trace,
+        pi: M[claimId].pi,
+        window: M[claimId].window,
+        position: M[claimId].position
+      };
+      continue;
+    }
 
     // SEED — initial claim state (carries the full pre-authored shape).
     if (evt.op === 'SEED' && evt.payload && evt.payload.claim_id) {
@@ -4212,7 +5090,8 @@ self.addEventListener('message', (ev) => {
       continue;
     }
 
-    // CITE — user-authored citation, same shape as SEED
+    // CITE — legacy user-authored citation. New code emits OBS+CLAIM;
+    // this handler stays for forward-compat with existing log entries.
     if (evt.op === 'CITE' && evt.payload && evt.payload.claim_id) {
       claims[evt.payload.claim_id] = {
         ...evt.payload.claim,
@@ -4256,26 +5135,86 @@ self.addEventListener('message', (ev) => {
       continue;
     }
 
-    // EVA on a claim: confirm or release
+    // EVA on a claim: an evaluation. Later EVA events supersede earlier
+    // ones; the latest reading wins. The fold stores a σ-chain so readers
+    // can walk supersessions back.
     if (evt.op === 'EVA' && evt.site && evt.site.startsWith('claim:')) {
       const id = evt.site.slice('claim:'.length);
       if (!claims[id]) continue;
       const s = evt.payload && evt.payload.new_status;
       if (s) claims[id].status = s;
+      (claims[id].sigma = claims[id].sigma || []).push({
+        op: 'EVA',
+        event_id: evt.id,
+        action: evt.payload && evt.payload.action,
+        new_status: s,
+        supersedes: (evt.payload && evt.payload.supersedes) || [],
+        ts: evt.ts
+      });
       continue;
     }
 
-    // REC on a claim: reclassification / correction
+    // LINK — build a relational claim (conflict or concur) from two prior
+    // claims. The new claim references both; resolution stays open until
+    // the user acts on it with the typed verbs.
+    if (evt.op === 'LINK' && evt.site && evt.site.startsWith('claim:')) {
+      const newId = evt.site.slice('claim:'.length);
+      const aId = evt.payload && evt.payload.claim_a;
+      const bId = evt.payload && evt.payload.claim_b;
+      const a = claims[aId];
+      const b = claims[bId];
+      if (!a || !b) continue;
+      const kind = (evt.payload && evt.payload.kind) === 'concur' ? 'concur' : 'conflict';
+      const digest = (id, c) => {
+        const p = c.prov || {};
+        let loc = '';
+        let value = '';
+        if (p.kind === 'quote')    { loc = p.page ? (p.src + ' · p.' + p.page) : p.src; value = p.highlight || ''; }
+        else if (p.kind === 'cell'){ loc = p.src + ' · row ' + p.row + ' · ' + p.col; value = p.value || ''; }
+        else if (p.kind === 'derived') { loc = (p.src || 'derived'); value = p.result || ''; }
+        return { id, text: c.text, kind: p.kind || '', src: p.src || '', loc, value };
+      };
+      claims[newId] = {
+        type: kind,
+        text: a.text,
+        conf: Math.min(a.conf || 1, b.conf || 1),
+        status: 'pending',
+        prov: {
+          kind,
+          claim_a: digest(aId, a),
+          claim_b: digest(bId, b),
+          reason: (evt.payload && evt.payload.reason) || null
+        },
+        trace: [
+          { op: 'CON', txt: 'two claims linked by a reviewer' },
+          { op: 'EVA', txt: kind + ' relation registered — pending resolution' }
+        ]
+      };
+      continue;
+    }
+
+    // REC on a claim: a reframe — retract, dissolve, reanchor, fill.
+    // Payloads may carry a replacement prov (reanchor/fill).
     if (evt.op === 'REC' && evt.site && evt.site.startsWith('claim:')) {
       const id = evt.site.slice('claim:'.length);
       if (!claims[id]) continue;
       const s = evt.payload && evt.payload.new_status;
       if (s) claims[id].status = s;
+      if (evt.payload && evt.payload.prov) claims[id].prov = evt.payload.prov;
+      if (evt.payload && evt.payload.type) claims[id].type = evt.payload.type;
+      (claims[id].sigma = claims[id].sigma || []).push({
+        op: 'REC',
+        event_id: evt.id,
+        action: evt.payload && evt.payload.action,
+        new_status: s,
+        supersedes: (evt.payload && evt.payload.supersedes) || [],
+        ts: evt.ts
+      });
       continue;
     }
   }
 
-  self.postMessage({ type: 'state', claims, sources });
+  self.postMessage({ type: 'state', claims, sources, G, M, S });
 });
 `;
 
@@ -4288,7 +5227,9 @@ function getFoldWorker() {
   return foldWorker;
 }
 
-/* Kicks off a fold; resolves with the new claim+source state. */
+/* Kicks off a fold; resolves with the three EO views plus the
+   render-ready claim projection. G = observations (Given-Log),
+   M = interpretations (Meant-Graph), S = positional lattice. */
 async function fold() {
   const events = await storage.readAll();
   const worker = getFoldWorker();
@@ -4296,7 +5237,13 @@ async function fold() {
     const onMsg = (ev) => {
       if (ev.data && ev.data.type === 'state') {
         worker.removeEventListener('message', onMsg);
-        resolve({ claims: ev.data.claims, sources: ev.data.sources || {} });
+        resolve({
+          claims: ev.data.claims,
+          sources: ev.data.sources || {},
+          G: ev.data.G || {},
+          M: ev.data.M || {},
+          S: ev.data.S || {}
+        });
       }
     };
     worker.addEventListener('message', onMsg);
@@ -4305,12 +5252,21 @@ async function fold() {
   });
 }
 
+// Three-view cache: kept in memory for downstream readers (π walkers,
+// lattice queries). The fold populates these after every refold.
+let G_VIEW = {};
+let M_VIEW = {};
+let S_VIEW = {};
+
 /* Convenience: append an event then refold and install into CLAIMS + USER_SOURCES */
 async function appendEventAndRefold(e) {
   await appendEvent(e);
   const state = await fold();
   CLAIMS = state.claims;
   USER_SOURCES = state.sources;
+  G_VIEW = state.G;
+  M_VIEW = state.M;
+  S_VIEW = state.S;
 }
 
 /* ---------- Seed on first run ---------- */
@@ -4658,8 +5614,7 @@ async function handleUpload(files) {
           archive_identifier: proveo?.archive?.identifier || null,
           matrix_mxc: proveo?.matrix?.mxc || null,
           matrix_room_id: proveo?.matrix?.room_id || null,
-          sha256: proveo?.archive?.redacted_sha256 || proveo?.matrix?.original_sha256
-                  || extraction?.doc_sha256 || null,
+          sha256: extraction?.doc_sha256 || null,
           // PDF audit: how the text we just indexed was actually
           // obtained, page by page. Travels in the append-only log.
           extraction
@@ -4684,9 +5639,497 @@ async function handleUpload(files) {
   }
 }
 
+/* ----------------------------------------------------------------------
+   Auto-archive: a dedicated import entry point that skips the per-file
+   destination modal and pushes every chosen file straight to Archive.org
+   via the PROVeo webhook. Gated behind a one-time consent modal so we
+   don't silently publish on the user's behalf.
+---------------------------------------------------------------------- */
+const LS_AUTO_ARCHIVE_CONSENT = 'nl.autoArchiveConsent.v1';
+
+function hasAutoArchiveConsent() {
+  try { return localStorage.getItem(LS_AUTO_ARCHIVE_CONSENT) === 'true'; } catch { return false; }
+}
+
+function promptAutoArchiveConsent() {
+  return new Promise((resolve) => {
+    const modal = $('#arcauto-modal');
+    ['arc-consent-permanence','arc-consent-privacy','arc-consent-rights']
+      .forEach(id => { const el = $('#'+id); if (el) el.checked = false; });
+    $('#arcauto-err').hidden = true;
+    modal.hidden = false;
+
+    const cleanup = () => {
+      modal.hidden = true;
+      $('#arcauto-cancel').removeEventListener('click', onCancel);
+      $('#arcauto-close').removeEventListener('click', onCancel);
+      $('#arcauto-backdrop').removeEventListener('click', onCancel);
+      $('#arcauto-confirm').removeEventListener('click', onConfirm);
+      document.removeEventListener('keydown', onEsc);
+    };
+    const onCancel = () => { cleanup(); resolve(false); };
+    const onEsc = (e) => { if (e.key === 'Escape' && !modal.hidden) onCancel(); };
+    const onConfirm = () => {
+      const ok = $('#arc-consent-permanence').checked
+              && $('#arc-consent-privacy').checked
+              && $('#arc-consent-rights').checked;
+      if (!ok) {
+        const err = $('#arcauto-err');
+        err.hidden = false;
+        err.textContent = 'All three acknowledgments are required.';
+        return;
+      }
+      try { localStorage.setItem(LS_AUTO_ARCHIVE_CONSENT, 'true'); } catch {}
+      cleanup();
+      resolve(true);
+    };
+    $('#arcauto-cancel').addEventListener('click', onCancel);
+    $('#arcauto-close').addEventListener('click', onCancel);
+    $('#arcauto-backdrop').addEventListener('click', onCancel);
+    $('#arcauto-confirm').addEventListener('click', onConfirm);
+    document.addEventListener('keydown', onEsc);
+  });
+}
+
+function isHtmlFile(name, mime) {
+  const ext = fileExt(name);
+  return ext === 'html' || ext === 'htm' || /^text\/html/i.test(mime || '');
+}
+
+async function handleAutoArchiveUpload(files) {
+  const list = Array.from(files || []);
+  if (!list.length) return;
+  if (!hasAutoArchiveConsent()) {
+    const ok = await promptAutoArchiveConsent();
+    if (!ok) { showToast('auto-archive cancelled'); return; }
+  }
+
+  const btn = $('#sarc-btn');
+  const prevLabel = btn ? btn.textContent : null;
+  if (btn) { btn.classList.add('is-busy'); }
+
+  let added = 0, failed = 0;
+  for (let i = 0; i < list.length; i++) {
+    const file = list[i];
+    if (btn) btn.textContent = `archiving ${i+1}/${list.length}…`;
+    showToast(`archiving ${i+1}/${list.length}: ${file.name}`);
+    try {
+      const id = 's_' + ulid().slice(-10);
+      const kind = detectKind(file.name, file.type);
+      const textCapable = isTextLike(file.name, file.type);
+      const mime = file.type || '';
+      const isHtml = isHtmlFile(file.name, mime);
+
+      let text = null, lineCount = 0;
+      if (textCapable) {
+        text = await file.text();
+        lineCount = (text.match(/\n/g) || []).length + 1;
+      }
+
+      let meta;
+      if (kind === 'csv' && textCapable) meta = `${Math.max(0, lineCount - 1)} rows · ${humanSize(file.size)}`;
+      else if (textCapable) meta = `${humanSize(file.size)} · ${lineCount} lines`;
+      else meta = `${(fileExt(file.name) || 'file').toUpperCase()} · ${humanSize(file.size)}`;
+
+      // HTML files get the same dual-variant treatment as URL-archived
+      // pages: the archive.org copy has images inlined for self-containment,
+      // the local copy keeps image URLs as links.
+      let archiveFile = file;
+      let localText = text;
+      let archiveMetaExtra = null;
+      if (isHtml && text) {
+        try {
+          const baseUrl = 'about:blank';
+          const { localHtml, archiveHtml, title, timestamp } =
+            await buildArchiveVariants(text, baseUrl, { stripScripts: true, addBanner: false });
+          localText = localHtml;
+          lineCount = (localHtml.match(/\n/g) || []).length + 1;
+          meta = `HTML · ${humanSize(new Blob([localHtml]).size)}`;
+          archiveFile = new File([archiveHtml], file.name, { type: 'text/html' });
+          archiveMetaExtra = {
+            archive_variant: 'images-inlined',
+            local_variant: 'images-linked',
+            captured_at: timestamp,
+            html_title: title
+          };
+        } catch (e) {
+          console.warn('[auto-archive] html variant build failed; falling back to raw', e);
+        }
+      }
+
+      const proveo = await uploadViaProveo(archiveFile, 'public', { title: file.name });
+
+      if (textCapable) {
+        await storage.saveSource(id, localText);
+        SOURCE_TEXT[id] = localText;
+      } else {
+        await storage.saveSourceBlob(id, file);
+      }
+      await appendEventAndRefold({
+        op: 'SRC',
+        site: `source:${id}`,
+        resolution: 'Figure',
+        payload: {
+          id, name: file.name, kind, meta, mime,
+          size: (localText ? new Blob([localText]).size : file.size),
+          lines: lineCount,
+          has_text: textCapable,
+          destination: 'public',
+          archive_url: proveo?.archive?.url || null,
+          archive_identifier: proveo?.archive?.identifier || null,
+          matrix_mxc: proveo?.matrix?.mxc || null,
+          matrix_room_id: proveo?.matrix?.room_id || null,
+          sha256: proveo?.archive?.redacted_sha256 || proveo?.matrix?.original_sha256 || null,
+          ...(archiveMetaExtra || {})
+        },
+        author: 'human'
+      });
+      added++;
+    } catch (err) {
+      console.error('[auto-archive] failed for', file.name, err);
+      showToast(`archive failed: ${file.name} · ${err.message || 'error'}`);
+      failed++;
+    }
+  }
+  if (btn) { btn.classList.remove('is-busy'); btn.textContent = prevLabel || '↑ file → archive'; }
+  renderSources();
+  if (added) {
+    showToast(`archived ${added} to Archive.org${failed ? ' · ' + failed + ' failed' : ''}`);
+  } else if (failed) {
+    showToast(`archive failed for all ${failed} file${failed === 1 ? '' : 's'}`);
+  }
+}
+
+/* ----------------------------------------------------------------------
+   Web-page archiver — fetches a URL through the PROVeo page proxy,
+   rewrites relative URLs, optionally strips scripts, and produces TWO
+   HTML variants:
+     local   — images kept as links (small, faithful to live DOM)
+     archive — images fetched and inlined as data URLs (self-contained
+               snapshot suitable as a permanent Archive.org record)
+   The local variant is stored as a source blob; the archive variant is
+   posted to PROVeo with visibility=public.
+---------------------------------------------------------------------- */
+const PAGE_PROXY_URL = 'https://n8n.intelechia.com/webhook/f175846f-86fa-484a-9247-7d04a8ce2e70';
+
+async function pageProxyFetch(url) {
+  const resp = await fetch(PAGE_PROXY_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url })
+  });
+  if (!resp.ok) throw new Error(`proxy http ${resp.status}`);
+  const text = await resp.text();
+  let body = null, statusCode = null, contentType = null;
+  try {
+    const parsed = JSON.parse(text);
+    const peek = Array.isArray(parsed) ? parsed[0] : parsed;
+    if (peek && typeof peek === 'object') {
+      if (typeof peek.body === 'string') body = peek.body;
+      else if (typeof peek.data === 'string') body = peek.data;
+      else if (typeof peek.contents === 'string') body = peek.contents;
+      if (typeof peek.statusCode === 'number') statusCode = peek.statusCode;
+      else if (typeof peek.status === 'number') statusCode = peek.status;
+      if (peek.headers && typeof peek.headers === 'object') {
+        contentType = peek.headers['content-type'] || peek.headers['Content-Type'] || null;
+      }
+    } else if (typeof parsed === 'string') {
+      body = parsed;
+    }
+  } catch { /* not JSON */ }
+  if (body == null) body = text;
+  return { body, statusCode, contentType };
+}
+
+function pageRewriteUrls(doc, baseUrl) {
+  const attrs = [
+    ['img','src'],['img','srcset'],
+    ['link','href'],['a','href'],
+    ['script','src'],
+    ['source','src'],['source','srcset'],
+    ['video','src'],['video','poster'],
+    ['audio','src'],['iframe','src'],
+    ['form','action']
+  ];
+  for (const [sel, attr] of attrs) {
+    doc.querySelectorAll(sel).forEach(el => {
+      const val = el.getAttribute(attr);
+      if (!val) return;
+      if (/^(data:|blob:|javascript:|mailto:|tel:|#)/i.test(val)) return;
+      if (attr === 'srcset') {
+        const out = val.split(',').map(p => {
+          const t = p.trim();
+          const m = t.match(/^(\S+)(\s+.+)?$/);
+          if (!m) return t;
+          try { return new URL(m[1], baseUrl).href + (m[2] || ''); }
+          catch { return t; }
+        }).join(', ');
+        el.setAttribute(attr, out);
+        return;
+      }
+      try { el.setAttribute(attr, new URL(val, baseUrl).href); } catch {}
+    });
+  }
+  doc.querySelectorAll('[style]').forEach(el => {
+    const s = el.getAttribute('style');
+    if (!s || !/url\(/i.test(s)) return;
+    const out = s.replace(/url\((['"]?)([^'")]+)\1\)/gi, (_, q, u) => {
+      if (/^(data:|blob:|#)/i.test(u)) return `url(${q}${u}${q})`;
+      try { return `url(${q}${new URL(u, baseUrl).href}${q})`; }
+      catch { return `url(${q}${u}${q})`; }
+    });
+    el.setAttribute('style', out);
+  });
+}
+
+function pageStripActive(doc) {
+  doc.querySelectorAll('script').forEach(n => n.remove());
+  doc.querySelectorAll('*').forEach(el => {
+    for (const a of Array.from(el.attributes)) {
+      if (a.name.toLowerCase().startsWith('on')) el.removeAttribute(a.name);
+    }
+  });
+  doc.querySelectorAll('meta[http-equiv="refresh" i]').forEach(n => n.remove());
+}
+
+async function pageInlineImages(doc, progress) {
+  const imgs = Array.from(doc.querySelectorAll('img'));
+  const total = imgs.length;
+  if (!total) return;
+  let done = 0;
+  const queue = imgs.slice();
+  const CONCURRENCY = 4;
+  async function worker() {
+    while (queue.length) {
+      const img = queue.shift();
+      const src = img.getAttribute('src');
+      if (src && !/^data:/i.test(src)) {
+        try {
+          const r = await fetch(src, { mode: 'cors', referrerPolicy: 'no-referrer' });
+          if (r.ok) {
+            const blob = await r.blob();
+            if (blob.size < 5 * 1024 * 1024) {
+              const dataUrl = await new Promise((res, rej) => {
+                const fr = new FileReader();
+                fr.onload = () => res(fr.result);
+                fr.onerror = rej;
+                fr.readAsDataURL(blob);
+              });
+              img.setAttribute('src', dataUrl);
+              img.removeAttribute('srcset');
+            }
+          }
+        } catch {}
+      }
+      done++;
+      if (progress) progress(done, total);
+    }
+  }
+  await Promise.all(Array(Math.min(CONCURRENCY, total)).fill(0).map(worker));
+}
+
+function pageAddBanner(doc, meta) {
+  const b = doc.createElement('div');
+  b.setAttribute('data-archive-banner','true');
+  b.style.cssText = 'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:12px;line-height:1.4;color:#412402;background:#FAEEDA;border-bottom:1px solid #BA7517;padding:8px 14px;position:sticky;top:0;z-index:2147483647';
+  const safeUrl = escapeHtml(meta.url);
+  b.innerHTML = `<strong>Archived snapshot</strong> &middot; <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color:#0C447C">${safeUrl}</a> &middot; captured ${escapeHtml(meta.timestamp)}`;
+  if (doc.body) doc.body.insertBefore(b, doc.body.firstChild);
+}
+
+function pageAttachProvenanceMeta(doc, meta) {
+  if (!doc.head) return;
+  [['x-archive-source', meta.url],
+   ['x-archive-timestamp', meta.timestamp],
+   ['x-archive-proxy', 'PROVeo']].forEach(([n, c]) => {
+    const m = doc.createElement('meta');
+    m.setAttribute('name', n); m.setAttribute('content', c);
+    doc.head.appendChild(m);
+  });
+}
+
+function pageSerialize(doc) {
+  return '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+}
+
+function safeUrlFilename(rawUrl, timestamp) {
+  let host = 'page', path = '';
+  try {
+    const u = new URL(rawUrl);
+    host = u.hostname.replace(/[^a-z0-9.-]/gi, '_');
+    path = u.pathname.replace(/[^a-z0-9]/gi, '_').replace(/^_+|_+$/g, '');
+  } catch {}
+  const ts = (timestamp || new Date().toISOString()).replace(/[:.]/g, '-');
+  return `${host}${path ? '__' + path : ''}__${ts}.html`;
+}
+
+function normalizeUrl(raw) {
+  let u = (raw || '').trim();
+  if (!u) return null;
+  if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+  try { return new URL(u).href; } catch { return null; }
+}
+
+/* Build two HTML variants from a raw HTML body. Returns { localHtml,
+   archiveHtml, title, statusCode, contentType, timestamp }. */
+async function buildArchiveVariants(body, url, { stripScripts = true, addBanner = true } = {}, progress) {
+  const timestamp = new Date().toISOString();
+  const localDoc = new DOMParser().parseFromString(body, 'text/html');
+  if (localDoc.head && !localDoc.querySelector('base')) {
+    const base = localDoc.createElement('base');
+    base.href = url;
+    localDoc.head.insertBefore(base, localDoc.head.firstChild);
+  }
+  pageRewriteUrls(localDoc, url);
+  if (stripScripts) pageStripActive(localDoc);
+  const title = (localDoc.querySelector('title')?.textContent || '(untitled)').trim().slice(0, 200);
+  const meta = { url, title, timestamp };
+  if (addBanner) pageAddBanner(localDoc, meta);
+  pageAttachProvenanceMeta(localDoc, meta);
+
+  // Clone for archive variant BEFORE inlining images. We serialize, then
+  // reparse — DOMParser is cheaper than deep-cloning a Document.
+  const localHtml = pageSerialize(localDoc);
+  const archiveDoc = new DOMParser().parseFromString(localHtml, 'text/html');
+  if (progress) progress('fetching images…');
+  await pageInlineImages(archiveDoc, (done, total) => {
+    if (progress) progress(`inlining images ${done}/${total}…`);
+  });
+  const archiveHtml = pageSerialize(archiveDoc);
+  return { localHtml, archiveHtml, title, timestamp };
+}
+
+async function handleUrlArchive(url, { stripScripts, addBanner } = {}, progress) {
+  if (!hasAutoArchiveConsent()) {
+    const ok = await promptAutoArchiveConsent();
+    if (!ok) { showToast('url-archive cancelled'); return null; }
+  }
+  if (progress) progress('fetching page…');
+  const { body, statusCode, contentType } = await pageProxyFetch(url);
+  if (!body || typeof body !== 'string') throw new Error('empty response from proxy');
+  if (progress) progress('parsing & rewriting URLs…');
+  const { localHtml, archiveHtml, title, timestamp } =
+    await buildArchiveVariants(body, url, { stripScripts, addBanner }, progress);
+
+  const filename = safeUrlFilename(url, timestamp);
+  const archiveFile = new File([archiveHtml], filename, { type: 'text/html' });
+
+  if (progress) progress('uploading to Archive.org…');
+  const proveo = await uploadViaProveo(archiveFile, 'public', {
+    title: title || filename,
+    description: `Snapshot of ${url} captured ${timestamp}`
+  });
+
+  // Save the LOCAL variant (images as links) as the in-app source blob.
+  const id = 's_' + ulid().slice(-10);
+  const localBlob = new Blob([localHtml], { type: 'text/html' });
+  await storage.saveSourceBlob(id, localBlob);
+  const size = localBlob.size;
+  const meta = `HTML · ${humanSize(size)}`;
+
+  await appendEventAndRefold({
+    op: 'SRC',
+    site: `source:${id}`,
+    resolution: 'Figure',
+    payload: {
+      id, name: filename, kind: 'bin', meta, mime: 'text/html',
+      size, lines: 0,
+      has_text: false,
+      destination: 'public',
+      source_url: url,
+      captured_at: timestamp,
+      page_status_code: statusCode || null,
+      page_content_type: contentType || null,
+      archive_variant: 'images-inlined',
+      local_variant: 'images-linked',
+      archive_url: proveo?.archive?.url || null,
+      archive_identifier: proveo?.archive?.identifier || null,
+      matrix_mxc: proveo?.matrix?.mxc || null,
+      matrix_room_id: proveo?.matrix?.room_id || null,
+      sha256: proveo?.archive?.redacted_sha256 || proveo?.matrix?.original_sha256 || null
+    },
+    author: 'human'
+  });
+  renderSources();
+  return { filename, title, proveo };
+}
+
+function openUrlArchiveModal() {
+  const modal = $('#urlarc-modal');
+  $('#urlarc-url').value = '';
+  $('#urlarc-strip').checked = true;
+  $('#urlarc-banner').checked = true;
+  $('#urlarc-err').hidden = true;
+  $('#urlarc-progress').hidden = true;
+  modal.hidden = false;
+  setTimeout(() => $('#urlarc-url').focus(), 0);
+
+  const cleanup = () => {
+    modal.hidden = true;
+    $('#urlarc-cancel').removeEventListener('click', onCancel);
+    $('#urlarc-close').removeEventListener('click', onCancel);
+    $('#urlarc-backdrop').removeEventListener('click', onCancel);
+    $('#urlarc-confirm').removeEventListener('click', onConfirm);
+    $('#urlarc-url').removeEventListener('keydown', onKey);
+    document.removeEventListener('keydown', onEsc);
+  };
+  const onCancel = () => { cleanup(); };
+  const onEsc = (e) => { if (e.key === 'Escape' && !modal.hidden) onCancel(); };
+  const onKey = (e) => { if (e.key === 'Enter') onConfirm(); };
+  const onConfirm = async () => {
+    const url = normalizeUrl($('#urlarc-url').value);
+    if (!url) {
+      const err = $('#urlarc-err');
+      err.hidden = false; err.textContent = 'Enter a valid URL.';
+      return;
+    }
+    const stripScripts = $('#urlarc-strip').checked;
+    const addBanner = $('#urlarc-banner').checked;
+    const btn = $('#urlarc-confirm');
+    const prog = $('#urlarc-progress');
+    btn.disabled = true;
+    prog.hidden = false;
+    prog.textContent = 'starting…';
+    $('#urlarc-err').hidden = true;
+    const urlBtn = $('#sarc-url-btn');
+    const prevUrlLabel = urlBtn ? urlBtn.textContent : null;
+    if (urlBtn) { urlBtn.classList.add('is-busy'); urlBtn.textContent = 'archiving…'; }
+    try {
+      const res = await handleUrlArchive(url, { stripScripts, addBanner }, (msg) => {
+        prog.textContent = msg;
+      });
+      if (res) {
+        cleanup();
+        showToast(`archived · ${res.title || res.filename}`);
+      } else {
+        btn.disabled = false;
+        prog.hidden = true;
+      }
+    } catch (err) {
+      console.error('[url-archive] failed', err);
+      const e = $('#urlarc-err');
+      e.hidden = false;
+      e.textContent = err.message || 'archive failed';
+      btn.disabled = false;
+      prog.hidden = true;
+    } finally {
+      if (urlBtn) {
+        urlBtn.classList.remove('is-busy');
+        urlBtn.textContent = prevUrlLabel || '↗ url → archive';
+      }
+    }
+  };
+  $('#urlarc-cancel').addEventListener('click', onCancel);
+  $('#urlarc-close').addEventListener('click', onCancel);
+  $('#urlarc-backdrop').addEventListener('click', onCancel);
+  $('#urlarc-confirm').addEventListener('click', onConfirm);
+  $('#urlarc-url').addEventListener('keydown', onKey);
+  document.addEventListener('keydown', onEsc);
+}
+
 function wireUploads() {
   const input = $('#file-input');
-  const addBtn = $('.sadd');
+  const addBtn = $('#sadd-btn');
   const panel = $('.sources');
 
   addBtn.addEventListener('click', () => input.click());
@@ -4694,6 +6137,28 @@ function wireUploads() {
     await handleUpload(e.target.files);
     input.value = '';
   });
+
+  const arcBtn = $('#sarc-btn');
+  const arcInput = $('#file-input-archive');
+  if (arcBtn && arcInput) {
+    arcBtn.addEventListener('click', () => {
+      if (arcBtn.classList.contains('is-busy')) return;
+      arcInput.click();
+    });
+    arcInput.addEventListener('change', async (e) => {
+      const files = e.target.files;
+      arcInput.value = '';
+      await handleAutoArchiveUpload(files);
+    });
+  }
+
+  const urlBtn = $('#sarc-url-btn');
+  if (urlBtn) {
+    urlBtn.addEventListener('click', () => {
+      if (urlBtn.classList.contains('is-busy')) return;
+      openUrlArchiveModal();
+    });
+  }
 
   let dragDepth = 0;
   const hasFiles = (e) => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
@@ -4725,18 +6190,174 @@ function wireUploads() {
 }
 
 /* ======================================================================
-   CITATIONS
+   EVIDENCE BENCH (READING LANE)
    ----------------------------------------------------------------------
-   Select text in the editor → a floating "Cite source" button appears.
-   Click → modal with:
-     - source picker (user-uploaded sources available for cite)
-     - snippet search against the source's raw text
-     - pick a sentence → emit a CITE event → claim is wrapped in the
-       article as a grounded span with working provenance inspector
+   A reader highlights passages in the source viewer while reading —
+   each highlight becomes an unbound evidence chip on a bench strip
+   under the editor toolbar. Clicking a chip while a claim is selected
+   in the article binds it (opens the anchor drawer with source + span
+   pre-filled). Drag-and-drop works the same way — drop on an article
+   text selection. Chips persist across viewer open/close via
+   localStorage.
+====================================================================== */
+const EVIDENCE_LS_KEY = 'nl.evidenceBench.v1';
+
+let evidenceBench = [];
+let highlightMode = false;
+
+function loadEvidenceBench() {
+  try {
+    const raw = localStorage.getItem(EVIDENCE_LS_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) evidenceBench = parsed;
+  } catch {}
+}
+
+function saveEvidenceBench() {
+  try {
+    localStorage.setItem(EVIDENCE_LS_KEY, JSON.stringify(evidenceBench));
+  } catch {}
+}
+
+function addEvidenceChip(chip) {
+  evidenceBench.push({ id: 'ev_' + ulid().slice(-8), ...chip });
+  saveEvidenceBench();
+  renderEvidenceBench();
+}
+
+function removeEvidenceChip(id) {
+  evidenceBench = evidenceBench.filter(c => c.id !== id);
+  saveEvidenceBench();
+  renderEvidenceBench();
+}
+
+function renderEvidenceBench() {
+  const strip = $('#evidence-bench');
+  if (!strip) return;
+  if (!evidenceBench.length) {
+    strip.hidden = true;
+    strip.innerHTML = '';
+    return;
+  }
+  strip.hidden = false;
+  strip.innerHTML = `
+    <span class="bench-label">Evidence bench · ${evidenceBench.length}</span>
+    <div class="bench-chips">
+      ${evidenceBench.map(c => {
+        const preview = (c.highlight || '').slice(0, 60);
+        return `
+          <div class="bench-chip" draggable="true" data-id="${c.id}"
+               title="${escapeHtml(c.src)} — click or drop on a text selection to bind.">
+            <span class="bench-chip-src">${escapeHtml(c.src)}</span>
+            <span class="bench-chip-text">${escapeHtml(preview)}${c.highlight && c.highlight.length > 60 ? '…' : ''}</span>
+            <button class="bench-chip-del" data-id="${c.id}" aria-label="remove">×</button>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+  $$('.bench-chip-del', strip).forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      removeEvidenceChip(btn.dataset.id);
+    });
+  });
+  $$('.bench-chip', strip).forEach(chip => {
+    chip.addEventListener('click', () => bindEvidenceChip(chip.dataset.id));
+    chip.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('text/x-evidence-id', chip.dataset.id);
+      e.dataTransfer.effectAllowed = 'copy';
+      chip.classList.add('dragging');
+    });
+    chip.addEventListener('dragend', () => chip.classList.remove('dragging'));
+  });
+}
+
+/* Bind an evidence chip to the article text currently selected.
+   Opens the anchor drawer in confirm state with the target pre-filled. */
+function bindEvidenceChip(chipId) {
+  const chip = evidenceBench.find(c => c.id === chipId);
+  if (!chip) return;
+  const info = getArticleSelectionRange();
+  if (!info) { showToast('Select text in the article first'); return; }
+  pendingSelection = info;
+  openAnchorDrawer(info.text);
+  // Skip picker — go straight to confirm with this chip as target.
+  drawerState.sourceId = chip.sourceId;
+  drawerState.target = {
+    kind: 'quote',
+    src: chip.src,
+    sourceId: chip.sourceId,
+    start: chip.start,
+    end: chip.end,
+    text: chip.highlight,
+    before: chip.before,
+    after: chip.after,
+    spanLabel: chip.spanLabel,
+    highlight: chip.highlight
+  };
+  drawerState.substate = 'confirm';
+  hideSourceViewer();
+  renderDrawer();
+}
+
+function wireEvidenceDnd() {
+  const body = $('#article-body');
+  if (!body) return;
+  body.addEventListener('dragover', e => {
+    if (!e.dataTransfer) return;
+    if (!Array.from(e.dataTransfer.types || []).includes('text/x-evidence-id')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  });
+  body.addEventListener('drop', e => {
+    if (!e.dataTransfer) return;
+    const id = e.dataTransfer.getData('text/x-evidence-id');
+    if (!id) return;
+    e.preventDefault();
+    bindEvidenceChip(id);
+  });
+}
+
+/* ======================================================================
+   ANCHOR DRAWER
+   ----------------------------------------------------------------------
+   Anchoring an evidence span lives in the right panel as a drawer, not
+   a modal. Select text in the editor → click "+ Anchor evidence" → the
+   right panel switches from provenance-inspector to sourcing mode, with
+   three substates:
+     source-picker  — list citeable sources; auto-advance if only one
+     target-picker  — open the source viewer with selection mode on;
+                      user picks a quote span or one+ cells
+     confirm        — show claim + resolved target + computed kind +
+                      the Anchor button
+   Kind falls out of target shape:
+     single cell       → cell
+     text selection    → quote
+     2+ cells + op     → derived
+     (explicit escape hatch) → absence  [handled in phase 5]
+   The drawer is the only citing surface — the old cite modal is gone.
 ====================================================================== */
 
 let pendingSelection = null;
-let citeState = { sourceId: null, snippet: null };
+
+// Module-level sticky state: if the user anchored from source X last time,
+// source-picker auto-skips to X's target-picker on the next open.
+let lastCitedSourceId = null;
+
+// Drawer state machine. `substate` walks source-picker → target-picker →
+// confirm; `target` is the picked evidence span. Cleared on dismiss.
+let drawerState = {
+  active: false,
+  substate: 'source-picker',
+  sourceId: null,
+  claimText: '',
+  range: null,
+  target: null,       // { kind: 'quote'|'cell'|'derived', ...payload }
+  selectedCells: [],  // running cell selection in the source viewer
+  derivedOp: null
+};
 
 function showToast(text) {
   const el = $('#toast');
@@ -4745,6 +6366,22 @@ function showToast(text) {
   el.classList.add('visible');
   clearTimeout(showToast._t);
   showToast._t = setTimeout(() => el.classList.remove('visible'), 2200);
+}
+
+/* Compute a cheap S-lattice coordinate for the current selection — the
+   paragraph index within #article-body. Anchors live at paragraphs. */
+function currentParagraphId() {
+  const body = $('#article-body');
+  if (!body) return '0';
+  const sel = window.getSelection();
+  let node = sel && sel.rangeCount ? sel.getRangeAt(0).startContainer : null;
+  if (!node) return '0';
+  // climb to the direct child of article-body
+  while (node && node.parentNode && node.parentNode !== body) node = node.parentNode;
+  if (!node) return '0';
+  const paragraphs = Array.from(body.children);
+  const idx = paragraphs.indexOf(node);
+  return idx >= 0 ? String(idx) : '0';
 }
 
 function getArticleSelectionRange() {
@@ -4780,6 +6417,9 @@ function wireSelectionToolbar() {
     // only show in Write mode (the editable article)
     const writeActive = $('#mode-write').classList.contains('active');
     if (!writeActive) { $('#cite-toolbar').hidden = true; return; }
+    // Don't shadow the drawer with a toolbar — while sourcing, the
+    // toolbar is mode-inappropriate.
+    if (drawerState.active) { $('#cite-toolbar').hidden = true; return; }
     positionCiteToolbar();
   });
   window.addEventListener('scroll', positionCiteToolbar, true);
@@ -4794,7 +6434,7 @@ function wireSelectionToolbar() {
     if (!info) return;
     pendingSelection = info;
     $('#cite-toolbar').hidden = true;
-    openCiteModal(info.text);
+    openAnchorDrawer(info.text);
   });
 }
 
@@ -4854,129 +6494,6 @@ function locatorLabel(source, snippet, text) {
   return `line ${line}`;
 }
 
-function renderCiteSourceList() {
-  const wrap = $('#cite-source-list');
-  const sources = citeableSources();
-  if (!sources.length) {
-    wrap.innerHTML = `<div class="cite-empty">No sources you can cite from yet.<br><br>Close this dialog and drop a .txt, .csv, .md, or .pdf file onto the Sources panel to start.</div>`;
-    return;
-  }
-  wrap.innerHTML = sources.map(s => `
-    <div class="cite-src-item${citeState.sourceId === s.id ? ' selected' : ''}" data-cite-src="${s.id}">
-      <div>${escapeHtml(s.name)}</div>
-      <div class="cite-src-item-meta">${s.kind.toUpperCase()} · ${escapeHtml(s.meta || '')}</div>
-    </div>
-  `).join('');
-
-  $$('#cite-source-list .cite-src-item').forEach(el => {
-    el.addEventListener('click', async () => {
-      citeState.sourceId = el.dataset.citeSrc;
-      citeState.snippet = null;
-      renderCiteSourceList();
-      await renderCiteSnippets();
-      updateCiteActions();
-    });
-  });
-}
-
-function highlightMatch(text, match) {
-  if (!match) return escapeHtml(text);
-  const a = text.slice(0, match.at);
-  const b = text.slice(match.at, match.at + match.len);
-  const c = text.slice(match.at + match.len);
-  return `${escapeHtml(a)}<mark>${escapeHtml(b)}</mark>${escapeHtml(c)}`;
-}
-
-async function renderCiteSnippets() {
-  const list = $('#cite-snippet-list');
-  if (!citeState.sourceId) {
-    list.innerHTML = `<div class="cite-empty">Select a source on the left.</div>`;
-    return;
-  }
-  const source = USER_SOURCES[citeState.sourceId];
-  if (!source) { list.innerHTML = `<div class="cite-empty">Source unavailable.</div>`; return; }
-  const text = await ensureSourceText(source.id);
-  const q = $('#cite-search').value;
-  const snippets = buildSnippets(text, q);
-  if (!snippets.length) {
-    list.innerHTML = `<div class="cite-empty">No matches in this source${q ? ` for "${escapeHtml(q)}"` : ''}.</div>`;
-    return;
-  }
-  list.innerHTML = snippets.map((s, i) => {
-    const isSelected = citeState.snippet && citeState.snippet.start === s.start;
-    const loc = locatorLabel(source, s, text);
-    return `
-      <div class="cite-snippet${isSelected ? ' selected' : ''}" data-snippet-idx="${i}">
-        <div class="cite-snippet-loc">${escapeHtml(loc)}</div>
-        <div class="cite-snippet-text">${highlightMatch(s.text, s.match)}</div>
-      </div>
-    `;
-  }).join('');
-
-  $$('.cite-snippet', list).forEach(el => {
-    el.addEventListener('click', () => {
-      const idx = +el.dataset.snippetIdx;
-      citeState.snippet = { ...snippets[idx], sourceText: text };
-      $$('.cite-snippet', list).forEach(x => x.classList.remove('selected'));
-      el.classList.add('selected');
-      updateCiteActions();
-    });
-  });
-}
-
-function updateCiteActions() {
-  const ready = !!(citeState.sourceId && citeState.snippet);
-  $('#cite-confirm').disabled = !ready;
-  $('#cite-pick-note').textContent = ready
-    ? 'Ready — this claim will link to the selected span.'
-    : citeState.sourceId
-      ? 'Pick a matching span from the source.'
-      : 'Pick a source to search.';
-}
-
-function openCiteModal(selectedText) {
-  citeState = { sourceId: null, snippet: null };
-  $('#cite-sel-text').textContent = selectedText;
-  $('#cite-search').value = selectedText;
-  const modal = $('#cite-modal');
-  modal.hidden = false;
-  renderCiteSourceList();
-
-  // auto-select the only source if there's just one
-  const sources = citeableSources();
-  if (sources.length === 1) {
-    citeState.sourceId = sources[0].id;
-    renderCiteSourceList();
-  }
-  renderCiteSnippets();
-  updateCiteActions();
-
-  setTimeout(() => $('#cite-search').focus(), 0);
-}
-
-function closeCiteModal() {
-  $('#cite-modal').hidden = true;
-  pendingSelection = null;
-  citeState = { sourceId: null, snippet: null };
-}
-
-function wireCiteModal() {
-  $('#cite-modal-close').addEventListener('click', closeCiteModal);
-  $('#cite-cancel').addEventListener('click', closeCiteModal);
-  $('#cite-backdrop').addEventListener('click', closeCiteModal);
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !$('#cite-modal').hidden) closeCiteModal();
-  });
-
-  let searchT = null;
-  $('#cite-search').addEventListener('input', () => {
-    clearTimeout(searchT);
-    searchT = setTimeout(renderCiteSnippets, 120);
-  });
-
-  $('#cite-confirm').addEventListener('click', confirmCitation);
-}
-
 function contextBefore(text, start) {
   const left = text.slice(Math.max(0, start - 120), start);
   const nl = left.lastIndexOf('\n');
@@ -4988,76 +6505,770 @@ function contextAfter(text, end) {
   return nl >= 0 ? right.slice(0, nl) : right;
 }
 
-async function confirmCitation() {
-  if (!pendingSelection || !citeState.sourceId || !citeState.snippet) return;
-  const source = USER_SOURCES[citeState.sourceId];
-  const snippet = citeState.snippet;
-  const text = snippet.sourceText || await ensureSourceText(source.id);
-  const claimId = 'u_' + ulid().slice(-8);
-  const spanLabel = locatorLabel(source, snippet, text);
-  const claim = {
-    type: 'grounded',
-    text: pendingSelection.text,
-    conf: 0.92,
-    status: 'pending',
-    prov: {
-      kind: 'quote',
-      src: source.name,
-      page: null,
-      before: contextBefore(text, snippet.start),
-      highlight: snippet.text,
-      after: contextAfter(text, snippet.end),
-      spanLabel
-    },
-    trace: [
-      { op: 'SIG', txt: `citation pattern matched in <strong>${escapeHtml(source.name)}</strong>` },
-      { op: 'INS', txt: `anchor minted for <strong>${escapeHtml(pendingSelection.text.slice(0,40))}</strong>` },
-      { op: 'DEF', txt: `claim bound to source span at ${escapeHtml(spanLabel)}` }
-    ]
-  };
+/* ---- Drawer state machine ---- */
 
+function openAnchorDrawer(claimText) {
+  drawerState = {
+    active: true,
+    substate: 'source-picker',
+    sourceId: null,
+    claimText: claimText,
+    range: pendingSelection ? pendingSelection.range : null,
+    target: null,
+    selectedCells: [],
+    derivedOp: null
+  };
+  // Sticky: reuse last source if still available.
+  const available = citeableSources();
+  if (lastCitedSourceId && available.find(s => s.id === lastCitedSourceId)) {
+    drawerState.sourceId = lastCitedSourceId;
+    drawerState.substate = 'target-picker';
+  } else if (available.length === 1) {
+    drawerState.sourceId = available[0].id;
+    drawerState.substate = 'target-picker';
+  }
+  setRightPanelMode('sourcing');
+  renderDrawer();
+  if (drawerState.substate === 'target-picker') {
+    openSourceViewerForPicking(drawerState.sourceId);
+  }
+}
+
+function closeAnchorDrawer() {
+  drawerState = {
+    active: false,
+    substate: 'source-picker',
+    sourceId: null,
+    claimText: '',
+    range: null,
+    target: null,
+    selectedCells: [],
+    derivedOp: null,
+    absence: null,
+    reanchorTargetId: null,
+    reanchorType: null
+  };
+  pendingSelection = null;
+  setRightPanelMode('provenance');
+  hideSourceViewer();
+}
+
+function setRightPanelMode(mode) {
+  const panel = $('#right-panel');
+  if (!panel) return;
+  panel.dataset.mode = mode;
+}
+
+function renderDrawer() {
+  const body = $('#drawer-body');
+  if (!body) return;
+  const head = $('#drawer-title');
+  head.textContent = drawerState.substate === 'source-picker'
+    ? 'Pick a source'
+    : drawerState.substate === 'target-picker'
+      ? 'Pick the evidence'
+      : 'Confirm anchor';
+
+  const claimLine = `
+    <div class="drawer-claim">
+      <div class="drawer-label">Claim</div>
+      <div class="drawer-claim-text">"${escapeHtml(drawerState.claimText)}"</div>
+    </div>
+  `;
+
+  if (drawerState.substate === 'source-picker') {
+    const sources = citeableSources();
+    const list = sources.length
+      ? sources.map(s => `
+          <div class="drawer-src-item" data-src="${s.id}">
+            <div class="drawer-src-name">${escapeHtml(s.name)}</div>
+            <div class="drawer-src-meta">${s.kind.toUpperCase()} · ${escapeHtml(s.meta || '')}</div>
+          </div>
+        `).join('')
+      : `<div class="drawer-empty">No sources to cite from yet. Drop a .txt, .csv, or .md file onto the Sources panel.</div>`;
+    body.innerHTML = `
+      ${claimLine}
+      <div class="drawer-section">
+        <div class="drawer-label">Sources</div>
+        ${list}
+      </div>
+      <div class="drawer-actions">
+        <button class="btn-sm" id="drawer-absence">Mark as absence</button>
+        <button class="btn-sm" id="drawer-cancel">Cancel</button>
+      </div>
+    `;
+    $$('.drawer-src-item', body).forEach(el => {
+      el.addEventListener('click', () => pickSource(el.dataset.src));
+    });
+    return;
+  }
+
+  if (drawerState.substate === 'target-picker') {
+    const src = drawerState.sourceId ? (USER_SOURCES[drawerState.sourceId] || SOURCES.find(s => s.id === drawerState.sourceId)) : null;
+    body.innerHTML = `
+      ${claimLine}
+      <div class="drawer-section">
+        <div class="drawer-label">Source</div>
+        <div class="drawer-source-chip">
+          <span>${escapeHtml(src ? src.name : '—')}</span>
+          <button class="drawer-source-change" id="drawer-change-src">change ×</button>
+        </div>
+        <div class="drawer-hint">
+          Select text in the source viewer to anchor a quote, or click
+          cells to build a derived claim. Your selection becomes the
+          target automatically.
+        </div>
+      </div>
+      <div class="drawer-actions">
+        <button class="btn-sm" id="drawer-absence">Mark as absence</button>
+        <button class="btn-sm" id="drawer-cancel">Cancel</button>
+      </div>
+    `;
+    $('#drawer-change-src').addEventListener('click', () => {
+      drawerState.sourceId = null;
+      drawerState.substate = 'source-picker';
+      lastCitedSourceId = null;
+      hideSourceViewer();
+      renderDrawer();
+    });
+    wireDrawerFooter(body);
+    return;
+  }
+
+  if (drawerState.substate === 'absence-form') {
+    const a = drawerState.absence;
+    const sources = citeableSources().concat(SOURCES);
+    // Dedupe by id (seed SOURCES may overlap names)
+    const seen = new Set();
+    const uniqueSources = sources.filter(s => seen.has(s.id) ? false : (seen.add(s.id), true));
+    const scanRows = a.scanned.map((s, i) => `
+      <div class="drawer-scan-row" data-idx="${i}">
+        <select class="drawer-input drawer-scan-src" data-idx="${i}">
+          ${uniqueSources.map(src => `
+            <option value="${src.id}"${src.id === s.sourceId ? ' selected' : ''}>${escapeHtml(src.name)}</option>
+          `).join('')}
+        </select>
+        <input class="drawer-input drawer-scan-note" data-idx="${i}"
+               type="text" placeholder="note (e.g. 'no reply')" value="${escapeHtml(s.note || '')}">
+        <button class="drawer-scan-del" data-idx="${i}">×</button>
+      </div>
+    `).join('');
+    head.textContent = 'Mark as absence';
+    body.innerHTML = `
+      ${claimLine}
+      <div class="drawer-section">
+        <div class="drawer-label">Absence kind</div>
+        <div class="drawer-radio-group">
+          <label class="drawer-radio" title="The value was there and has been removed.">
+            <input type="radio" name="abs-kind" value="cleared" ${a.kind === 'cleared' ? 'checked' : ''}>
+            <span class="drawer-radio-title">Cleared</span>
+            <span class="drawer-radio-note">Value was there, now removed.</span>
+          </label>
+          <label class="drawer-radio" title="Can't determine whether it was set.">
+            <input type="radio" name="abs-kind" value="unknown" ${a.kind === 'unknown' ? 'checked' : ''}>
+            <span class="drawer-radio-title">Unknown</span>
+            <span class="drawer-radio-note">Can't determine either way.</span>
+          </label>
+          <label class="drawer-radio" title="Was never set in the scanned window.">
+            <input type="radio" name="abs-kind" value="never_set" ${a.kind === 'never_set' ? 'checked' : ''}>
+            <span class="drawer-radio-title">Never set</span>
+            <span class="drawer-radio-note">Not present across the window.</span>
+          </label>
+        </div>
+      </div>
+      <div class="drawer-section">
+        <div class="drawer-label">What was expected</div>
+        <textarea class="drawer-input drawer-textarea" id="abs-expected" rows="3"
+                  placeholder="Describe what should have been there.">${escapeHtml(a.expected || '')}</textarea>
+      </div>
+      <div class="drawer-section">
+        <div class="drawer-label">Sources scanned</div>
+        <div id="abs-scan-list">${scanRows || '<div class="drawer-empty-inline">Add sources you checked.</div>'}</div>
+        <button class="btn-sm" id="abs-scan-add" style="margin-top: 6px;">+ add source</button>
+      </div>
+      <div class="drawer-section">
+        <div class="drawer-label">Window</div>
+        <input class="drawer-input" id="abs-window" type="text"
+               placeholder="e.g. Feb 18 – Mar 4, 2026" value="${escapeHtml(a.window || '')}">
+      </div>
+      <div class="drawer-actions">
+        <button class="btn-sm" id="abs-back">Back</button>
+        <button class="btn-sm" id="drawer-cancel">Cancel</button>
+        <button class="btn-sm btn-sm-primary" id="abs-confirm">Anchor absence</button>
+      </div>
+    `;
+    wireAbsenceForm(uniqueSources);
+    const cancelBtn = $('#drawer-cancel', body);
+    if (cancelBtn) cancelBtn.addEventListener('click', closeAnchorDrawer);
+    return;
+  }
+
+  if (drawerState.substate === 'confirm') {
+    const t = drawerState.target;
+    const targetLine = t
+      ? (t.kind === 'quote'
+          ? `<div class="drawer-target-view">"${escapeHtml(t.text)}"</div><div class="drawer-target-meta">${escapeHtml(t.src)} · ${escapeHtml(t.spanLabel)}</div>`
+          : t.kind === 'cell'
+            ? `<div class="drawer-target-view">row ${t.row} · ${escapeHtml(t.col)} = <b>${escapeHtml(t.value)}</b></div><div class="drawer-target-meta">${escapeHtml(t.src)}</div>`
+            : t.kind === 'derived'
+              ? `<div class="drawer-target-view">${escapeHtml(t.op)}(${t.inputs.length} cells) = <b>${escapeHtml(t.result)}</b></div><div class="drawer-target-meta">${escapeHtml(t.src)}</div>`
+              : `<div class="drawer-target-view">—</div>`)
+      : `<div class="drawer-target-view">—</div>`;
+    body.innerHTML = `
+      ${claimLine}
+      <div class="drawer-section">
+        <div class="drawer-label">Target · ${t ? escapeHtml(t.kind) : '—'}</div>
+        ${targetLine}
+      </div>
+      <div class="drawer-actions">
+        <button class="btn-sm" id="drawer-back">Back</button>
+        <button class="btn-sm" id="drawer-cancel">Cancel</button>
+        <button class="btn-sm btn-sm-primary" id="drawer-anchor">Anchor</button>
+      </div>
+    `;
+    $('#drawer-back').addEventListener('click', () => {
+      drawerState.substate = 'target-picker';
+      renderDrawer();
+      openSourceViewerForPicking(drawerState.sourceId);
+    });
+    $('#drawer-anchor').addEventListener('click', confirmAnchor);
+    wireDrawerFooter(body);
+    return;
+  }
+}
+
+function wireDrawerFooter(body) {
+  const absBtn = $('#drawer-absence', body);
+  if (absBtn) absBtn.addEventListener('click', () => {
+    drawerState.substate = 'absence-form';
+    drawerState.absence = drawerState.absence || {
+      kind: 'unknown',
+      expected: drawerState.claimText || '',
+      scanned: [],
+      window: ''
+    };
+    hideSourceViewer();
+    renderDrawer();
+  });
+  const cancelBtn = $('#drawer-cancel', body);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeAnchorDrawer);
+}
+
+/* Wire handlers for the absence form. Mutates drawerState.absence
+   in place; on Anchor, emits a CITE with type='absent'. */
+function wireAbsenceForm(uniqueSources) {
+  const a = drawerState.absence;
+
+  $$('input[name="abs-kind"]').forEach(r => {
+    r.addEventListener('change', () => { a.kind = r.value; });
+  });
+  const expEl = $('#abs-expected');
+  if (expEl) expEl.addEventListener('input', () => { a.expected = expEl.value; });
+  const winEl = $('#abs-window');
+  if (winEl) winEl.addEventListener('input', () => { a.window = winEl.value; });
+
+  const rebindList = () => {
+    $$('.drawer-scan-src').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const i = Number(sel.dataset.idx);
+        a.scanned[i].sourceId = sel.value;
+        const src = uniqueSources.find(s => s.id === sel.value);
+        a.scanned[i].src = src ? src.name : sel.value;
+      });
+    });
+    $$('.drawer-scan-note').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const i = Number(inp.dataset.idx);
+        a.scanned[i].note = inp.value;
+      });
+    });
+    $$('.drawer-scan-del').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const i = Number(btn.dataset.idx);
+        a.scanned.splice(i, 1);
+        renderDrawer();
+      });
+    });
+  };
+  rebindList();
+
+  const addBtn = $('#abs-scan-add');
+  if (addBtn) addBtn.addEventListener('click', () => {
+    const first = uniqueSources[0];
+    if (!first) { showToast('Add a source to the library first'); return; }
+    a.scanned.push({ sourceId: first.id, src: first.name, note: '' });
+    renderDrawer();
+  });
+
+  const back = $('#abs-back');
+  if (back) back.addEventListener('click', () => {
+    drawerState.substate = drawerState.sourceId ? 'target-picker' : 'source-picker';
+    renderDrawer();
+    if (drawerState.substate === 'target-picker') openSourceViewerForPicking(drawerState.sourceId);
+  });
+
+  const confirm = $('#abs-confirm');
+  if (confirm) confirm.addEventListener('click', confirmAbsence);
+}
+
+/* Emit a CITE event carrying an absent claim. The prov shape retains
+   backward compatibility with renderAbsenceProv (expected, scanned,
+   window) and adds absence_state carrying the kind. */
+async function confirmAbsence() {
+  const a = drawerState.absence;
+  if (!a || !a.expected.trim()) { showToast('Describe what was expected'); return; }
+  const claimId = 'u_' + ulid().slice(-8);
+  const position = {
+    workspace: (typeof matrix !== 'undefined' && matrix.activeRoomId) || 'local',
+    article_id: 'draft',
+    paragraph_id: currentParagraphId()
+  };
+  // Emit one OBS per scanned source — each absence probe is an
+  // observation (mode: 'inferred' — the reader looked and did not find).
+  const piIds = [];
+  for (const s of a.scanned) {
+    const obsId = 'o_' + ulid().slice(-10);
+    piIds.push(obsId);
+    await appendEvent({
+      op: 'OBS',
+      site: `observation:${obsId}`,
+      resolution: 'Figure',
+      payload: {
+        agent: 'human',
+        mode: 'inferred',
+        source_id: s.sourceId || null,
+        location: null,
+        content: s.note || '(scanned, not found)',
+        context: position
+      },
+      author: 'human'
+    });
+  }
+  const prov = {
+    kind: 'absence',
+    absence_state: a.kind,
+    expected: a.expected,
+    scanned: a.scanned.map(s => ({ src: s.src, note: s.note || '' })),
+    window: a.window || '—'
+  };
+  const trace = [
+    { op: 'NUL',   txt: `absence probed (${a.kind}) — ${escapeHtml(a.expected.slice(0, 60))}` },
+    { op: 'OBS',   txt: `${a.scanned.length} source${a.scanned.length === 1 ? '' : 's'} scanned` },
+    { op: 'CLAIM', txt: 'absence recorded' }
+  ];
   await appendEventAndRefold({
-    op: 'CITE',
+    op: 'CLAIM',
     site: `claim:${claimId}`,
     resolution: 'Figure',
-    payload: { claim_id: claimId, claim, source_id: source.id },
+    payload: {
+      type: 'absent',
+      text: drawerState.claimText,
+      pi: piIds,
+      position,
+      prov_content: prov,
+      conf: 0.85,
+      trace
+    },
+    author: 'human'
+  });
+  // Wrap the claim span with an 'absent' class
+  const range = drawerState.range;
+  const claimText = drawerState.claimText;
+  try {
+    if (!range) throw new Error('no range');
+    const span = document.createElement('span');
+    span.className = 'absent';
+    span.dataset.id = claimId;
+    range.surroundContents(span);
+    span.addEventListener('click', () => showClaim(claimId));
+  } catch (e) {
+    const bodyEl = $('#article-body');
+    if (bodyEl) {
+      const walker = document.createTreeWalker(bodyEl, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode())) {
+        const idx = node.nodeValue.indexOf(claimText);
+        if (idx !== -1) {
+          const r = document.createRange();
+          r.setStart(node, idx);
+          r.setEnd(node, idx + claimText.length);
+          const span = document.createElement('span');
+          span.className = 'absent';
+          span.dataset.id = claimId;
+          try { r.surroundContents(span); span.addEventListener('click', () => showClaim(claimId)); } catch {}
+          break;
+        }
+      }
+    }
+  }
+  await saveArticleNow();
+  renderCounts();
+  const newId = claimId;
+  closeAnchorDrawer();
+  showToast('absence recorded');
+  showClaim(newId);
+}
+
+function pickSource(sourceId) {
+  drawerState.sourceId = sourceId;
+  drawerState.substate = 'target-picker';
+  renderDrawer();
+  openSourceViewerForPicking(sourceId);
+}
+
+/* Open the source viewer in selection mode. Clearing selectedCells on
+   entry — each new pick starts a fresh aggregation. Empty search default
+   per task 15: paraphrase cites shouldn't require verbatim matches. */
+function openSourceViewerForPicking(sourceId) {
+  drawerState.selectedCells = [];
+  drawerState.derivedOp = null;
+  showSourceViewer(sourceId, { selecting: true });
+}
+
+/* Capture a text-range selection in the source viewer as an unbound
+   evidence chip on the bench. Highlight-mode path. */
+function captureHighlightForBench() {
+  const viewer = $('#src-viewer');
+  if (!viewer || viewer.hidden) return;
+  const textEl = $('#src-viewer-text');
+  if (!textEl || textEl.hidden) return;
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+  const range = sel.getRangeAt(0);
+  if (!textEl.contains(range.startContainer) || !textEl.contains(range.endContainer)) return;
+  const text = sel.toString();
+  if (!text.trim()) return;
+  const full = textEl.textContent;
+  const preRange = range.cloneRange();
+  preRange.selectNodeContents(textEl);
+  preRange.setEnd(range.startContainer, range.startOffset);
+  const start = preRange.toString().length;
+  const end = start + text.length;
+  // Resolve source by title
+  const title = $('#src-viewer-title').textContent;
+  const srcEntry = Object.values(USER_SOURCES).find(s => s.name === title)
+                || SOURCES.find(s => s.name === title);
+  if (!srcEntry) return;
+  const before = contextBefore(full, start);
+  const after  = contextAfter(full, end);
+  const spanLabel = locatorLabel(srcEntry, { start, end }, full);
+  addEvidenceChip({
+    src: srcEntry.name,
+    sourceId: srcEntry.id,
+    start, end,
+    highlight: text,
+    before, after,
+    spanLabel
+  });
+  sel.removeAllRanges();
+  showToast('evidence saved to bench');
+}
+
+/* Commit a text-range selection in the source viewer as the drawer target. */
+function captureViewerTextSelection() {
+  if (!drawerState.active || drawerState.substate !== 'target-picker') return;
+  const textEl = $('#src-viewer-text');
+  if (!textEl || textEl.hidden) return;
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+  const range = sel.getRangeAt(0);
+  if (!textEl.contains(range.startContainer) || !textEl.contains(range.endContainer)) return;
+  const text = sel.toString();
+  if (!text.trim()) return;
+  // Compute character offsets into the raw text by measuring from the
+  // start of textEl. textContent is our ground truth for raw.
+  const full = textEl.textContent;
+  const preRange = range.cloneRange();
+  preRange.selectNodeContents(textEl);
+  preRange.setEnd(range.startContainer, range.startOffset);
+  const start = preRange.toString().length;
+  const end = start + text.length;
+  const src = USER_SOURCES[drawerState.sourceId] || SOURCES.find(s => s.id === drawerState.sourceId);
+  if (!src) return;
+  const before = contextBefore(full, start);
+  const after  = contextAfter(full, end);
+  const spanLabel = locatorLabel(src, { start, end }, full);
+  drawerState.target = {
+    kind: 'quote',
+    src: src.name,
+    sourceId: src.id,
+    start, end,
+    text,
+    before,
+    after,
+    spanLabel,
+    highlight: text
+  };
+  drawerState.substate = 'confirm';
+  renderDrawer();
+}
+
+/* Commit a cell selection (single → cell; multiple → derived with the
+   chosen op). */
+function captureViewerCellSelection() {
+  if (!drawerState.active || drawerState.substate !== 'target-picker') return;
+  const src = USER_SOURCES[drawerState.sourceId] || SOURCES.find(s => s.id === drawerState.sourceId);
+  if (!src) return;
+  const cells = drawerState.selectedCells.slice();
+  if (cells.length === 1) {
+    const c = cells[0];
+    drawerState.target = {
+      kind: 'cell',
+      src: src.name,
+      sourceId: src.id,
+      row: c.row,
+      col: c.col,
+      value: c.value
+    };
+    drawerState.substate = 'confirm';
+    renderDrawer();
+    return;
+  }
+  if (cells.length >= 2 && drawerState.derivedOp) {
+    drawerState.target = {
+      kind: 'derived',
+      src: src.name,
+      sourceId: src.id,
+      op: drawerState.derivedOp,
+      inputs: cells.map(c => ({ kind: 'cell', src: src.name, row: c.row, col: c.col, value: c.value })),
+      result: computeDerivedResult(drawerState.derivedOp, cells)
+    };
+    drawerState.substate = 'confirm';
+    renderDrawer();
+  }
+}
+
+/* Compute the displayed result for a derived op over selected cells.
+   Non-numeric ops (COUNT) don't need numeric parse. */
+function computeDerivedResult(op, cells) {
+  const toNum = v => {
+    const n = parseFloat(String(v).replace(/[^0-9.\-]/g, ''));
+    return Number.isFinite(n) ? n : 0;
+  };
+  const nums = cells.map(c => toNum(c.value));
+  const fmt = n => (Math.abs(n) >= 1000 ? n.toLocaleString() : String(n));
+  switch (op) {
+    case 'SUM':   return fmt(nums.reduce((a,b) => a+b, 0));
+    case 'AVG':   return fmt(nums.reduce((a,b) => a+b, 0) / nums.length);
+    case 'COUNT': return String(cells.length);
+    case 'MIN':   return fmt(Math.min(...nums));
+    case 'MAX':   return fmt(Math.max(...nums));
+    case 'DIFF':  return fmt(nums[0] - nums[1]);
+    case 'RATIO': return nums[1] === 0 ? '—' : (nums[0] / nums[1]).toFixed(2);
+    default: return '';
+  }
+}
+
+/* Finalize the anchor. Emits OBS events (one per observed location) and
+   a CLAIM event that π-references the obs ids. Derived claims also
+   carry a window — source version hash and row range — so that
+   re-uploaded sources don't break old claims; they become historical,
+   superseded by fresh observations.
+
+   Wraps the editor selection range with a grounded span. Sticky:
+   remembers this source for the next anchor. */
+async function confirmAnchor() {
+  const t = drawerState.target;
+  if (!t) return;
+  const claimId = 'u_' + ulid().slice(-8);
+  const position = {
+    workspace: (typeof matrix !== 'undefined' && matrix.activeRoomId) || 'local',
+    article_id: 'draft',
+    paragraph_id: currentParagraphId()
+  };
+  let prov;
+  const trace = [];
+  const obsEvents = [];   // events we'll emit before the CLAIM
+  const piIds = [];
+  const sourceId = t.sourceId || drawerState.sourceId;
+
+  if (t.kind === 'quote') {
+    const obsId = 'o_' + ulid().slice(-10);
+    piIds.push(obsId);
+    obsEvents.push({
+      op: 'OBS',
+      site: `observation:${obsId}`,
+      resolution: 'Figure',
+      payload: {
+        agent: 'human',
+        mode: 'direct_read',
+        source_id: sourceId,
+        location: { start: t.start, end: t.end },
+        content: t.text,
+        context: position
+      },
+      author: 'human'
+    });
+    prov = {
+      kind: 'quote',
+      src: t.src,
+      page: null,
+      before: t.before,
+      highlight: t.highlight,
+      after: t.after,
+      spanLabel: t.spanLabel
+    };
+    trace.push(
+      { op: 'OBS', txt: `read span [${t.start}:${t.end}] in <strong>${escapeHtml(t.src)}</strong>` },
+      { op: 'CLAIM', txt: `grounded claim bound at ${escapeHtml(t.spanLabel)}` }
+    );
+  } else if (t.kind === 'cell') {
+    const obsId = 'o_' + ulid().slice(-10);
+    piIds.push(obsId);
+    obsEvents.push({
+      op: 'OBS',
+      site: `observation:${obsId}`,
+      resolution: 'Figure',
+      payload: {
+        agent: 'human',
+        mode: 'direct_read',
+        source_id: sourceId,
+        location: { row: t.row, col: t.col },
+        content: t.value,
+        context: position
+      },
+      author: 'human'
+    });
+    prov = {
+      kind: 'cell',
+      src: t.src,
+      row: t.row,
+      col: t.col,
+      value: t.value,
+      headers: [t.col],
+      rows: [[t.row, t.value]]
+    };
+    trace.push(
+      { op: 'OBS', txt: `read cell row ${t.row} · ${escapeHtml(t.col)} = ${escapeHtml(t.value)}` },
+      { op: 'CLAIM', txt: `grounded claim bound to cell` }
+    );
+  } else if (t.kind === 'derived') {
+    // One OBS per input cell; the CLAIM's pi references them all.
+    for (const inp of t.inputs) {
+      const obsId = 'o_' + ulid().slice(-10);
+      piIds.push(obsId);
+      obsEvents.push({
+        op: 'OBS',
+        site: `observation:${obsId}`,
+        resolution: 'Figure',
+        payload: {
+          agent: 'human',
+          mode: 'direct_read',
+          source_id: sourceId,
+          location: { row: inp.row, col: inp.col },
+          content: inp.value,
+          context: position
+        },
+        author: 'human'
+      });
+    }
+    const rows = t.inputs.map(i => i.row);
+    prov = {
+      kind: 'derived',
+      expr: `${t.op}(${t.inputs.length} cells)`,
+      op: t.op,
+      result: t.result,
+      inputs: t.inputs,
+      // Window required for derived — re-uploaded sources produce fresh
+      // obs, making old derived claims historical rather than broken.
+      window: {
+        source_version_hash: (USER_SOURCES[sourceId] && USER_SOURCES[sourceId].sha256) || null,
+        row_range: rows.length ? [Math.min(...rows), Math.max(...rows)] : null,
+        observed_at: new Date().toISOString()
+      }
+    };
+    trace.push(
+      { op: 'OBS', txt: `${t.inputs.length} cells observed for aggregation` },
+      { op: 'CLAIM', txt: `${t.op} = ${escapeHtml(t.result)} (window: rows ${rows.join(', ')})` }
+    );
+  } else {
+    return;
+  }
+  // Re-anchor path: emit REC against the existing claim rather than
+  // creating a new one. Fold applies replacement prov + type.
+  if (drawerState.reanchorTargetId) {
+    const targetId = drawerState.reanchorTargetId;
+    const newType = drawerState.reanchorType || 'grounded';
+    await appendEventAndRefold({
+      op: 'REC',
+      site: `claim:${targetId}`,
+      resolution: 'Figure',
+      payload: {
+        action: 'reanchor',
+        new_status: 'pending',
+        type: newType,
+        prov
+      },
+      author: 'human'
+    });
+    lastCitedSourceId = drawerState.sourceId;
+    closeAnchorDrawer();
+    showToast('re-anchored');
+    showClaim(targetId);
+    renderCounts();
+    return;
+  }
+
+  // Append OBS events first — they're G-entries that the CLAIM's π
+  // will reference. Then the CLAIM itself. Only the final event
+  // triggers a refold, so the log stays coherent.
+  for (const obs of obsEvents) await appendEvent(obs);
+  await appendEventAndRefold({
+    op: 'CLAIM',
+    site: `claim:${claimId}`,
+    resolution: 'Figure',
+    payload: {
+      type: 'grounded',
+      text: drawerState.claimText,
+      pi: piIds,
+      position,
+      window: prov.window || null,
+      prov_content: prov,
+      conf: 0.92,
+      trace
+    },
     author: 'human'
   });
 
-  // wrap the selection range with a grounded span
+  // Wrap the editor selection range with a grounded span.
+  const range = drawerState.range;
+  const claimText = drawerState.claimText;
   try {
-    const range = pendingSelection.range;
+    if (!range) throw new Error('no range');
     const span = document.createElement('span');
     span.className = 'g';
     span.dataset.id = claimId;
     range.surroundContents(span);
     span.addEventListener('click', () => showClaim(claimId));
   } catch (e) {
-    // range may have been invalidated (e.g. content edited). Fallback: re-attach by text search.
-    console.warn('[cite] surroundContents failed, falling back to text search', e);
+    // range may have been invalidated — fall back to text search
     const body = $('#article-body');
-    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
-    let node;
-    while ((node = walker.nextNode())) {
-      const idx = node.nodeValue.indexOf(pendingSelection.text);
-      if (idx !== -1) {
-        const r = document.createRange();
-        r.setStart(node, idx);
-        r.setEnd(node, idx + pendingSelection.text.length);
-        const span = document.createElement('span');
-        span.className = 'g';
-        span.dataset.id = claimId;
-        try { r.surroundContents(span); span.addEventListener('click', () => showClaim(claimId)); } catch {}
-        break;
+    if (body) {
+      const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode())) {
+        const idx = node.nodeValue.indexOf(claimText);
+        if (idx !== -1) {
+          const r = document.createRange();
+          r.setStart(node, idx);
+          r.setEnd(node, idx + claimText.length);
+          const span = document.createElement('span');
+          span.className = 'g';
+          span.dataset.id = claimId;
+          try { r.surroundContents(span); span.addEventListener('click', () => showClaim(claimId)); } catch {}
+          break;
+        }
       }
     }
   }
 
+  lastCitedSourceId = drawerState.sourceId;
   await saveArticleNow();
   renderCounts();
-  closeCiteModal();
-  showToast('cited');
-  showClaim(claimId);
+  const newId = claimId;
+  closeAnchorDrawer();
+  showToast('anchored');
+  showClaim(newId);
 }
 
 /* ======================================================================
@@ -6320,6 +8531,18 @@ function renderCsvTable(text, kind) {
   return { html, rowCount: body.length, colCount, headers: header };
 }
 
+/* Look up a source id from a name. Tries user-uploaded sources first (they
+   have raw text), then falls back to the seeded demo catalog. Returns null
+   if no source matches — callers should treat that as "can't open". */
+function resolveSourceIdByName(name) {
+  if (!name) return null;
+  for (const s of Object.values(USER_SOURCES)) {
+    if (s.name === name) return s.id;
+  }
+  const seed = SOURCES.find(s => s.name === name);
+  return seed ? seed.id : null;
+}
+
 // Object URLs created for media previews — revoked when the viewer closes
 // so we don't leak blob memory on repeated opens of large files.
 let _srcViewerMediaUrl = null;
@@ -6332,9 +8555,18 @@ function revokeSrcViewerMedia() {
   if (mediaEl) mediaEl.innerHTML = '';
 }
 
-async function showSourceViewer(id) {
+/* showSourceViewer(id, { scrollTo, selecting })
+     scrollTo  = { kind: 'quote', highlight }     → find & pulse a text span
+     scrollTo  = { kind: 'cell',  row, col }      → scroll row into view, pulse target cell
+     selecting = true                             → render in selection mode: text
+                                                    selection + cell clicks feed the drawer
+   Called from the Sources panel (plain), from a provenance chip (scrollTo),
+   and from the anchor drawer's target-picker (selecting). */
+async function showSourceViewer(id, opts = {}) {
   const src = USER_SOURCES[id] || SOURCES.find(s => s.id === id);
   if (!src) return;
+  const scrollTo = opts.scrollTo || null;
+  const selecting = !!opts.selecting;
   const modal = $('#src-viewer');
   modal._currentSrc = src;
   const body = modal.querySelector('.src-viewer-body');
@@ -6445,6 +8677,14 @@ async function showSourceViewer(id) {
     } else {
       textEl.textContent = '(This is a built-in sample source — no raw text is stored. Upload your own file to view its contents.)';
     }
+
+    // Scroll/highlight a specific span on request — lets a provenance chip
+    // open the source *at* its cited target, not just at the top.
+    if (scrollTo) applySourceViewerScrollTo(scrollTo, { body });
+
+    // Selection mode — wire cell/text picking to the anchor drawer.
+    body.classList.toggle('is-selecting', selecting);
+    togglePickerBar(selecting, src);
   } catch (err) {
     console.warn('[src-viewer] failed to load', err);
     revokeSrcViewerMedia();
@@ -6455,6 +8695,44 @@ async function showSourceViewer(id) {
     tableFooter.hidden = true;
     body.classList.remove('is-table', 'is-pdf');
     textEl.textContent = '(failed to load source: ' + (err && err.message || err) + ')';
+  }
+}
+
+/* Post-render scroll/highlight inside the source viewer. */
+function applySourceViewerScrollTo(scrollTo, { body }) {
+  if (scrollTo.kind === 'cell' && body.classList.contains('is-table')) {
+    const wrap = $('#src-viewer-table-wrap');
+    if (!wrap) return;
+    // Target <td> by row attribute; col name → data-col-idx via headers
+    const headers = Array.from(wrap.querySelectorAll('thead th[data-col-idx]'));
+    const col = headers.find(h => h.textContent === scrollTo.col);
+    if (!col) return;
+    const colIdx = col.dataset.colIdx;
+    const td = wrap.querySelector(`tbody td[data-row="${scrollTo.row}"][data-col-idx="${colIdx}"]`);
+    if (!td) return;
+    td.scrollIntoView({ block: 'center', inline: 'center', behavior: 'auto' });
+    td.classList.add('pulse-target');
+    setTimeout(() => td.classList.remove('pulse-target'), 1500);
+    return;
+  }
+  if (scrollTo.kind === 'quote') {
+    const textEl = $('#src-viewer-text');
+    if (!textEl || textEl.hidden) return;
+    const raw = textEl.textContent;
+    const needle = (scrollTo.highlight || '').trim();
+    if (!needle) return;
+    const idx = raw.indexOf(needle);
+    if (idx === -1) return;
+    const before = raw.slice(0, idx);
+    const match  = raw.slice(idx, idx + needle.length);
+    const after  = raw.slice(idx + needle.length);
+    textEl.innerHTML = `${escapeHtml(before)}<mark class="src-viewer-hit">${escapeHtml(match)}</mark>${escapeHtml(after)}`;
+    const hit = textEl.querySelector('.src-viewer-hit');
+    if (hit) {
+      hit.scrollIntoView({ block: 'center', behavior: 'auto' });
+      hit.classList.add('pulse-target');
+      setTimeout(() => hit && hit.classList.remove('pulse-target'), 1500);
+    }
   }
 }
 
@@ -6727,6 +9005,13 @@ function wireCellTuple() {
       const td = e.target.closest('td');
       if (!td || td.classList.contains('rowno')) return;
       if (!wrap.contains(td)) return;
+      // In drawer selection mode the click feeds drawerState.selectedCells
+      // instead of the tuple readout — different affordance, same input.
+      const body = $('#src-viewer').querySelector('.src-viewer-body');
+      if (body && body.classList.contains('is-selecting')) {
+        handleDrawerCellClick(td, e.shiftKey);
+        return;
+      }
       selectCellTuple(td);
     });
   }
@@ -6745,11 +9030,102 @@ function wireCellTuple() {
     });
   }
 }
+/* Show/hide the picker bar at the bottom of the source viewer. Active
+   only when the anchor drawer is in target-picker substate. */
+function togglePickerBar(selecting, src) {
+  const bar = $('#src-viewer-picker');
+  const hint = $('.src-viewer-hint');
+  const tupleBar = $('#src-viewer-tuple');
+  const ops = $('#src-viewer-ops');
+  if (!bar) return;
+  bar.hidden = !selecting;
+  if (hint) hint.hidden = selecting;
+  if (selecting) {
+    // In selection mode the tuple bar is superfluous — we use the picker bar.
+    if (tupleBar) tupleBar.hidden = true;
+    renderPickerBarState();
+  } else if (ops) {
+    ops.hidden = true;
+  }
+}
+
+/* Update the picker bar label + op visibility based on current selection. */
+function renderPickerBarState() {
+  const label = $('#src-viewer-picker-label');
+  const ops = $('#src-viewer-ops');
+  const btn = $('#src-viewer-use');
+  const n = drawerState.selectedCells.length;
+  if (!label) return;
+  if (n === 0) {
+    label.textContent = 'Select text or click a cell to anchor';
+    if (ops) ops.hidden = true;
+    if (btn) btn.hidden = true;
+  } else if (n === 1) {
+    const c = drawerState.selectedCells[0];
+    label.textContent = `1 cell · row ${c.row} · ${c.col} = ${c.value}`;
+    if (ops) ops.hidden = true;
+    if (btn) { btn.hidden = false; btn.textContent = 'Use this cell'; }
+  } else {
+    label.textContent = `${n} cells selected — pick an op`;
+    if (ops) ops.hidden = false;
+    if (btn) {
+      btn.hidden = !drawerState.derivedOp;
+      btn.textContent = drawerState.derivedOp ? `Use ${drawerState.derivedOp}` : 'Pick an op';
+    }
+  }
+}
+
+/* In selection mode, a TD click adds/toggles a cell in the drawer's
+   selectedCells list. Shift-click appends; plain click starts a fresh
+   single-cell selection. */
+function handleDrawerCellClick(td, shift) {
+  const row = Number(td.dataset.row);
+  const colIdx = Number(td.dataset.colIdx);
+  if (!Number.isFinite(row) || !Number.isFinite(colIdx)) return;
+  const wrap = $('#src-viewer-table-wrap');
+  if (!wrap) return;
+  const th = wrap.querySelector(`thead th[data-col-idx="${colIdx}"]`);
+  const col = th ? th.textContent : '';
+  const value = td.textContent;
+  const entry = { row, col, colIdx, value };
+  if (shift) {
+    // Toggle: if this cell is already in the list, remove it
+    const at = drawerState.selectedCells.findIndex(c => c.row === row && c.colIdx === colIdx);
+    if (at >= 0) {
+      drawerState.selectedCells.splice(at, 1);
+      td.classList.remove('picked');
+    } else {
+      drawerState.selectedCells.push(entry);
+      td.classList.add('picked');
+    }
+  } else {
+    // Fresh selection — clear the prior picks
+    wrap.querySelectorAll('td.picked').forEach(c => c.classList.remove('picked'));
+    drawerState.selectedCells = [entry];
+    td.classList.add('picked');
+    drawerState.derivedOp = null;
+  }
+  renderPickerBarState();
+}
+
 function hideSourceViewer() {
   const modal = $('#src-viewer');
-  modal.hidden = true;
-  modal._currentSrc = null;
+  const bar = $('#src-viewer-picker');
+  if (bar) bar.hidden = true;
+  const hint = $('.src-viewer-hint');
+  if (hint) hint.hidden = false;
+  const ops = $('#src-viewer-ops');
+  if (ops) ops.hidden = true;
+  const body = modal.querySelector('.src-viewer-body');
+  if (body) { body.classList.remove('is-selecting'); body.classList.remove('is-highlight-mode'); }
+  highlightMode = false;
+  const hlBtn = $('#src-viewer-hl-toggle');
+  if (hlBtn) { hlBtn.setAttribute('aria-pressed', 'false'); hlBtn.classList.remove('active'); }
+  // Revoke media object URLs so large video/image/PDF blobs don't
+  // leak memory across repeated opens.
   revokeSrcViewerMedia();
+  modal._currentSrc = null;
+  modal.hidden = true;
   if (typeof clipHidePill === 'function') clipHidePill();
 }
 function wireSourceViewer() {
@@ -6758,20 +9134,78 @@ function wireSourceViewer() {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !$('#src-viewer').hidden) hideSourceViewer();
   });
+
+  // Text-selection capture — when the drawer is picking, any mouseup
+  // with a non-collapsed selection inside #src-viewer-text is the
+  // drawer target. When highlight mode is on (no drawer), the same
+  // mouseup builds an unbound evidence chip.
+  const textEl = $('#src-viewer-text');
+  if (textEl) {
+    textEl.addEventListener('mouseup', () => {
+      const body = $('#src-viewer').querySelector('.src-viewer-body');
+      if (body && body.classList.contains('is-selecting')) {
+        setTimeout(captureViewerTextSelection, 0);
+        return;
+      }
+      if (highlightMode) setTimeout(captureHighlightForBench, 0);
+    });
+  }
+
+  // Highlight mode toggle
+  const hlBtn = $('#src-viewer-hl-toggle');
+  if (hlBtn) {
+    hlBtn.addEventListener('click', () => {
+      highlightMode = !highlightMode;
+      hlBtn.setAttribute('aria-pressed', String(highlightMode));
+      hlBtn.classList.toggle('active', highlightMode);
+      const body = $('#src-viewer').querySelector('.src-viewer-body');
+      if (body) body.classList.toggle('is-highlight-mode', highlightMode);
+      showToast(highlightMode ? 'Highlight mode on' : 'Highlight mode off');
+    });
+  }
+
+  // Picker op palette — pick an aggregation for multi-cell selections.
+  const ops = $('#src-viewer-ops');
+  if (ops) {
+    ops.addEventListener('click', e => {
+      const b = e.target.closest('.src-viewer-op');
+      if (!b) return;
+      ops.querySelectorAll('.src-viewer-op').forEach(x => x.classList.remove('picked-op'));
+      b.classList.add('picked-op');
+      drawerState.derivedOp = b.dataset.op;
+      renderPickerBarState();
+    });
+  }
+
+  // "Use selection" — commit whatever cell/op state the drawer has.
+  const useBtn = $('#src-viewer-use');
+  if (useBtn) {
+    useBtn.addEventListener('click', () => captureViewerCellSelection());
+  }
+}
+
+function wireAnchorDrawer() {
+  const closeBtn = $('#drawer-close');
+  if (closeBtn) closeBtn.addEventListener('click', closeAnchorDrawer);
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (linkMode.active) { exitLinkMode(); return; }
+    if (drawerState.active) { closeAnchorDrawer(); return; }
+  });
 }
 
 /* ======================================================================
    PROVeo WEBHOOK + UPLOAD DESTINATION
    ----------------------------------------------------------------------
-   PROVeo is an external n8n workflow that handles redaction, Archive.org
-   dedup + upload, and Matrix media sync. Schema per the workflow:
+   PROVeo is an external n8n workflow that handles Archive.org dedup +
+   upload and Matrix media sync. Schema per the workflow:
      body: { visibility: 'public'|'gated', kind, mime, filename, title,
              description, license, parent_identifier?, claim_id?,
-             redactions?, matrix_room_id?, consent_acknowledged? }
+             matrix_room_id?, consent_acknowledged? }
      binary: the file bytes
    Frontend just posts multipart/form-data; backend returns archive_url +
-   matrix mxc + hashes. Storing those on the source lets later exports
-   carry the provenance forward.
+   matrix mxc. Any censoring or redaction happens in the client before
+   upload — the backend does not do crypto or content transforms.
 ====================================================================== */
 const PROVEO_URL = 'https://n8n.intelechia.com/webhook/PROVeo';
 const LS_UPLOAD_DEST = 'nl.uploadDest.v1';
@@ -6792,7 +9226,7 @@ function loadProveoSettingsIntoModal() {
 }
 
 /* Sends a source to the PROVeo webhook. Returns the parsed JSON response. */
-async function uploadViaProveo(file, visibility, { title, description, redactions } = {}) {
+async function uploadViaProveo(file, visibility, { title, description } = {}) {
   const fd = new FormData();
   fd.append('data', file, file.name);
   fd.append('visibility', visibility);
@@ -6802,14 +9236,11 @@ async function uploadViaProveo(file, visibility, { title, description, redaction
   fd.append('title', title || file.name);
   if (description) fd.append('description', description);
   fd.append('license', 'CC-BY-4.0');
-  if (redactions && redactions.length) {
-    fd.append('redactions', JSON.stringify(redactions));
-  }
   if (visibility === 'public') {
     fd.append('consent_acknowledged', JSON.stringify(['permanence', 'privacy', 'rights']));
   }
-  if (visibility === 'gated' || (redactions && redactions.length)) {
-    if (!matrix.activeRoomId) throw new Error('Pick a Matrix workspace room before uploading to a gated/redacted destination.');
+  if (visibility === 'gated') {
+    if (!matrix.activeRoomId) throw new Error('Pick a Matrix workspace room before uploading to a gated destination.');
     fd.append('matrix_room_id', matrix.activeRoomId);
   }
   const res = await fetch(PROVEO_URL, { method: 'POST', body: fd });
@@ -7677,8 +10108,11 @@ async function init() {
   wireEditor();
   wireUploads();
   wireSelectionToolbar();
-  wireCiteModal();
   wireSourceViewer();
+  wireAnchorDrawer();
+  loadEvidenceBench();
+  renderEvidenceBench();
+  wireEvidenceDnd();
   wireCellTuple();
   wireClipboard();
   wireWorkspace();
