@@ -453,6 +453,8 @@
   }
   .tbtn b { font-family: var(--font-serif); font-weight: 700; }
   .tbtn i { font-family: var(--font-serif); font-style: italic; font-weight: 500; }
+  .tbtn svg { width: 14px; height: 14px; display: block; stroke: currentColor; fill: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+  .tbtn sup, .tbtn sub { font-family: var(--font-serif); font-size: 11px; line-height: 1; }
   .tbar-sep {
     width: 1px;
     height: 16px;
@@ -3626,35 +3628,35 @@
               <div class="tbtn-palette" id="tbtn-color-palette" hidden></div>
             </div>
             <div class="tbtn-color-wrap">
-              <button class="tbtn tbtn-color" id="tbtn-hilite" title="Highlight color" aria-label="Highlight color"><span class="tbtn-color-label">🖍</span><span class="tbtn-color-chip" id="tbtn-hilite-chip"></span><span class="tbtn-caret">▾</span></button>
+              <button class="tbtn tbtn-color" id="tbtn-hilite" title="Highlight color" aria-label="Highlight color"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span class="tbtn-color-chip" id="tbtn-hilite-chip"></span><span class="tbtn-caret">▾</span></button>
               <div class="tbtn-palette" id="tbtn-hilite-palette" hidden></div>
             </div>
             <span class="tbar-sep"></span>
             <button class="tbtn" data-block="h2" title="Heading" aria-label="Heading 2">H2</button>
             <button class="tbtn" data-block="h3" title="Subheading" aria-label="Heading 3">H3</button>
-            <button class="tbtn" data-block="blockquote" title="Quote" aria-label="Blockquote">❝</button>
-            <button class="tbtn" data-block="pre" title="Code block" aria-label="Code block">&lt;/&gt;</button>
+            <button class="tbtn" data-block="blockquote" title="Quote" aria-label="Blockquote"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21c3 0 7-1 7-8V5H3v8h4"/><path d="M14 21c3 0 7-1 7-8V5h-7v8h4"/></svg></button>
+            <button class="tbtn" data-block="pre" title="Code block" aria-label="Code block"><svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></button>
             <span class="tbar-sep"></span>
-            <button class="tbtn" data-cmd="justifyLeft" title="Align left (⌘⇧L)" aria-label="Align left">⯇</button>
-            <button class="tbtn" data-cmd="justifyCenter" title="Align center (⌘⇧E)" aria-label="Align center">⯐</button>
-            <button class="tbtn" data-cmd="justifyRight" title="Align right (⌘⇧R)" aria-label="Align right">⯈</button>
-            <button class="tbtn" data-cmd="justifyFull" title="Justify (⌘⇧J)" aria-label="Justify">⯍</button>
+            <button class="tbtn" data-cmd="justifyLeft" title="Align left (⌘⇧L)" aria-label="Align left"><svg viewBox="0 0 24 24" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg></button>
+            <button class="tbtn" data-cmd="justifyCenter" title="Align center (⌘⇧E)" aria-label="Align center"><svg viewBox="0 0 24 24" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg></button>
+            <button class="tbtn" data-cmd="justifyRight" title="Align right (⌘⇧R)" aria-label="Align right"><svg viewBox="0 0 24 24" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="6" y1="18" x2="21" y2="18"/></svg></button>
+            <button class="tbtn" data-cmd="justifyFull" title="Justify (⌘⇧J)" aria-label="Justify"><svg viewBox="0 0 24 24" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
             <span class="tbar-sep"></span>
-            <button class="tbtn" data-cmd="outdent" title="Decrease indent" aria-label="Outdent">⇤</button>
-            <button class="tbtn" data-cmd="indent" title="Increase indent" aria-label="Indent">⇥</button>
+            <button class="tbtn" data-cmd="outdent" title="Decrease indent" aria-label="Outdent"><svg viewBox="0 0 24 24" aria-hidden="true"><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="18" x2="3" y2="18"/><line x1="21" y1="12" x2="11" y2="12"/><polyline points="7 8 3 12 7 16"/></svg></button>
+            <button class="tbtn" data-cmd="indent" title="Increase indent" aria-label="Indent"><svg viewBox="0 0 24 24" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/><line x1="13" y1="12" x2="21" y2="12"/><polyline points="3 8 7 12 3 16"/></svg></button>
             <span class="tbar-sep"></span>
-            <button class="tbtn" data-cmd="insertUnorderedList" title="Bulleted list" aria-label="Bulleted list">•</button>
-            <button class="tbtn" data-cmd="insertOrderedList" title="Numbered list" aria-label="Numbered list">1.</button>
-            <button class="tbtn" data-cmd="link" title="Link (⌘K)" aria-label="Insert link">🔗</button>
+            <button class="tbtn" data-cmd="insertUnorderedList" title="Bulleted list" aria-label="Bulleted list"><svg viewBox="0 0 24 24" aria-hidden="true"><line x1="9" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="9" y1="18" x2="21" y2="18"/><circle cx="4.5" cy="6" r="1.25" fill="currentColor" stroke="none"/><circle cx="4.5" cy="12" r="1.25" fill="currentColor" stroke="none"/><circle cx="4.5" cy="18" r="1.25" fill="currentColor" stroke="none"/></svg></button>
+            <button class="tbtn" data-cmd="insertOrderedList" title="Numbered list" aria-label="Numbered list"><svg viewBox="0 0 24 24" aria-hidden="true"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><path d="M4 6h1V3H4m0 0 1-1"/><path d="M4 10h2c.5 0 1 .3 1 1s-.3 1-1 1.2L4 14h3"/><path d="M4 18h2c.6 0 1 .4 1 1s-.4 1-1 1H5c.6 0 1 .4 1 1s-.4 1-1 1H4"/></svg></button>
+            <button class="tbtn" data-cmd="link" title="Link (⌘K)" aria-label="Insert link"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></button>
             <span class="tbar-sep"></span>
-            <button class="tbtn" data-cmd="superscript" title="Superscript" aria-label="Superscript">x²</button>
-            <button class="tbtn" data-cmd="subscript" title="Subscript" aria-label="Subscript">x₂</button>
-            <button class="tbtn" data-cmd="insertHorizontalRule" title="Horizontal rule" aria-label="Horizontal rule">―</button>
+            <button class="tbtn" data-cmd="superscript" title="Superscript" aria-label="Superscript">x<sup>2</sup></button>
+            <button class="tbtn" data-cmd="subscript" title="Subscript" aria-label="Subscript">x<sub>2</sub></button>
+            <button class="tbtn" data-cmd="insertHorizontalRule" title="Horizontal rule" aria-label="Horizontal rule"><svg viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="12" x2="20" y2="12"/></svg></button>
             <span class="tbar-sep"></span>
-            <button class="tbtn" data-cmd="find" title="Find &amp; replace (⌘F)" aria-label="Find and replace">🔍</button>
-            <button class="tbtn" data-cmd="removeFormat" title="Clear formatting" aria-label="Clear formatting">✕</button>
-            <button class="tbtn" data-cmd="undo" title="Undo (⌘Z)" aria-label="Undo">↶</button>
-            <button class="tbtn" data-cmd="redo" title="Redo (⇧⌘Z)" aria-label="Redo">↷</button>
+            <button class="tbtn" data-cmd="find" title="Find &amp; replace (⌘F)" aria-label="Find and replace"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg></button>
+            <button class="tbtn" data-cmd="removeFormat" title="Clear formatting" aria-label="Clear formatting"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V5h16v2"/><line x1="15" y1="5" x2="9" y2="19"/><line x1="5" y1="19" x2="13" y2="19"/></svg></button>
+            <button class="tbtn" data-cmd="undo" title="Undo (⌘Z)" aria-label="Undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-6.7L3 9"/></svg></button>
+            <button class="tbtn" data-cmd="redo" title="Redo (⇧⌘Z)" aria-label="Redo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 7v6h-6"/><path d="M21 13a9 9 0 1 1-3-6.7L21 9"/></svg></button>
             <div class="presence-bar" id="presence-bar"></div>
             <div class="tbar-status">
               <span id="tbar-wordcount">0 words</span>
