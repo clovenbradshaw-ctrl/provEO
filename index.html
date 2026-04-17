@@ -7459,15 +7459,40 @@ function wireEditor() {
     }
   });
 
-  // Plain-text paste
-  body.addEventListener('paste', (e) => {
+  // Paste — provenance-aware. If the clipboard carries a provEO chain
+  // (custom MIME or HTML fallback), materialize the text as a grounded
+  // claim span whose inspector links to the original source. Otherwise
+  // fall back to plain-text paste so normal typing + hyperlinks keep
+  // working unchanged.
+  body.addEventListener('paste', async (e) => {
+    const dt = e.clipboardData || window.clipboardData;
+    const chain = provReadChain(dt);
+    if (chain) {
+      e.preventDefault();
+      const next = provChainAppendHop(chain, { kind: 'paste', into: 'article' });
+      // Preserve the pasted text verbatim — the chain's text may differ
+      // if the user trimmed the selection before the copy fired.
+      const pasted = (dt.getData('text/plain') || next.text || '').trim();
+      if (pasted) next.text = pasted;
+      try {
+        await provInsertGroundedFromChain(next);
+        showToast?.('pasted with provenance');
+      } catch (err) {
+        console.warn('[proveo] provenance paste failed, falling back', err);
+        document.execCommand('insertText', false, pasted);
+      }
+      return;
+    }
     e.preventDefault();
-    const t = (e.clipboardData || window.clipboardData).getData('text/plain');
+    const t = dt.getData('text/plain');
     document.execCommand('insertText', false, t);
   });
   title.addEventListener('paste', (e) => {
     e.preventDefault();
-    const t = (e.clipboardData || window.clipboardData).getData('text/plain');
+    const dt = e.clipboardData || window.clipboardData;
+    // Title is plain — strip any chain payload down to text, but the
+    // system clipboard still carries the chain for future pastes.
+    const t = dt.getData('text/plain');
     document.execCommand('insertText', false, t.replace(/\n+/g, ' '));
   });
 
@@ -9764,6 +9789,281 @@ const CLIPBOARD_KEY = 'proveo.clipboard.v1';
 const CLIPBOARD_MAX = 100;
 let CLIPBOARD = [];
 
+/* Provenance chain transit.
+   Every copy from a provenance-bearing surface (source viewer, clipboard
+   drawer item, or an already-grounded span in the article) enriches the
+   system clipboard with a custom MIME and an HTML fallback. Pastes into
+   any provEO editor detect the chain and materialize a grounded claim,
+   so Cmd-C/Cmd-V can't strip provenance even if it leaves and re-enters
+   the app. */
+const PROVEO_MIME = 'application/x-proveo-provenance+json';
+const PROVEO_HTML_ATTR = 'data-proveo-provenance';
+
+function provNowIso() { return new Date().toISOString(); }
+
+function provBase64Encode(s) {
+  try { return btoa(unescape(encodeURIComponent(s))); }
+  catch { return ''; }
+}
+function provBase64Decode(s) {
+  try { return decodeURIComponent(escape(atob(s))); }
+  catch { return ''; }
+}
+
+// Build a fresh transit chain starting at a source-viewer selection.
+function provChainFromSource(prov, text) {
+  return {
+    version: 1,
+    text,
+    origin: prov,
+    hops: [{
+      kind: 'read',
+      at: provNowIso(),
+      by: 'human',
+      source_id: prov.sourceId || null,
+      source_name: prov.sourceName || null,
+      page: prov.page ?? null,
+      row: prov.row ?? null,
+      col: prov.col ?? null,
+      sha256: prov.sha256 || null,
+      method: prov.pageMethod || null,
+      app_url: location.href,
+    }],
+  };
+}
+
+// Append a hop to an existing chain (e.g. when copying from the editor).
+function provChainAppendHop(chain, hop) {
+  const next = JSON.parse(JSON.stringify(chain || {}));
+  next.hops = next.hops || [];
+  next.hops.push({ at: provNowIso(), by: 'human', app_url: location.href, ...hop });
+  return next;
+}
+
+// Package a chain for transit. Returns { plain, html, json } strings.
+// The HTML fallback embeds the JSON as a data- attribute so provenance
+// survives browsers / targets that drop custom MIME types.
+function provPackage(chain) {
+  const json = JSON.stringify(chain);
+  const b64 = provBase64Encode(json);
+  const text = chain.text || '';
+  const html = `<span ${PROVEO_HTML_ATTR}="${b64}">${escapeHtml(text)}</span>`;
+  return { plain: text, html, json };
+}
+
+// Write a provenance-bearing payload into a native ClipboardEvent.
+function provWriteToClipboardEvent(e, chain) {
+  const pkg = provPackage(chain);
+  try {
+    e.clipboardData.setData('text/plain', pkg.plain);
+    e.clipboardData.setData('text/html', pkg.html);
+    e.clipboardData.setData(PROVEO_MIME, pkg.json);
+  } catch {}
+  e.preventDefault();
+}
+
+// Read a chain from a ClipboardEvent or a DataTransfer-like object.
+// Falls back to parsing the HTML payload if the custom MIME was dropped.
+function provReadChain(dataTransfer) {
+  if (!dataTransfer) return null;
+  try {
+    const raw = dataTransfer.getData(PROVEO_MIME);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  try {
+    const html = dataTransfer.getData('text/html');
+    if (html && html.indexOf(PROVEO_HTML_ATTR) !== -1) {
+      const m = html.match(new RegExp(PROVEO_HTML_ATTR + '="([^"]+)"'));
+      if (m) {
+        const json = provBase64Decode(m[1]);
+        if (json) return JSON.parse(json);
+      }
+    }
+  } catch {}
+  return null;
+}
+
+// Gather the provenance chain carried by a DOM range that sits inside the
+// article body. If the range is fully inside a single `.g`/`.conflict`/
+// `.absent` span with a data-id, we pull its claim's prov_content out of
+// CLAIMS and build a chain. If the selection crosses multiple, we build a
+// compound chain with a hop per claim.
+function provChainFromEditorRange(range) {
+  if (!range) return null;
+  const body = document.querySelector('#article-body');
+  if (!body || !body.contains(range.commonAncestorContainer)) return null;
+  const frag = range.cloneContents();
+  const spans = frag.querySelectorAll ? frag.querySelectorAll('[data-id]') : [];
+  const text = range.toString();
+  if (!text) return null;
+  // Collect unique claim ids touched by the selection.
+  const ids = new Set();
+  spans.forEach(s => { if (s.dataset.id) ids.add(s.dataset.id); });
+  // Also include a claim whose span fully contains the selection end.
+  const anchor = range.commonAncestorContainer;
+  const anchorEl = anchor.nodeType === 1 ? anchor : anchor.parentElement;
+  const enclosing = anchorEl && anchorEl.closest ? anchorEl.closest('[data-id]') : null;
+  if (enclosing && enclosing.dataset.id) ids.add(enclosing.dataset.id);
+  if (!ids.size) return null;
+  const hops = [];
+  let origin = null;
+  for (const id of ids) {
+    const claim = (typeof CLAIMS === 'object' && CLAIMS[id]) || null;
+    const prov = claim && claim.prov_content;
+    if (!prov) continue;
+    if (!origin) origin = prov;
+    hops.push({
+      kind: 'copy_from_editor',
+      at: provNowIso(),
+      by: 'human',
+      claim_id: id,
+      source_id: prov.sourceId || prov.src || null,
+      source_name: prov.sourceName || prov.src || null,
+      page: prov.page ?? null,
+      row: prov.row ?? null,
+      col: prov.col ?? null,
+      sha256: prov.sha256 || null,
+      app_url: location.href,
+    });
+  }
+  if (!hops.length) return null;
+  return { version: 1, text, origin, hops };
+}
+
+// Normalize a chain back into a `prov_content`-shaped object so downstream
+// rendering (claim inspector, source open) works as if the claim was
+// anchored directly. The first hop defines the source anchor.
+function provToProvContent(chain) {
+  const head = (chain.hops && chain.hops[0]) || {};
+  const origin = chain.origin || {};
+  return {
+    kind: 'quote',
+    src: origin.sourceName || head.source_name || 'clipboard',
+    sourceId: origin.sourceId || head.source_id || null,
+    sourceName: origin.sourceName || head.source_name || null,
+    sourceKind: origin.sourceKind || null,
+    sha256: origin.sha256 || head.sha256 || null,
+    page: origin.page ?? head.page ?? null,
+    row: origin.row ?? head.row ?? null,
+    col: origin.col ?? head.col ?? null,
+    pageMethod: origin.pageMethod || null,
+    pageConf: origin.pageConf ?? null,
+    extractionEngine: origin.extractionEngine || null,
+    destination: origin.destination || null,
+    archive_url: origin.archive_url || null,
+    matrix_mxc: origin.matrix_mxc || null,
+    spanLabel: (origin.sourceName || head.source_name || 'clipboard') +
+               (origin.page != null ? ` · p.${origin.page}` : ''),
+    before: '',
+    highlight: chain.text || '',
+    after: '',
+    chain,
+  };
+}
+
+// Materialize a pasted provenance chain as a grounded claim span inside
+// the article body. Emits OBS → CLAIM through the fold, wraps the inserted
+// text in `<span class="g" data-id="...">`, and hooks up click → inspector.
+async function provInsertGroundedFromChain(chain) {
+  const body = $('#article-body');
+  if (!body) return null;
+  const sel = window.getSelection();
+  let range = sel && sel.rangeCount ? sel.getRangeAt(0) : null;
+  // Only operate inside the article body.
+  if (!range || !body.contains(range.commonAncestorContainer)) {
+    body.focus();
+    range = document.createRange();
+    range.selectNodeContents(body);
+    range.collapse(false);
+    sel.removeAllRanges(); sel.addRange(range);
+  }
+  range.deleteContents();
+  const text = chain.text || '';
+  if (!text) return null;
+
+  const claimId = 'u_' + ulid().slice(-8);
+  const prov = provToProvContent(chain);
+  const position = {
+    workspace: (typeof matrix !== 'undefined' && matrix.activeRoomId) || 'local',
+    article_id: 'draft',
+    paragraph_id: currentParagraphId()
+  };
+  // One OBS per hop that references a source.
+  const piIds = [];
+  for (const hop of (chain.hops || [])) {
+    const obsId = 'o_' + ulid().slice(-10);
+    piIds.push(obsId);
+    await appendEvent({
+      op: 'OBS',
+      site: `observation:${obsId}`,
+      resolution: 'Figure',
+      payload: {
+        agent: hop.by || 'human',
+        mode: hop.kind === 'read' ? 'direct_read' : 'transit',
+        source_id: hop.source_id || null,
+        location: (hop.page != null) ? { page: hop.page }
+                 : (hop.row != null) ? { row: hop.row, col: hop.col }
+                 : null,
+        content: text,
+        context: position,
+      },
+      author: hop.by || 'human'
+    });
+  }
+  const trace = [];
+  (chain.hops || []).forEach((hop, i) => {
+    if (hop.kind === 'read') {
+      trace.push({ op: 'OBS', txt: `read from <strong>${escapeHtml(hop.source_name || 'source')}</strong>${hop.page != null ? ' · p. ' + hop.page : ''}` });
+    } else if (hop.kind === 'copy_from_editor') {
+      trace.push({ op: 'OBS', txt: `re-copied from an earlier grounded span` });
+    } else if (hop.kind === 'paste') {
+      trace.push({ op: 'OBS', txt: `pasted into the article` });
+    } else {
+      trace.push({ op: 'OBS', txt: `transit hop: ${escapeHtml(hop.kind || '?')}` });
+    }
+  });
+  trace.push({ op: 'CLAIM', txt: `grounded via clipboard transit (${(chain.hops || []).length} hop${(chain.hops || []).length === 1 ? '' : 's'})` });
+
+  await appendEventAndRefold({
+    op: 'CLAIM',
+    site: `claim:${claimId}`,
+    resolution: 'Figure',
+    payload: {
+      type: 'grounded',
+      text,
+      pi: piIds,
+      position,
+      window: null,
+      prov_content: prov,
+      conf: 0.9,
+      trace
+    },
+    author: 'human'
+  });
+
+  // Insert a grounded span at the caret. The span carries the claim id
+  // so clicking it opens the inspector; a base64 copy of the chain rides
+  // along as a data attribute so a later copy-from-editor still carries
+  // the original chain even before the worker returns.
+  const span = document.createElement('span');
+  span.className = 'g';
+  span.dataset.id = claimId;
+  span.setAttribute(PROVEO_HTML_ATTR, provBase64Encode(JSON.stringify(chain)));
+  span.textContent = text;
+  range.insertNode(span);
+  // Move caret to end of inserted span.
+  const after = document.createRange();
+  after.setStartAfter(span);
+  after.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(after);
+  span.addEventListener('click', () => showClaim(claimId));
+
+  await saveArticleNow();
+  renderCounts();
+  return claimId;
+}
+
 function loadClipboard() {
   try {
     const raw = localStorage.getItem(CLIPBOARD_KEY);
@@ -9816,7 +10116,57 @@ function clipCiteFormat(item) {
   if (p.sha256) bits.push('sha256 ' + p.sha256.slice(0, 12));
   return `"${item.text}" — ${bits.join(', ')}`;
 }
-async function clipCopyToSystem(text) {
+async function clipCopyToSystem(text, chain) {
+  // Path 1 — chain-aware write via the async Clipboard API. ClipboardItem
+  // lets us carry plain, HTML fallback, and (browser permitting) the
+  // custom proveo MIME type together.
+  if (chain && typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+    try {
+      const pkg = provPackage(chain);
+      const items = {
+        'text/plain': new Blob([pkg.plain], { type: 'text/plain' }),
+        'text/html':  new Blob([pkg.html],  { type: 'text/html'  }),
+      };
+      try { items[PROVEO_MIME] = new Blob([pkg.json], { type: PROVEO_MIME }); } catch {}
+      await navigator.clipboard.write([new ClipboardItem(items)]);
+      return true;
+    } catch (err) {
+      // Chrome rejects non-standard MIME in some contexts; retry without it.
+      try {
+        const pkg = provPackage(chain);
+        await navigator.clipboard.write([new ClipboardItem({
+          'text/plain': new Blob([pkg.plain], { type: 'text/plain' }),
+          'text/html':  new Blob([pkg.html],  { type: 'text/html'  }),
+        })]);
+        return true;
+      } catch {}
+    }
+  }
+  // Path 2 — fallback via a transient contenteditable. This still lets us
+  // attach the chain through a native copy event when the async API is
+  // unavailable (non-secure contexts, older browsers).
+  if (chain) {
+    try {
+      const host = document.createElement('div');
+      host.contentEditable = 'true';
+      host.style.cssText = 'position:fixed;left:-1000px;top:-1000px;opacity:0';
+      const pkg = provPackage(chain);
+      host.innerHTML = pkg.html;
+      document.body.appendChild(host);
+      const r = document.createRange();
+      r.selectNodeContents(host);
+      const sel = window.getSelection();
+      const prior = sel.rangeCount ? sel.getRangeAt(0) : null;
+      sel.removeAllRanges(); sel.addRange(r);
+      const once = (e) => { provWriteToClipboardEvent(e, chain); };
+      host.addEventListener('copy', once, { once: true });
+      const ok = document.execCommand('copy');
+      host.remove();
+      if (prior) { sel.removeAllRanges(); sel.addRange(prior); }
+      if (ok) return true;
+    } catch {}
+  }
+  // Path 3 — pure text fallback.
   try { await navigator.clipboard.writeText(text); return true; }
   catch {
     try {
@@ -9976,9 +10326,66 @@ function clipHidePill() {
   const pill = $('#clip-select-pill');
   if (pill) pill.hidden = true;
 }
+/* Global copy interception. Any Cmd/Ctrl-C that originates in a surface
+   with known provenance writes a chain alongside the plain text, so
+   pasting elsewhere (even a different provEO editor) re-anchors the
+   claim. This is the "unavoidable" chain rule: you can't separate text
+   from its source by copy-pasting. */
+function wireProvenanceCopy() {
+  document.addEventListener('copy', (e) => {
+    const sel = window.getSelection?.();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+    const range = sel.getRangeAt(0);
+    const text = sel.toString();
+    if (!text) return;
+
+    // 1) Inside the source viewer → build a fresh chain from the
+    //    source anchor the selection sits in.
+    const modal = $('#src-viewer');
+    if (modal && !modal.hidden && modal.contains(range.commonAncestorContainer)) {
+      const prov = clipBuildProvenance(range);
+      if (prov) {
+        const chain = provChainFromSource(prov, text);
+        provWriteToClipboardEvent(e, chain);
+        return;
+      }
+    }
+
+    // 2) Inside the provenance clipboard drawer → use the stored item.
+    const drawer = $('#clip-drawer');
+    if (drawer && !drawer.hidden && drawer.contains(range.commonAncestorContainer)) {
+      const itemEl = (range.commonAncestorContainer.nodeType === 1
+        ? range.commonAncestorContainer
+        : range.commonAncestorContainer.parentElement)?.closest?.('.clip-item');
+      if (itemEl) {
+        const item = CLIPBOARD.find(x => x.id === itemEl.dataset.id);
+        if (item && item.provenance) {
+          const chain = provChainFromSource(item.provenance, text);
+          provWriteToClipboardEvent(e, chain);
+          return;
+        }
+      }
+    }
+
+    // 3) Inside the article body → if selection touches a grounded span,
+    //    forward its chain. Otherwise let the browser copy plain.
+    const body = $('#article-body');
+    if (body && body.contains(range.commonAncestorContainer)) {
+      const chain = provChainFromEditorRange(range);
+      if (chain) {
+        const next = provChainAppendHop(chain, { kind: 'copy_from_editor' });
+        next.text = text;
+        provWriteToClipboardEvent(e, next);
+        return;
+      }
+    }
+  });
+}
+
 function wireClipboard() {
   loadClipboard();
   clipUpdateFab();
+  wireProvenanceCopy();
 
   $('#clip-fab').addEventListener('click', () => {
     const d = $('#clip-drawer');
@@ -10033,10 +10440,13 @@ function wireClipboard() {
     const item = CLIPBOARD.find(x => x.id === id);
     if (!item) return;
     if (action === 'copy-text') {
-      const ok = await clipCopyToSystem(item.text);
-      clipToast(ok ? 'Copied text' : 'Copy failed');
+      const chain = provChainFromSource(item.provenance || {}, item.text);
+      const ok = await clipCopyToSystem(item.text, chain);
+      clipToast(ok ? 'Copied text (with provenance)' : 'Copy failed');
     } else if (action === 'copy-cite') {
-      const ok = await clipCopyToSystem(clipCiteFormat(item));
+      const cite = clipCiteFormat(item);
+      const chain = provChainFromSource(item.provenance || {}, cite);
+      const ok = await clipCopyToSystem(cite, chain);
       clipToast(ok ? 'Copied with citation' : 'Copy failed');
     } else if (action === 'copy-json') {
       const ok = await clipCopyToSystem(JSON.stringify(item, null, 2));
