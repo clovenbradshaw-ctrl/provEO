@@ -206,6 +206,10 @@
   .stag-csv { background: var(--teal-fill); color: var(--teal-text); }
   .stag-pdf { background: var(--amber-fill); color: var(--amber-text); }
   .stag-txt { background: var(--blue-fill); color: var(--blue-text); }
+  .stag-img { background: var(--teal-fill); color: var(--teal-text); }
+  .stag-video { background: var(--amber-fill); color: var(--amber-text); }
+  .stag-audio { background: var(--blue-fill); color: var(--blue-text); }
+  .stag-bin { background: var(--color-background-tertiary); color: var(--color-text-secondary); }
   .dest-local { background: var(--color-background-tertiary); color: var(--color-text-secondary); }
   .dest-gated { background: var(--blue-fill); color: var(--blue-text); }
   .dest-public { background: var(--teal-fill); color: var(--teal-text); }
@@ -1877,6 +1881,64 @@
     color: var(--color-text-primary);
     background: var(--color-background-primary);
   }
+  .src-viewer-media {
+    flex: 1;
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: var(--color-background-secondary);
+  }
+  .src-viewer-media img,
+  .src-viewer-media video {
+    max-width: 100%;
+    max-height: 70vh;
+    border-radius: var(--border-radius-md);
+    box-shadow: 0 4px 18px rgba(26,25,21,0.12);
+    background: #000;
+  }
+  .src-viewer-media audio { width: min(480px, 90%); }
+  .src-viewer-media iframe {
+    width: 100%;
+    height: 70vh;
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    background: var(--color-background-primary);
+  }
+  .src-viewer-binary {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    text-align: center;
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    padding: 24px;
+  }
+  .src-viewer-binary .bin-icon {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    padding: 10px 14px;
+    border: 0.5px dashed var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    color: var(--color-text-tertiary);
+  }
+  .src-viewer-binary .bin-download {
+    appearance: none;
+    text-decoration: none;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    padding: 6px 14px;
+    border-radius: var(--border-radius-md);
+    border: 0.5px solid var(--color-border-secondary);
+    background: var(--color-background-primary);
+    color: var(--color-text-primary);
+    cursor: pointer;
+  }
+  .src-viewer-binary .bin-download:hover { background: var(--color-background-tertiary); }
   .src-viewer-hint {
     padding: 10px 18px;
     font-size: 11.5px;
@@ -2208,7 +2270,7 @@
   </div>
 </div>
 
-<input type="file" id="file-input" multiple accept=".txt,.csv,.md,.tsv,.json,.log,.xml,.html,.htm" style="display:none">
+<input type="file" id="file-input" multiple style="display:none">
 
 <div id="cite-toolbar" class="cite-toolbar" hidden>
   <button class="ct-btn" id="cite-btn">＋ Cite source</button>
@@ -2260,6 +2322,7 @@
       <button class="rphead-close" id="src-viewer-close">×</button>
     </div>
     <div class="src-viewer-text" id="src-viewer-text"></div>
+    <div class="src-viewer-media" id="src-viewer-media" hidden></div>
     <div class="src-viewer-table-wrap" id="src-viewer-table-wrap" hidden></div>
     <div class="src-viewer-table-footer" id="src-viewer-table-footer" hidden></div>
     <div class="src-viewer-tuple is-empty" id="src-viewer-tuple" hidden>
@@ -2794,7 +2857,7 @@ function allSources() {
 function renderSources() {
   const list = allSources();
   const items = list.map(s => {
-    const kindTag = ['csv','pdf','txt'].includes(s.kind) ? s.kind : 'txt';
+    const kindTag = ['csv','pdf','txt','img','video','audio','bin'].includes(s.kind) ? s.kind : 'txt';
     const delBtn = s.user_added
       ? `<button class="sitem-del" data-del-src="${s.id}" title="Remove source">×</button>`
       : '';
@@ -3538,7 +3601,12 @@ const storage = (() => {
   }
 
   // ---- Source file persistence ----
-  const memSources = new Map(); // id -> text
+  // Text sources are stored as UTF-8 strings; binary sources (images,
+  // videos, pdfs, anything else) are stored as Blob bytes. Both use the
+  // same id-keyed OPFS file under /sources/ — the caller picks the read
+  // path (readSource for text, readSourceBlob for bytes).
+  const memSources = new Map(); // id -> string
+  const memSourceBlobs = new Map(); // id -> Blob
   async function saveSource(id, text) {
     if (!available) { memSources.set(id, text); return; }
     const srcDir = await getDir('sources', true);
@@ -3547,8 +3615,20 @@ const storage = (() => {
     await w.write(text);
     await w.close();
   }
+  async function saveSourceBlob(id, blob) {
+    if (!available) { memSourceBlobs.set(id, blob); return; }
+    const srcDir = await getDir('sources', true);
+    const fh = await srcDir.getFileHandle(id, { create: true });
+    const w = await fh.createWritable();
+    await w.write(blob);
+    await w.close();
+  }
   async function readSource(id) {
-    if (!available) return memSources.get(id) || '';
+    if (!available) {
+      if (memSources.has(id)) return memSources.get(id);
+      const b = memSourceBlobs.get(id);
+      return b ? await b.text() : '';
+    }
     try {
       const srcDir = await getDir('sources', true);
       const fh = await srcDir.getFileHandle(id);
@@ -3558,8 +3638,25 @@ const storage = (() => {
       return '';
     }
   }
+  async function readSourceBlob(id, mime) {
+    if (!available) {
+      if (memSourceBlobs.has(id)) return memSourceBlobs.get(id);
+      if (memSources.has(id)) return new Blob([memSources.get(id)], { type: mime || 'text/plain' });
+      return null;
+    }
+    try {
+      const srcDir = await getDir('sources', true);
+      const fh = await srcDir.getFileHandle(id);
+      const f = await fh.getFile();
+      return mime && !f.type ? new Blob([f], { type: mime }) : f;
+    } catch {
+      return null;
+    }
+  }
   async function deleteSource(id) {
-    if (!available) { memSources.delete(id); return; }
+    memSources.delete(id);
+    memSourceBlobs.delete(id);
+    if (!available) return;
     try {
       const srcDir = await getDir('sources', true);
       await srcDir.removeEntry(id);
@@ -3589,7 +3686,7 @@ const storage = (() => {
 
   return {
     init, append, readAll, seedMarkerExists, setSeedMarker,
-    saveSource, readSource, deleteSource,
+    saveSource, saveSourceBlob, readSource, readSourceBlob, deleteSource,
     saveArticle, readArticle,
     get available() { return available; }
   };
@@ -3651,6 +3748,9 @@ self.addEventListener('message', (ev) => {
         name: evt.payload.name,
         kind: evt.payload.kind,
         meta: evt.payload.meta || '',
+        mime: evt.payload.mime || '',
+        size: evt.payload.size || 0,
+        has_text: evt.payload.has_text !== false,
         indexed: true,
         user_added: true,
         destination: evt.payload.destination || 'local',
@@ -3751,7 +3851,10 @@ async function seedIfNeeded() {
    ----------------------------------------------------------------------
    Click "+ add source" or drop files onto the Sources panel.
    Text-based formats (.txt, .csv, .md, .json, .tsv, .log, .xml, .html)
-   are read and indexed. Binary formats are rejected with a toast.
+   are read and indexed for citation. Images, videos, audio, PDFs, and
+   any other binary files are stored as blobs and rendered in the source
+   viewer; they can't be snippet-cited yet but they are first-class
+   library entries with the same event log provenance.
 ====================================================================== */
 
 function humanSize(n) {
@@ -3760,19 +3863,29 @@ function humanSize(n) {
   return (n / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
-function detectKind(name) {
-  const m = /\.([^.]+)$/.exec(name);
-  if (!m) return 'txt';
-  const ext = m[1].toLowerCase();
-  if (ext === 'csv' || ext === 'tsv') return 'csv';
-  if (ext === 'pdf') return 'pdf';
-  return 'txt';
+const IMG_EXTS = ['png','jpg','jpeg','gif','webp','bmp','svg','avif','heic','heif','tiff','tif','ico'];
+const VIDEO_EXTS = ['mp4','webm','mov','avi','mkv','m4v','ogv','mpg','mpeg'];
+const AUDIO_EXTS = ['mp3','wav','ogg','flac','aac','m4a','opus','oga'];
+const TEXT_EXTS = ['txt','md','csv','tsv','json','log','xml','html','htm','yaml','yml','ini','conf','js','ts','py','rb','go','rs','c','h','cpp','java','sh'];
+
+function fileExt(name) {
+  return (/\.([^.]+)$/.exec(name || '') || [])[1]?.toLowerCase() || '';
 }
 
-function isTextLike(name) {
-  const ext = (/\.([^.]+)$/.exec(name) || [])[1];
-  if (!ext) return true;
-  return ['txt','md','csv','tsv','json','log','xml','html','htm'].includes(ext.toLowerCase());
+function detectKind(name, mime = '') {
+  const ext = fileExt(name);
+  if (ext === 'csv' || ext === 'tsv') return 'csv';
+  if (ext === 'pdf' || mime === 'application/pdf') return 'pdf';
+  if ((mime && mime.startsWith('image/')) || IMG_EXTS.includes(ext)) return 'img';
+  if ((mime && mime.startsWith('video/')) || VIDEO_EXTS.includes(ext)) return 'video';
+  if ((mime && mime.startsWith('audio/')) || AUDIO_EXTS.includes(ext)) return 'audio';
+  if ((mime && (mime.startsWith('text/') || mime === 'application/json' || mime === 'application/xml')) || TEXT_EXTS.includes(ext) || !ext) return 'txt';
+  return 'bin';
+}
+
+function isTextLike(name, mime = '') {
+  const k = detectKind(name, mime);
+  return k === 'txt' || k === 'csv';
 }
 
 async function handleUpload(files) {
@@ -3780,21 +3893,25 @@ async function handleUpload(files) {
   if (!list.length) return;
   let added = 0, skipped = 0, published = 0;
   for (const file of list) {
-    if (!isTextLike(file.name)) {
-      console.warn('[upload] skipping non-text file', file.name);
-      skipped++;
-      continue;
-    }
     const choice = await promptUploadDestination(file);
     if (!choice) { skipped++; continue; } // user cancelled / skipped
     try {
-      const text = await file.text();
       const id = 's_' + ulid().slice(-10);
-      const kind = detectKind(file.name);
-      const lineCount = (text.match(/\n/g) || []).length + 1;
-      const meta = kind === 'csv'
-        ? `${lineCount - 1} rows · ${humanSize(file.size)}`
-        : `${humanSize(file.size)} · ${lineCount} lines`;
+      const kind = detectKind(file.name, file.type);
+      const textCapable = isTextLike(file.name, file.type);
+      const mime = file.type || '';
+
+      let text = null;
+      let lineCount = 0;
+      if (textCapable) {
+        text = await file.text();
+        lineCount = (text.match(/\n/g) || []).length + 1;
+      }
+
+      let meta;
+      if (kind === 'csv' && textCapable) meta = `${Math.max(0, lineCount - 1)} rows · ${humanSize(file.size)}`;
+      else if (textCapable) meta = `${humanSize(file.size)} · ${lineCount} lines`;
+      else meta = `${(fileExt(file.name) || 'file').toUpperCase()} · ${humanSize(file.size)}`;
 
       // If a non-local destination was chosen, post to the PROVeo webhook
       // first. If the webhook fails we abort this file — the user asked
@@ -3808,15 +3925,20 @@ async function handleUpload(files) {
         published++;
       }
 
-      await storage.saveSource(id, text);
-      SOURCE_TEXT[id] = text;
+      if (textCapable) {
+        await storage.saveSource(id, text);
+        SOURCE_TEXT[id] = text;
+      } else {
+        await storage.saveSourceBlob(id, file);
+      }
       await appendEventAndRefold({
         op: 'SRC',
         site: `source:${id}`,
         resolution: 'Figure',
         payload: {
-          id, name: file.name, kind, meta,
+          id, name: file.name, kind, meta, mime,
           size: file.size, lines: lineCount,
+          has_text: textCapable,
           destination: choice.visibility,
           archive_url: proveo?.archive?.url || null,
           archive_identifier: proveo?.archive?.identifier || null,
@@ -3959,8 +4081,10 @@ function wireSelectionToolbar() {
 }
 
 function citeableSources() {
-  // only user-uploaded (have raw text available); seed sources are demo-only.
-  return Object.values(USER_SOURCES);
+  // only user-uploaded sources that carry raw text can be snippet-cited.
+  // Images, video, audio, pdf and other binary sources live in the library
+  // but are excluded from the cite picker — there's no text span to pick.
+  return Object.values(USER_SOURCES).filter(s => s.has_text !== false);
 }
 
 function ensureSourceText(id) {
@@ -5478,6 +5602,18 @@ function renderCsvTable(text, kind) {
   return { html, rowCount: body.length, colCount, headers: header };
 }
 
+// Object URLs created for media previews — revoked when the viewer closes
+// so we don't leak blob memory on repeated opens of large files.
+let _srcViewerMediaUrl = null;
+function revokeSrcViewerMedia() {
+  if (_srcViewerMediaUrl) {
+    try { URL.revokeObjectURL(_srcViewerMediaUrl); } catch {}
+    _srcViewerMediaUrl = null;
+  }
+  const mediaEl = $('#src-viewer-media');
+  if (mediaEl) mediaEl.innerHTML = '';
+}
+
 async function showSourceViewer(id) {
   const src = USER_SOURCES[id] || SOURCES.find(s => s.id === id);
   if (!src) return;
@@ -5491,6 +5627,7 @@ async function showSourceViewer(id) {
   if (src.sha256) destBits.push(`sha256: <span style="font-family:var(--font-mono)">${escapeHtml(src.sha256.slice(0, 16))}…</span>`);
   $('#src-viewer-sub').innerHTML = `${(src.kind || 'txt').toUpperCase()} · ${escapeHtml(src.meta || '')}${destBits.length ? ' · ' + destBits.join(' · ') : ''}`;
   const textEl = $('#src-viewer-text');
+  const mediaEl = $('#src-viewer-media');
   const tableWrap = $('#src-viewer-table-wrap');
   const tableFooter = $('#src-viewer-table-footer');
   const tupleBar = $('#src-viewer-tuple');
@@ -5500,43 +5637,80 @@ async function showSourceViewer(id) {
   tableWrap.innerHTML = '';
   tableFooter.hidden = true;
   tableFooter.innerHTML = '';
+  revokeSrcViewerMedia();
+  mediaEl.hidden = true;
   if (tupleBar) { tupleBar.hidden = true; tupleBar._tuple = null; tupleBar._headers = null; tupleBar._src = null; }
   textEl.hidden = false;
   textEl.textContent = 'Loading…';
   modal.hidden = false;
   try {
     if (USER_SOURCES[id]) {
-      const text = await ensureSourceText(id);
-      const ext = (/\.([^.]+)$/.exec(src.name) || [])[1]?.toLowerCase();
-      const isTable = (src.kind === 'csv') || ext === 'csv' || ext === 'tsv';
-      if (isTable && text) {
-        const tableKind = ext === 'tsv' ? 'tsv' : 'csv';
-        const { html, rowCount, colCount, headers } = renderCsvTable(text, tableKind);
-        tableWrap.innerHTML = html;
-        tableFooter.innerHTML = `<span>${rowCount.toLocaleString()} rows · ${colCount} columns</span><span>${tableKind.toUpperCase()}</span>`;
-        textEl.hidden = true;
-        tableWrap.hidden = false;
-        tableFooter.hidden = false;
-        body.classList.add('is-table');
-        if (tupleBar) {
-          tupleBar.hidden = false;
-          tupleBar._headers = headers;
-          tupleBar._src = src;
-          resetCellTuple();
+      const kind = src.kind;
+      const hasText = src.has_text !== false;
+      const isMedia = kind === 'img' || kind === 'video' || kind === 'audio' || kind === 'pdf' || kind === 'bin' || !hasText;
+      if (isMedia) {
+        const blob = await storage.readSourceBlob(id, src.mime);
+        if (!blob) {
+          textEl.textContent = '(file bytes unavailable — this source may have been uploaded in a previous session without persistent storage.)';
+        } else {
+          _srcViewerMediaUrl = URL.createObjectURL(blob);
+          textEl.hidden = true;
+          mediaEl.hidden = false;
+          if (kind === 'img') {
+            mediaEl.innerHTML = `<img src="${_srcViewerMediaUrl}" alt="${escapeHtml(src.name)}">`;
+          } else if (kind === 'video') {
+            mediaEl.innerHTML = `<video src="${_srcViewerMediaUrl}" controls preload="metadata"></video>`;
+          } else if (kind === 'audio') {
+            mediaEl.innerHTML = `<audio src="${_srcViewerMediaUrl}" controls preload="metadata"></audio>`;
+          } else if (kind === 'pdf') {
+            mediaEl.innerHTML = `<iframe src="${_srcViewerMediaUrl}" title="${escapeHtml(src.name)}"></iframe>`;
+          } else {
+            const dl = _srcViewerMediaUrl;
+            const label = (src.mime || 'application/octet-stream') + ' · ' + humanSize(src.size || blob.size || 0);
+            mediaEl.innerHTML = `
+              <div class="src-viewer-binary">
+                <div class="bin-icon">${escapeHtml(label)}</div>
+                <div>No in-app preview for this file type.</div>
+                <a class="bin-download" href="${dl}" download="${escapeHtml(src.name)}">Download ${escapeHtml(src.name)}</a>
+              </div>
+            `;
+          }
         }
       } else {
-        textEl.textContent = text || '(empty file)';
+        const text = await ensureSourceText(id);
+        const ext = (/\.([^.]+)$/.exec(src.name) || [])[1]?.toLowerCase();
+        const isTable = (kind === 'csv') || ext === 'csv' || ext === 'tsv';
+        if (isTable && text) {
+          const tableKind = ext === 'tsv' ? 'tsv' : 'csv';
+          const { html, rowCount, colCount, headers } = renderCsvTable(text, tableKind);
+          tableWrap.innerHTML = html;
+          tableFooter.innerHTML = `<span>${rowCount.toLocaleString()} rows · ${colCount} columns</span><span>${tableKind.toUpperCase()}</span>`;
+          textEl.hidden = true;
+          tableWrap.hidden = false;
+          tableFooter.hidden = false;
+          body.classList.add('is-table');
+          if (tupleBar) {
+            tupleBar.hidden = false;
+            tupleBar._headers = headers;
+            tupleBar._src = src;
+            resetCellTuple();
+          }
+        } else {
+          textEl.textContent = text || '(empty file)';
+        }
       }
     } else {
       textEl.textContent = '(This is a built-in sample source — no raw text is stored. Upload your own file to view its contents.)';
     }
   } catch (err) {
     console.warn('[src-viewer] failed to load', err);
+    revokeSrcViewerMedia();
+    mediaEl.hidden = true;
     textEl.hidden = false;
     tableWrap.hidden = true;
     tableFooter.hidden = true;
     body.classList.remove('is-table');
-    textEl.textContent = '(failed to load source text)';
+    textEl.textContent = '(failed to load source)';
   }
 }
 
@@ -5623,7 +5797,10 @@ function wireCellTuple() {
     });
   }
 }
-function hideSourceViewer() { $('#src-viewer').hidden = true; }
+function hideSourceViewer() {
+  $('#src-viewer').hidden = true;
+  revokeSrcViewerMedia();
+}
 function wireSourceViewer() {
   $('#src-viewer-close').addEventListener('click', hideSourceViewer);
   $('#src-viewer-backdrop').addEventListener('click', hideSourceViewer);
@@ -5669,7 +5846,7 @@ async function uploadViaProveo(file, visibility, { title, description, redaction
   fd.append('data', file, file.name);
   fd.append('visibility', visibility);
   fd.append('kind', 'source');
-  fd.append('mime', file.type || 'text/plain');
+  fd.append('mime', file.type || 'application/octet-stream');
   fd.append('filename', file.name);
   fd.append('title', title || file.name);
   if (description) fd.append('description', description);
