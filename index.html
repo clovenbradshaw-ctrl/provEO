@@ -3339,6 +3339,10 @@
   }
   .clip-select-btn:hover { background: var(--color-background-tertiary); }
   .clip-select-btn .plus { color: var(--amber-text); font-weight: 700; }
+  .clip-select-btn-primary { background: var(--amber-text); color: #fff; font-weight: 600; }
+  .clip-select-btn-primary:hover { background: var(--amber-text); filter: brightness(0.95); }
+  .clip-select-btn-primary .plus { color: #fff; }
+  .clip-select-btn[hidden] { display: none; }
 
   .clip-drawer[hidden] { display: none; }
   .clip-drawer {
@@ -3818,6 +3822,9 @@
 </button>
 
 <div id="clip-select-pill" class="clip-select-pill" hidden>
+  <button class="clip-select-btn clip-select-btn-primary" id="clip-select-anchor" type="button" hidden>
+    <span class="plus">＋</span> Use as evidence
+  </button>
   <button class="clip-select-btn" id="clip-select-add" type="button">
     <span class="plus">＋</span> Save to clipboard
   </button>
@@ -8512,6 +8519,8 @@ function clipPositionPillFromIframe(iframe) {
   pill.hidden = false;
   pill.style.left = (frameRect.left + last.right) + 'px';
   pill.style.top  = (frameRect.top  + last.top)   + 'px';
+  const anchorBtn = $('#clip-select-anchor');
+  if (anchorBtn) anchorBtn.hidden = true;
 }
 
 function clipAddFromIframeSelection(iframe) {
@@ -8664,6 +8673,9 @@ function captureViewerTextSelection() {
   };
   drawerState.substate = 'confirm';
   renderDrawer();
+  clipHidePill();
+  try { sel.removeAllRanges(); } catch {}
+  hideSourceViewer();
 }
 
 /* Commit a cell selection (single → cell; multiple → derived with the
@@ -8685,6 +8697,8 @@ function captureViewerCellSelection() {
     };
     drawerState.substate = 'confirm';
     renderDrawer();
+    clipHidePill();
+    hideSourceViewer();
     return;
   }
   if (cells.length >= 2 && drawerState.derivedOp) {
@@ -8698,6 +8712,8 @@ function captureViewerCellSelection() {
     };
     drawerState.substate = 'confirm';
     renderDrawer();
+    clipHidePill();
+    hideSourceViewer();
   }
 }
 
@@ -11332,10 +11348,18 @@ function wireSourceViewer() {
     });
   }
 
-  // "Use selection" — commit whatever cell/op state the drawer has.
+  // "Use selection" — commit whatever cell/op or text selection the drawer has.
   const useBtn = $('#src-viewer-use');
   if (useBtn) {
-    useBtn.addEventListener('click', () => captureViewerCellSelection());
+    useBtn.addEventListener('click', () => {
+      const textEl = $('#src-viewer-text');
+      const sel = window.getSelection?.();
+      const hasText =
+        textEl && !textEl.hidden && sel && sel.rangeCount > 0 && !sel.isCollapsed
+        && textEl.contains(sel.getRangeAt(0).commonAncestorContainer);
+      if (hasText) captureViewerTextSelection();
+      else captureViewerCellSelection();
+    });
   }
 }
 
@@ -12876,6 +12900,13 @@ function clipPositionPill() {
   pill.hidden = false;
   pill.style.left = last.right + 'px';
   pill.style.top  = last.top + 'px';
+  const anchorBtn = $('#clip-select-anchor');
+  if (anchorBtn) {
+    const picking = drawerState && drawerState.active && drawerState.substate === 'target-picker';
+    const textEl = $('#src-viewer-text');
+    const inText = !!(textEl && !textEl.hidden && textEl.contains(el));
+    anchorBtn.hidden = !(picking && inText);
+  }
 }
 function clipHidePill() {
   const pill = $('#clip-select-pill');
@@ -12984,6 +13015,21 @@ function wireClipboard() {
     pendingSave = null;
     clipAddFromSelection();
   });
+
+  const anchorBtnEl = $('#clip-select-anchor');
+  if (anchorBtnEl) {
+    anchorBtnEl.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (pendingSave) {
+        const sel = window.getSelection?.();
+        if (sel && (sel.rangeCount === 0 || sel.isCollapsed)) {
+          try { sel.removeAllRanges(); sel.addRange(pendingSave.range); } catch {}
+        }
+      }
+      pendingSave = null;
+      captureViewerTextSelection();
+    });
+  }
 
   $('#clip-drawer-list').addEventListener('click', async (e) => {
     const actBtn = e.target.closest('[data-action]');
