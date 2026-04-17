@@ -2289,17 +2289,18 @@
       <div class="ws-section">
         <div class="ws-section-title">Sign in to Matrix</div>
         <div class="ws-section-sub">Uses <span style="font-family:var(--font-mono)">matrix-js-sdk</span> loaded from the browser. Credentials are kept in this device's local storage only.</div>
-        <div class="ws-form-row">
-          <label for="mx-hs">Homeserver</label>
-          <input id="mx-hs" class="ws-input" type="text" placeholder="https://matrix.org" value="https://matrix.org">
-        </div>
+        <div class="ws-section-sub">Need an account? Sign up at <a href="https://hyphae.social" target="_blank" rel="noopener noreferrer">hyphae.social</a>.</div>
         <div class="ws-form-row">
           <label for="mx-user">Username or Matrix ID</label>
-          <input id="mx-user" class="ws-input" type="text" placeholder="@alice:matrix.org or alice">
+          <input id="mx-user" class="ws-input" type="text" placeholder="@alice:hyphae.social or alice">
         </div>
         <div class="ws-form-row">
           <label for="mx-pass">Password</label>
           <input id="mx-pass" class="ws-input" type="password" placeholder="••••••••">
+        </div>
+        <div class="ws-form-row" id="mx-hs-row">
+          <label for="mx-hs">Homeserver</label>
+          <input id="mx-hs" class="ws-input" type="text" placeholder="https://matrix.org" value="https://matrix.org">
         </div>
         <div class="ws-btn-row">
           <button class="btn-sm btn-sm-primary" id="mx-login">Sign in</button>
@@ -6021,16 +6022,39 @@ function renderWorkspaceModal() {
   }
 }
 
+// Extract the server domain from a Matrix ID like `@alice:hyphae.social`
+// or `alice:hyphae.social`. Returns null if no domain is embedded.
+function extractServerFromUser(user) {
+  const m = (user || '').trim().match(/^@?[^\s:@/]+:([^\s:/]+\.[^\s:/]+)$/);
+  return m ? m[1] : null;
+}
+
+async function resolveHomeserver(user, hsField) {
+  const embedded = extractServerFromUser(user);
+  if (embedded) {
+    // Prefer `.well-known/matrix/client` discovery; fall back to https://<domain>.
+    const AD = window.matrixcs && window.matrixcs.AutoDiscovery;
+    if (AD && typeof AD.findClientConfig === 'function') {
+      try {
+        const cfg = await AD.findClientConfig(embedded);
+        const base = cfg && cfg['m.homeserver'] && cfg['m.homeserver'].base_url;
+        if (base) return base;
+      } catch {}
+    }
+    return `https://${embedded}`;
+  }
+  return (hsField || '').trim();
+}
+
 async function tryMatrixLogin() {
-  const hs = $('#mx-hs').value.trim();
   const user = $('#mx-user').value.trim();
   const pass = $('#mx-pass').value;
   const err = $('#mx-err');
   const status = $('#mx-login-status');
   err.hidden = true;
-  if (!hs || !user || !pass) {
+  if (!user || !pass) {
     err.hidden = false;
-    err.textContent = 'Homeserver, username, and password are required.';
+    err.textContent = 'Username and password are required.';
     return;
   }
   if (!matrixAvailable()) {
@@ -6039,6 +6063,21 @@ async function tryMatrixLogin() {
     return;
   }
   status.textContent = 'signing in…';
+  let hs;
+  try {
+    hs = await resolveHomeserver(user, $('#mx-hs').value);
+  } catch (e) {
+    err.hidden = false;
+    err.textContent = e.message || 'Could not discover the homeserver for this Matrix ID.';
+    status.textContent = '';
+    return;
+  }
+  if (!hs) {
+    err.hidden = false;
+    err.textContent = 'Enter a Matrix ID like @alice:hyphae.social, or provide a homeserver.';
+    status.textContent = '';
+    return;
+  }
   try {
     await matrixLoginWithPassword(hs, user, pass);
     status.textContent = '';
@@ -6067,7 +6106,17 @@ function wireWorkspace() {
     if (e.key === 'Escape' && !$('#ws-modal').hidden) closeWorkspaceModal();
   });
   $('#mx-login').addEventListener('click', tryMatrixLogin);
-  $('#mx-pass').addEventListener('keydown', (e) => { if (e.key === 'Enter') tryMatrixLogin(); });
+  const hsRow = $('#mx-hs-row');
+  const syncHsVisibility = () => {
+    if (!hsRow) return;
+    hsRow.hidden = !!extractServerFromUser($('#mx-user').value);
+  };
+  $('#mx-user').addEventListener('input', syncHsVisibility);
+  syncHsVisibility();
+  const submitOnEnter = (e) => { if (e.key === 'Enter') tryMatrixLogin(); };
+  $('#mx-user').addEventListener('keydown', submitOnEnter);
+  $('#mx-pass').addEventListener('keydown', submitOnEnter);
+  $('#mx-hs').addEventListener('keydown', submitOnEnter);
   $('#mx-logout').addEventListener('click', async () => {
     if (!confirm('Sign out of Matrix? Uploaded sources stay on this device.')) return;
     await matrixLogout();
