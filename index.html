@@ -4620,10 +4620,35 @@ const storage = (() => {
     }
   }
 
+  // ---- Entity resolution table (Phase 8, Task 27) ----
+  // entities.json maps canonical IDs to surface forms + types. Fold reads
+  // this at projection time so alias edits propagate without re-ingest.
+  let memEntities = null;
+  async function readEntities() {
+    if (!available) return memEntities;
+    try {
+      const fh = await getFile('entities.json', true);
+      const f = await fh.getFile();
+      const t = await f.text();
+      return t ? JSON.parse(t) : null;
+    } catch {
+      return null;
+    }
+  }
+  async function saveEntities(obj) {
+    const serialized = JSON.stringify(obj, null, 2);
+    if (!available) { memEntities = JSON.parse(serialized); return; }
+    const fh = await getFile('entities.json', true);
+    const w = await fh.createWritable();
+    await w.write(serialized);
+    await w.close();
+  }
+
   return {
     init, append, readAll, seedMarkerExists, setSeedMarker,
     saveSource, saveSourceBlob, readSource, readSourceBlob, deleteSource,
     saveArticle, readArticle,
+    readEntities, saveEntities,
     get available() { return available; }
   };
 })();
@@ -4639,6 +4664,125 @@ async function appendEvent(e) {
   return full;
 }
 
+/* ======================================================================
+   ENTITY RESOLUTION TABLE (Phase 8, Task 27)
+   ----------------------------------------------------------------------
+   entities.json lives on OPFS at /entities.json. Each canonical ID
+   ('org:solaren_intl', 'person:d_ellwood', …) carries a type, a
+   canonical surface form, an alias list, and optional foreign keys
+   matching a src:col coordinate to known values. Resolution is
+   performed by the fold worker at projection time (NOT at ingest),
+   so edits to this table propagate on the next refold without
+   re-ingesting any source.
+====================================================================== */
+
+// Seed resolution rules hand-authored for the demo corpus. First run
+// bootstraps entities.json with these; user edits thereafter persist.
+const SEED_ENTITIES = {
+  'org:ndp': {
+    type: 'ORG',
+    canonical: 'Nashville Downtown Partnership',
+    aliases: [
+      'Nashville Downtown Partnership',
+      'Downtown Partnership',
+      'NDP',
+      'the Partnership',
+      'Partnership'
+    ],
+    foreign_keys: {}
+  },
+  'org:solaren_intl': {
+    type: 'ORG',
+    canonical: 'Solaren International',
+    aliases: [
+      'Solaren International',
+      'Solaren Intl.',
+      'Solaren Intl., LLC',
+      'Solaren Risk Management',
+      'Solaren'
+    ],
+    foreign_keys: {}
+  },
+  'org:ohs': {
+    type: 'ORG',
+    canonical: 'Office of Homeless Services',
+    aliases: [
+      'Office of Homeless Services',
+      'OHS',
+      'Metro OHS'
+    ],
+    foreign_keys: {}
+  },
+  'org:metro_finance': {
+    type: 'ORG',
+    canonical: 'Metro Finance',
+    aliases: ['Metro Finance', 'Nashville Metro Finance'],
+    foreign_keys: {}
+  },
+  'person:d_ellwood': {
+    type: 'PERSON',
+    canonical: 'David Ellwood',
+    aliases: ['David Ellwood', 'Ellwood', 'President Ellwood'],
+    foreign_keys: {}
+  }
+};
+
+// In-memory mirror. Loaded on boot from OPFS; every save writes through.
+let ENTITIES = {};
+
+async function ensureEntitiesSeeded() {
+  const existing = await storage.readEntities();
+  if (existing && Object.keys(existing).length) {
+    ENTITIES = existing;
+    return;
+  }
+  ENTITIES = JSON.parse(JSON.stringify(SEED_ENTITIES));
+  await storage.saveEntities(ENTITIES);
+  console.log(`[entities] seeded ${Object.keys(ENTITIES).length} resolution rules`);
+}
+
+async function saveEntitiesTable() {
+  await storage.saveEntities(ENTITIES);
+}
+
+async function addEntityAlias(entityId, alias) {
+  const norm = (alias || '').trim();
+  if (!norm) return;
+  const e = ENTITIES[entityId];
+  if (!e) throw new Error(`unknown entity: ${entityId}`);
+  if (!e.aliases.includes(norm)) e.aliases.push(norm);
+  await saveEntitiesTable();
+  await appendEventAndRefold({
+    op: 'REC',
+    site: `entity:${entityId}`,
+    resolution: 'Figure',
+    payload: {
+      action: 'add_alias',
+      alias: norm,
+      entity_id: entityId
+    },
+    author: 'human'
+  });
+}
+
+async function removeEntityAlias(entityId, alias) {
+  const e = ENTITIES[entityId];
+  if (!e) return;
+  e.aliases = e.aliases.filter(a => a !== alias);
+  await saveEntitiesTable();
+  await appendEventAndRefold({
+    op: 'REC',
+    site: `entity:${entityId}`,
+    resolution: 'Figure',
+    payload: {
+      action: 'remove_alias',
+      alias,
+      entity_id: entityId
+    },
+    author: 'human'
+  });
+}
+
 /* ---------- Fold worker — runs on a blob URL ---------- */
 /* The fold here is Phase A: it only handles claim-status mutations.
    All the provenance-producing events (SIG/INS/CON/DEF for source
@@ -4649,7 +4793,7 @@ async function appendEvent(e) {
    from parts. */
 const FOLD_WORKER_SRC = `
 self.addEventListener('message', (ev) => {
-  const { type, events } = ev.data;
+  const { type, events, entities } = ev.data;
   if (type !== 'fold') return;
 
   // Three projected views per the EO split:
@@ -4662,6 +4806,13 @@ self.addEventListener('message', (ev) => {
   const S = {};
   const claims = {};
   const sources = {};
+  const entityIndex = {}; // entity_id -> [obsId, ...] (only resolved, non-retracted OBS)
+
+  // Entity mentions (Phase 8, Task 28) are synthesized at projection time
+  // from OBS entries with mode 'ner' | 'coref' | 'rule', resolved against
+  // the caller-supplied entities table. They are NOT log events — rule
+  // edits propagate on the next fold without re-ingesting sources.
+  const mentions = {}; // mentionId -> M-entry shape
 
   for (const raw of events) {
     let evt;
@@ -4671,16 +4822,48 @@ self.addEventListener('message', (ev) => {
     // location at this time. The atomic unit of provenance.
     if (evt.op === 'OBS' && evt.site && evt.site.startsWith('observation:')) {
       const obsId = evt.site.slice('observation:'.length);
+      const p = evt.payload || {};
+      const mode = p.mode || 'direct_read';
+      // Any machine-authored mode — NER, coref, rule-driven — carries an
+      // agent_kind='model' flag so downstream filters can separate derived
+      // signal from human reads. agent is the model identifier string.
+      const agentKind = (mode === 'ner' || mode === 'coref' || mode === 'rule')
+        ? 'model'
+        : (typeof p.agent === 'string' && p.agent.startsWith('model:') ? 'model' : 'human');
       G[obsId] = {
         id: obsId,
         ts: evt.ts,
-        agent: evt.payload && evt.payload.agent,
-        mode: (evt.payload && evt.payload.mode) || 'direct_read',
-        source_id: evt.payload && evt.payload.source_id,
-        location: evt.payload && evt.payload.location,
-        content: evt.payload && evt.payload.content,
-        context: (evt.payload && evt.payload.context) || null
+        agent: p.agent,
+        agent_kind: agentKind,
+        mode,
+        source_id: p.source_id,
+        location: p.location,
+        content: p.content,
+        entity_type: p.entity_type || null,
+        context: p.context || null,
+        retracted: false,
+        sigma: []
       };
+      continue;
+    }
+
+    // REC on an observation — retract a derived OBS. The entry stays in
+    // G (the log is append-only) but is flagged so entity synthesis
+    // skips it. Misclassified NER hits are corrected exactly like
+    // user-authored claims. (Task 29)
+    if (evt.op === 'REC' && evt.site && evt.site.startsWith('observation:')) {
+      const id = evt.site.slice('observation:'.length);
+      if (!G[id]) continue;
+      const s = evt.payload && evt.payload.new_status;
+      if (s === 'retracted') G[id].retracted = true;
+      G[id].sigma.push({
+        op: 'REC',
+        event_id: evt.id,
+        action: evt.payload && evt.payload.action,
+        new_status: s,
+        supersedes: (evt.payload && evt.payload.supersedes) || [],
+        ts: evt.ts
+      });
       continue;
     }
 
@@ -4854,7 +5037,89 @@ self.addEventListener('message', (ev) => {
     }
   }
 
-  self.postMessage({ type: 'state', claims, sources, G, M, S });
+  // ---------- Entity resolution (Phase 8, Task 27 + 28) ----------
+  // Walk G for derived NER/coref/rule observations. Match each against
+  // the resolution table by alias (case-insensitive). On match, synthesize
+  // an entity_mention M-entry. Retracted OBS are skipped. Unresolved OBS
+  // remain bare observations; the UI can offer a suggest-alias action.
+  if (entities && typeof entities === 'object') {
+    // Pre-build an alias lookup: lowercase surface -> entity_id.
+    // Longest aliases first so "Solaren Risk Management" beats "Solaren".
+    const aliasPairs = [];
+    for (const [eid, e] of Object.entries(entities)) {
+      if (!e || !Array.isArray(e.aliases)) continue;
+      for (const a of e.aliases) {
+        if (typeof a === 'string' && a.trim()) {
+          aliasPairs.push({ alias: a.trim().toLowerCase(), entity_id: eid, type: e.type });
+        }
+      }
+    }
+    aliasPairs.sort((x, y) => y.alias.length - x.alias.length);
+    const byAlias = new Map();
+    for (const p of aliasPairs) {
+      if (!byAlias.has(p.alias)) byAlias.set(p.alias, p);
+    }
+
+    for (const [obsId, g] of Object.entries(G)) {
+      if (g.retracted) continue;
+      if (!(g.mode === 'ner' || g.mode === 'coref' || g.mode === 'rule')) continue;
+      if (!g.content || typeof g.content !== 'string') continue;
+      const key = g.content.trim().toLowerCase();
+      let hit = byAlias.get(key);
+      // Foreign-key resolution (Task 27): CSV cell obs can resolve via a
+      // src:col coordinate if the entity table lists this value there.
+      if (!hit && g.location && g.location.col != null && g.source_id && sources[g.source_id]) {
+        const srcName = sources[g.source_id].name || '';
+        for (const [eid, e] of Object.entries(entities)) {
+          const fks = e && e.foreign_keys;
+          if (!fks) continue;
+          const fkKey = srcName + ':' + g.location.col;
+          const vals = fks[fkKey];
+          if (Array.isArray(vals) && vals.includes(g.content)) {
+            hit = { alias: key, entity_id: eid, type: e.type };
+            break;
+          }
+        }
+      }
+      if (!hit) continue;
+
+      // Synthesize an entity_mention claim. Site prefix entity_mention:
+      // keeps it distinct from user-authored grounded claims.
+      const mentionId = 'em_' + obsId;
+      const src = sources[g.source_id] || {};
+      const locLabel = g.location
+        ? (g.location.start != null
+            ? ('offset ' + g.location.start + '–' + g.location.end)
+            : (g.location.row != null ? ('row ' + g.location.row + ' · ' + g.location.col) : ''))
+        : '';
+      const mention = {
+        id: mentionId,
+        derived: true,
+        type: 'entity_mention',
+        ts: g.ts,
+        entity_id: hit.entity_id,
+        entity_type: entities[hit.entity_id] ? entities[hit.entity_id].type : hit.type,
+        canonical: entities[hit.entity_id] ? entities[hit.entity_id].canonical : null,
+        surface: g.content,
+        conf: 0.85,
+        pi: [obsId],
+        position: g.context || null,
+        source_id: g.source_id,
+        source_name: src.name || null,
+        location: g.location,
+        location_label: locLabel,
+        trace: [
+          { op: 'OBS', txt: '[' + g.mode + '] ' + (g.agent || 'model') + ' read "' + g.content + '"' + (src.name ? ' in ' + src.name : '') },
+          { op: 'CLAIM', txt: 'entity_mention resolved to ' + hit.entity_id }
+        ]
+      };
+      M[mentionId] = mention;
+      mentions[mentionId] = mention;
+      (entityIndex[hit.entity_id] = entityIndex[hit.entity_id] || []).push(obsId);
+    }
+  }
+
+  self.postMessage({ type: 'state', claims, sources, G, M, S, mentions, entityIndex });
 });
 `;
 
@@ -4869,7 +5134,9 @@ function getFoldWorker() {
 
 /* Kicks off a fold; resolves with the three EO views plus the
    render-ready claim projection. G = observations (Given-Log),
-   M = interpretations (Meant-Graph), S = positional lattice. */
+   M = interpretations (Meant-Graph), S = positional lattice.
+   Also carries entity_mention projections and the entity_id → obsId
+   index synthesized at projection time. */
 async function fold() {
   const events = await storage.readAll();
   const worker = getFoldWorker();
@@ -4882,12 +5149,14 @@ async function fold() {
           sources: ev.data.sources || {},
           G: ev.data.G || {},
           M: ev.data.M || {},
-          S: ev.data.S || {}
+          S: ev.data.S || {},
+          mentions: ev.data.mentions || {},
+          entityIndex: ev.data.entityIndex || {}
         });
       }
     };
     worker.addEventListener('message', onMsg);
-    worker.postMessage({ type: 'fold', events });
+    worker.postMessage({ type: 'fold', events, entities: ENTITIES });
     setTimeout(() => { worker.removeEventListener('message', onMsg); reject(new Error('fold timeout')); }, 5000);
   });
 }
@@ -4897,6 +5166,10 @@ async function fold() {
 let G_VIEW = {};
 let M_VIEW = {};
 let S_VIEW = {};
+// Entity mention projections, synthesized from G + the resolution table.
+// Keyed by mentionId. entityIndex: entity_id -> [obsId, ...].
+let MENTIONS = {};
+let ENTITY_INDEX = {};
 
 /* Convenience: append an event then refold and install into CLAIMS + USER_SOURCES */
 async function appendEventAndRefold(e) {
@@ -4907,6 +5180,8 @@ async function appendEventAndRefold(e) {
   G_VIEW = state.G;
   M_VIEW = state.M;
   S_VIEW = state.S;
+  MENTIONS = state.mentions || {};
+  ENTITY_INDEX = state.entityIndex || {};
 }
 
 /* ---------- Seed on first run ---------- */
@@ -5151,6 +5426,168 @@ function isTextLike(name, mime = '') {
   return k === 'txt' || k === 'csv';
 }
 
+/* ======================================================================
+   NER ANNOTATION HOOK (Phase 8, Tasks 25 + 26)
+   ----------------------------------------------------------------------
+   PROVeo may return an `entities` array alongside its upload response.
+   Each annotation is an atomic observation: a model read this span and
+   recognized it as an entity of a type. We trust the annotations and
+   emit them as derived OBS events into the log — same machinery as
+   human reads, distinguished by mode ('ner' | 'coref' | 'rule') and
+   agent string ('model:<name>@<version>').
+
+   Annotation shape (text sources):
+     { span: { start, end }, surface, type, model, model_version, ... }
+   Annotation shape (CSV/TSV):
+     { row, col, surface, type, model, model_version, ... }
+
+   When a remote NER returns nothing (or upload is local-only), we fall
+   back to a small client-side heuristic that scans for known aliases
+   from entities.json plus MONEY/DATE regexes. The fallback is tagged
+   with agent 'model:local_heuristic@1' so it's unambiguous downstream.
+====================================================================== */
+
+function normalizeAnnotations(raw, fallback) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const a of raw) {
+    if (!a || typeof a !== 'object') continue;
+    const surface = a.surface || a.text || a.content;
+    if (!surface) continue;
+    let location = null;
+    if (a.span && typeof a.span === 'object' && a.span.start != null && a.span.end != null) {
+      location = { start: a.span.start, end: a.span.end };
+    } else if (a.start != null && a.end != null) {
+      location = { start: a.start, end: a.end };
+    } else if (a.row != null && a.col != null) {
+      location = { row: a.row, col: a.col };
+    }
+    if (!location) continue;
+    out.push({
+      surface: String(surface),
+      type: a.type || 'UNK',
+      mode: a.mode || fallback.mode || 'ner',
+      model: a.model || fallback.model || 'unknown',
+      model_version: a.model_version || fallback.model_version || '0',
+      location
+    });
+  }
+  return out;
+}
+
+// Simple heuristic: scan text against the current entities.json alias
+// list plus regexes for MONEY and DATE. Dedupes overlapping spans by
+// preferring the longest non-overlapping match. Returns the same shape
+// as PROVeo would.
+const MONEY_RE = /\$[\d,]+(?:\.\d+)?\s*(?:million|billion|thousand|k|m|b)?/gi;
+const DATE_RE = /\b(?:(?:19|20)\d{2}(?:-\d{2}-\d{2})?|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s*(?:19|20)?\d{2})\b/g;
+
+function localHeuristicNer(text) {
+  if (!text || typeof text !== 'string') return [];
+  const hits = [];
+  const lower = text.toLowerCase();
+  const seen = new Set();
+  const pushSpan = (start, end, surface, type) => {
+    const key = start + ':' + end;
+    if (seen.has(key)) return;
+    seen.add(key);
+    hits.push({ span: { start, end }, surface, type });
+  };
+  // Alias scan — longest first so multi-word aliases win.
+  const aliasList = [];
+  for (const e of Object.values(ENTITIES)) {
+    if (!e || !Array.isArray(e.aliases)) continue;
+    for (const a of e.aliases) {
+      if (typeof a === 'string' && a.trim()) aliasList.push({ alias: a.trim(), type: e.type });
+    }
+  }
+  aliasList.sort((a, b) => b.alias.length - a.alias.length);
+  for (const { alias, type } of aliasList) {
+    const needle = alias.toLowerCase();
+    let idx = 0;
+    while ((idx = lower.indexOf(needle, idx)) !== -1) {
+      // Word-boundary check: previous and next char must not be a letter/digit.
+      const prev = idx > 0 ? text[idx - 1] : ' ';
+      const next = idx + needle.length < text.length ? text[idx + needle.length] : ' ';
+      const boundaryOk = !/[A-Za-z0-9]/.test(prev) && !/[A-Za-z0-9]/.test(next);
+      if (boundaryOk) {
+        pushSpan(idx, idx + needle.length, text.slice(idx, idx + needle.length), type);
+      }
+      idx += needle.length;
+    }
+  }
+  // MONEY + DATE regex.
+  for (const [re, type] of [[MONEY_RE, 'MONEY'], [DATE_RE, 'DATE']]) {
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      pushSpan(m.index, m.index + m[0].length, m[0], type);
+    }
+  }
+  // Drop spans contained by a longer one at the same boundary.
+  hits.sort((a, b) => a.span.start - b.span.start || b.span.end - a.span.end);
+  const pruned = [];
+  for (const h of hits) {
+    const last = pruned[pruned.length - 1];
+    if (last && h.span.start < last.span.end) continue;
+    pruned.push(h);
+  }
+  return pruned;
+}
+
+// Emit an OBS event per annotation. Returns the number emitted so the
+// caller can surface a count. Caller is responsible for refolding after.
+async function emitDerivedObsForAnnotations(annotations, { sourceId, position }) {
+  if (!Array.isArray(annotations) || !annotations.length) return 0;
+  let n = 0;
+  for (const a of annotations) {
+    const obsId = 'o_' + ulid().slice(-10);
+    await appendEvent({
+      op: 'OBS',
+      site: `observation:${obsId}`,
+      resolution: 'Figure',
+      payload: {
+        agent: `model:${a.model}@${a.model_version}`,
+        mode: a.mode || 'ner',
+        source_id: sourceId,
+        location: a.location,
+        content: a.surface,
+        entity_type: a.type,
+        context: {
+          workspace: (position && position.workspace) || 'local',
+          derived_from: 'proveo_ingest'
+        }
+      },
+      author: 'system'
+    });
+    n++;
+  }
+  return n;
+}
+
+// Extract entities from whatever channels are available, in order:
+//   1. PROVeo webhook response.entities (backend-authoritative)
+//   2. Local heuristic scan over the source text
+// The annotation origin is preserved in the agent string so downstream
+// readers never conflate backend NER with the local fallback.
+function resolveAnnotationsForSource(proveoResponse, text, kind) {
+  const fromWebhook = proveoResponse && Array.isArray(proveoResponse.entities)
+    ? normalizeAnnotations(proveoResponse.entities, { mode: 'ner', model: 'proveo', model_version: '1' })
+    : [];
+  if (fromWebhook.length) return fromWebhook;
+  // Local fallback is text-only. CSV heuristic would need a header-aware
+  // parse; skip for now and wait for a backend annotation.
+  if (kind === 'txt' || kind === 'pdf') {
+    const local = localHeuristicNer(text || '');
+    return normalizeAnnotations(local, {
+      mode: 'ner',
+      model: 'local_heuristic',
+      model_version: '1'
+    });
+  }
+  return [];
+}
+
 async function handleUpload(files) {
   const list = Array.from(files || []);
   if (!list.length) return;
@@ -5240,7 +5677,7 @@ async function handleUpload(files) {
         await storage.saveSourceBlob(id, blob);
       }
 
-      await appendEventAndRefold({
+      await appendEvent({
         op: 'SRC',
         site: `source:${id}`,
         resolution: 'Figure',
@@ -5262,7 +5699,32 @@ async function handleUpload(files) {
         },
         author: 'human'
       });
+
+      // Derived NER observations (Phase 8, Tasks 25 + 26).
+      // Backend-authoritative when PROVeo returns entities; otherwise
+      // a local heuristic scan. Either way the OBS events are tagged
+      // with agent=model:<name>@<version> so downstream never mistakes
+      // derived reads for human reads.
+      const annotations = resolveAnnotationsForSource(proveo, text, kind);
+      await emitDerivedObsForAnnotations(annotations, {
+        sourceId: id,
+        position: { workspace: matrix.activeRoomId || 'local' }
+      });
+
+      // Single refold after SRC + any derived OBS — keeps the projected
+      // state coherent (resolution can't see OBS that were filed after
+      // this SRC's refold point).
+      const state = await fold();
+      CLAIMS = state.claims;
+      USER_SOURCES = state.sources;
+      G_VIEW = state.G; M_VIEW = state.M; S_VIEW = state.S;
+      MENTIONS = state.mentions || {};
+      ENTITY_INDEX = state.entityIndex || {};
+
       added++;
+      if (annotations.length) {
+        console.log(`[entities] ${file.name}: ${annotations.length} annotations emitted`);
+      }
     } catch (err) {
       console.error('[upload] failed for', file.name, err);
       showToast(`upload failed: ${err.message || 'unknown error'}`);
@@ -5406,7 +5868,7 @@ async function handleAutoArchiveUpload(files) {
       } else {
         await storage.saveSourceBlob(id, file);
       }
-      await appendEventAndRefold({
+      await appendEvent({
         op: 'SRC',
         site: `source:${id}`,
         resolution: 'Figure',
@@ -5425,7 +5887,24 @@ async function handleAutoArchiveUpload(files) {
         },
         author: 'human'
       });
+
+      const annotations = resolveAnnotationsForSource(proveo, localText, kind);
+      await emitDerivedObsForAnnotations(annotations, {
+        sourceId: id,
+        position: { workspace: matrix.activeRoomId || 'local' }
+      });
+
+      const state = await fold();
+      CLAIMS = state.claims;
+      USER_SOURCES = state.sources;
+      G_VIEW = state.G; M_VIEW = state.M; S_VIEW = state.S;
+      MENTIONS = state.mentions || {};
+      ENTITY_INDEX = state.entityIndex || {};
+
       added++;
+      if (annotations.length) {
+        console.log(`[entities] ${file.name}: ${annotations.length} annotations emitted`);
+      }
     } catch (err) {
       console.error('[auto-archive] failed for', file.name, err);
       showToast(`archive failed: ${file.name} · ${err.message || 'error'}`);
@@ -9406,9 +9885,13 @@ async function init() {
 
   await storage.init();
   await seedIfNeeded();
+  await ensureEntitiesSeeded();
   const state = await fold();
   CLAIMS = state.claims;
   USER_SOURCES = state.sources;
+  G_VIEW = state.G; M_VIEW = state.M; S_VIEW = state.S;
+  MENTIONS = state.mentions || {};
+  ENTITY_INDEX = state.entityIndex || {};
 
   renderSources();
 
@@ -9466,6 +9949,7 @@ async function init() {
       try { await root.removeEntry('state', { recursive: true }); } catch {}
       try { await root.removeEntry('sources', { recursive: true }); } catch {}
       try { await root.removeEntry('article.html'); } catch {}
+      try { await root.removeEntry('entities.json'); } catch {}
     }
     location.reload();
   });
@@ -9479,9 +9963,42 @@ async function init() {
     },
     CLAIMS: () => CLAIMS,
     SOURCES: () => ({ seed: SOURCES, user: USER_SOURCES }),
+    G: () => G_VIEW,
+    M: () => M_VIEW,
+    S: () => S_VIEW,
+    ENTITIES: () => ENTITIES,
+    MENTIONS: () => MENTIONS,
+    ENTITY_INDEX: () => ENTITY_INDEX,
+    // Return every OBS for a given entity id (non-retracted ones).
+    mentionsOf: (entityId) => {
+      const ids = ENTITY_INDEX[entityId] || [];
+      return ids.map(id => G_VIEW[id]).filter(Boolean);
+    },
+    addAlias: addEntityAlias,
+    removeAlias: removeEntityAlias,
+    // Retract a derived OBS. Phase 9 surfaces this via the entity
+    // profile (§34); for now it's exposed so the fold pathway can be
+    // exercised from the console.
+    retractObs: async (obsId, reason) => {
+      await appendEventAndRefold({
+        op: 'REC',
+        site: `observation:${obsId}`,
+        resolution: 'Figure',
+        payload: {
+          action: 'retract',
+          new_status: 'retracted',
+          reason: reason || null
+        },
+        author: 'human'
+      });
+      console.log(`retracted observation:${obsId}`);
+      return MENTIONS;
+    },
     refold: async () => {
       const s = await fold();
       CLAIMS = s.claims; USER_SOURCES = s.sources;
+      G_VIEW = s.G; M_VIEW = s.M; S_VIEW = s.S;
+      MENTIONS = s.mentions || {}; ENTITY_INDEX = s.entityIndex || {};
       renderSources(); renderCounts();
       console.log('refolded'); return s;
     }
