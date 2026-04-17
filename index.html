@@ -459,6 +459,163 @@
     background: var(--color-border-tertiary);
     margin: 0 4px;
   }
+  /* Font-size selector — matches the rest of the toolbar. */
+  .tbtn-select-wrap {
+    display: inline-flex;
+    align-items: center;
+    height: 28px;
+  }
+  .tbtn-select {
+    background: transparent;
+    border: 0.5px solid transparent;
+    color: var(--color-text-secondary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    height: 28px;
+    padding: 0 4px;
+    border-radius: 3px;
+    cursor: pointer;
+    min-width: 74px;
+    transition: background 0.1s, color 0.1s, border-color 0.1s;
+  }
+  .tbtn-select:hover {
+    background: var(--color-bg-secondary, rgba(0,0,0,0.04));
+    color: var(--color-text-primary);
+    border-color: var(--color-border-tertiary);
+  }
+  .tbtn-select:focus {
+    outline: none;
+    border-color: var(--color-border-secondary);
+    color: var(--color-text-primary);
+  }
+  /* Text-color / highlight-color triggers + popovers. */
+  .tbtn-color-wrap { position: relative; display: inline-flex; }
+  .tbtn-color {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 6px;
+  }
+  .tbtn-color-label {
+    font-family: var(--font-serif);
+    font-weight: 700;
+    font-size: 12px;
+    line-height: 1;
+  }
+  .tbtn-color-chip {
+    width: 12px;
+    height: 4px;
+    border-radius: 1px;
+    background: var(--amber-mid);
+    display: inline-block;
+  }
+  .tbtn-caret {
+    font-size: 9px;
+    line-height: 1;
+    opacity: 0.55;
+  }
+  .tbtn-palette {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 50;
+    background: var(--color-bg, #fafaf7);
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: 6px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+    padding: 8px;
+    display: grid;
+    grid-template-columns: repeat(8, 18px);
+    gap: 4px;
+  }
+  .tbtn-palette[hidden] { display: none; }
+  .tbtn-swatch {
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+    border: 0.5px solid var(--color-border-tertiary);
+    cursor: pointer;
+    padding: 0;
+    transition: transform 0.08s, border-color 0.08s;
+  }
+  .tbtn-swatch:hover { transform: scale(1.15); border-color: var(--color-text-primary); }
+  .tbtn-swatch[data-value=""] {
+    background:
+      linear-gradient(to bottom right, transparent calc(50% - 0.5px), var(--red-mid) calc(50% - 0.5px), var(--red-mid) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+      var(--color-bg);
+  }
+
+  /* Find & replace bar */
+  .find-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    margin-bottom: 8px;
+    background: var(--color-background-secondary);
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: 6px;
+    flex-wrap: wrap;
+  }
+  .find-bar[hidden] { display: none; }
+  .find-input {
+    flex: 1;
+    min-width: 120px;
+    background: var(--color-bg, #fafaf7);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: 3px;
+    padding: 4px 8px;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    color: var(--color-text-primary);
+    height: 26px;
+  }
+  .find-input:focus { outline: none; border-color: var(--color-border-secondary); }
+  .find-count {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-text-secondary);
+    min-width: 48px;
+    text-align: center;
+  }
+  .find-btn {
+    background: transparent;
+    border: 0.5px solid var(--color-border-tertiary);
+    color: var(--color-text-secondary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    height: 26px;
+    transition: background 0.1s, color 0.1s, border-color 0.1s;
+  }
+  .find-btn:hover {
+    background: var(--color-bg, #fafaf7);
+    color: var(--color-text-primary);
+    border-color: var(--color-border-secondary);
+  }
+  .find-btn.find-close {
+    margin-left: 4px;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .find-sep {
+    width: 1px;
+    height: 18px;
+    background: var(--color-border-tertiary);
+    margin: 0 2px;
+  }
+  .find-replace-input { flex: 1; min-width: 120px; }
+  /* Highlight the active/other matches in the article body. */
+  .find-mark {
+    background: rgba(220, 170, 60, 0.28);
+    border-radius: 2px;
+  }
+  .find-mark.find-mark-current {
+    background: rgba(220, 170, 60, 0.65);
+    outline: 1px solid var(--amber-mid);
+  }
   .tbar-status {
     margin-left: auto;
     font-family: var(--font-mono);
@@ -549,6 +706,23 @@
   }
   .g:hover, .g.active {
     background: var(--amber-fill);
+  }
+  /* Pasted-with-provenance spans read as plain text. The chain is still
+     attached (data-proveo-provenance + data-id), the click handler still
+     opens the inspector, and the entry shows up in the activity log — but
+     the body copy is not decorated. Hover reveals a subtle cue so users
+     who mouse over it still discover the affordance. */
+  .g.g-paste {
+    border-bottom: 0;
+    padding: 0;
+  }
+  .g.g-paste:hover {
+    background: var(--amber-fill);
+    box-shadow: inset 0 -1px 0 var(--amber-mid);
+  }
+  .g.g-paste.active {
+    background: var(--amber-fill);
+    box-shadow: inset 0 -2px 0 var(--amber-mid);
   }
   .conflict {
     border-bottom: 2px dashed var(--red-mid);
@@ -918,10 +1092,19 @@
   .rp-empty {
     flex: 1;
     display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+  }
+  .rp-empty-hint {
+    display: flex;
     align-items: center;
     justify-content: center;
-    padding: 28px;
+    text-align: center;
+    padding: 28px 24px 20px;
+    flex-shrink: 0;
   }
+  .rp-empty-hint.compact { padding: 14px 16px 8px; }
   .rp-empty-inner { text-align: center; }
   .rp-empty-glyph {
     font-size: 32px;
@@ -930,11 +1113,132 @@
     font-family: var(--font-mono);
     line-height: 1;
   }
+  .rp-empty-hint.compact .rp-empty-glyph {
+    font-size: 20px;
+    margin-bottom: 6px;
+  }
   .rp-empty-text {
     font-size: 12px;
     color: var(--color-text-secondary);
     line-height: 1.55;
   }
+  .rp-empty-hint.compact .rp-empty-text { font-size: 11px; }
+
+  /* Activity log — shows every paste-with-provenance so users can get
+     back to the source even though the pasted text reads as plain body
+     copy. Entries click through to the provenance inspector. */
+  .activity-log {
+    display: flex;
+    flex-direction: column;
+    border-top: 0.5px solid var(--color-border-tertiary);
+    flex: 1;
+    min-height: 0;
+  }
+  .activity-log-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px 8px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+  }
+  .activity-log-count {
+    background: var(--color-background-secondary);
+    padding: 1px 6px;
+    border-radius: 8px;
+    color: var(--color-text-secondary);
+    font-size: 9.5px;
+  }
+  .activity-log-clear {
+    background: transparent;
+    border: 0.5px solid var(--color-border-tertiary);
+    color: var(--color-text-secondary);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .activity-log-clear:hover {
+    color: var(--color-text-primary);
+    border-color: var(--color-border-secondary);
+  }
+  .activity-log-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 8px 12px;
+  }
+  .activity-log-empty {
+    padding: 8px 14px 14px;
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    font-style: italic;
+  }
+  .activity-item {
+    display: flex;
+    gap: 10px;
+    padding: 9px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.1s;
+    border-left: 2px solid transparent;
+    align-items: flex-start;
+  }
+  .activity-item:hover {
+    background: var(--color-background-secondary);
+    border-left-color: var(--amber-mid);
+  }
+  .activity-item.active {
+    background: var(--amber-fill);
+    border-left-color: var(--amber-mid);
+  }
+  .activity-item-icon {
+    font-size: 13px;
+    line-height: 1.4;
+    flex-shrink: 0;
+    opacity: 0.65;
+  }
+  .activity-item-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .activity-item-text {
+    font-size: 12px;
+    color: var(--color-text-primary);
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .activity-item-meta {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-text-secondary);
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .activity-item-src {
+    color: var(--amber-text);
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 140px;
+  }
+  .activity-item-sep { opacity: 0.4; }
+  .activity-item-time { color: var(--color-text-tertiary); }
   .rp-content {
     display: none;
     flex-direction: column;
@@ -3107,20 +3411,51 @@
       <div class="center">
         <div class="editor-wrap">
           <div class="editor-toolbar" id="editor-toolbar" role="toolbar" aria-label="Formatting">
+            <div class="tbtn-select-wrap" title="Font size">
+              <select class="tbtn-select" id="tbtn-fontsize" aria-label="Font size">
+                <option value="2">Small</option>
+                <option value="3" selected>Normal</option>
+                <option value="5">Large</option>
+                <option value="6">Huge</option>
+              </select>
+            </div>
+            <span class="tbar-sep"></span>
             <button class="tbtn" data-cmd="bold" title="Bold (⌘B)" aria-label="Bold"><b>B</b></button>
             <button class="tbtn" data-cmd="italic" title="Italic (⌘I)" aria-label="Italic"><i>I</i></button>
             <button class="tbtn" data-cmd="underline" title="Underline (⌘U)" aria-label="Underline"><span style="text-decoration:underline">U</span></button>
             <button class="tbtn" data-cmd="strikeThrough" title="Strikethrough" aria-label="Strikethrough"><span style="text-decoration:line-through">S</span></button>
+            <span class="tbar-sep"></span>
+            <div class="tbtn-color-wrap">
+              <button class="tbtn tbtn-color" id="tbtn-color" title="Text color" aria-label="Text color"><span class="tbtn-color-label">A</span><span class="tbtn-color-chip" id="tbtn-color-chip"></span><span class="tbtn-caret">▾</span></button>
+              <div class="tbtn-palette" id="tbtn-color-palette" hidden></div>
+            </div>
+            <div class="tbtn-color-wrap">
+              <button class="tbtn tbtn-color" id="tbtn-hilite" title="Highlight color" aria-label="Highlight color"><span class="tbtn-color-label">🖍</span><span class="tbtn-color-chip" id="tbtn-hilite-chip"></span><span class="tbtn-caret">▾</span></button>
+              <div class="tbtn-palette" id="tbtn-hilite-palette" hidden></div>
+            </div>
             <span class="tbar-sep"></span>
             <button class="tbtn" data-block="h2" title="Heading" aria-label="Heading 2">H2</button>
             <button class="tbtn" data-block="h3" title="Subheading" aria-label="Heading 3">H3</button>
             <button class="tbtn" data-block="blockquote" title="Quote" aria-label="Blockquote">❝</button>
             <button class="tbtn" data-block="pre" title="Code block" aria-label="Code block">&lt;/&gt;</button>
             <span class="tbar-sep"></span>
+            <button class="tbtn" data-cmd="justifyLeft" title="Align left (⌘⇧L)" aria-label="Align left">⯇</button>
+            <button class="tbtn" data-cmd="justifyCenter" title="Align center (⌘⇧E)" aria-label="Align center">⯐</button>
+            <button class="tbtn" data-cmd="justifyRight" title="Align right (⌘⇧R)" aria-label="Align right">⯈</button>
+            <button class="tbtn" data-cmd="justifyFull" title="Justify (⌘⇧J)" aria-label="Justify">⯍</button>
+            <span class="tbar-sep"></span>
+            <button class="tbtn" data-cmd="outdent" title="Decrease indent" aria-label="Outdent">⇤</button>
+            <button class="tbtn" data-cmd="indent" title="Increase indent" aria-label="Indent">⇥</button>
+            <span class="tbar-sep"></span>
             <button class="tbtn" data-cmd="insertUnorderedList" title="Bulleted list" aria-label="Bulleted list">•</button>
             <button class="tbtn" data-cmd="insertOrderedList" title="Numbered list" aria-label="Numbered list">1.</button>
             <button class="tbtn" data-cmd="link" title="Link (⌘K)" aria-label="Insert link">🔗</button>
             <span class="tbar-sep"></span>
+            <button class="tbtn" data-cmd="superscript" title="Superscript" aria-label="Superscript">x²</button>
+            <button class="tbtn" data-cmd="subscript" title="Subscript" aria-label="Subscript">x₂</button>
+            <button class="tbtn" data-cmd="insertHorizontalRule" title="Horizontal rule" aria-label="Horizontal rule">―</button>
+            <span class="tbar-sep"></span>
+            <button class="tbtn" data-cmd="find" title="Find &amp; replace (⌘F)" aria-label="Find and replace">🔍</button>
             <button class="tbtn" data-cmd="removeFormat" title="Clear formatting" aria-label="Clear formatting">✕</button>
             <button class="tbtn" data-cmd="undo" title="Undo (⌘Z)" aria-label="Undo">↶</button>
             <button class="tbtn" data-cmd="redo" title="Redo (⇧⌘Z)" aria-label="Redo">↷</button>
@@ -3130,6 +3465,17 @@
               <span class="dot offline" id="tbar-sync-dot"></span>
               <span id="tbar-sync-label">local</span>
             </div>
+          </div>
+          <div class="find-bar" id="find-bar" hidden>
+            <input class="find-input" id="find-input" type="text" placeholder="Find in article…" autocomplete="off" spellcheck="false">
+            <span class="find-count" id="find-count">0 / 0</span>
+            <button class="find-btn" id="find-prev" type="button" title="Previous match (⇧⏎)">↑</button>
+            <button class="find-btn" id="find-next" type="button" title="Next match (⏎)">↓</button>
+            <span class="find-sep"></span>
+            <input class="find-input find-replace-input" id="find-replace" type="text" placeholder="Replace with…" autocomplete="off" spellcheck="false">
+            <button class="find-btn" id="find-replace-one" type="button" title="Replace this match">Replace</button>
+            <button class="find-btn" id="find-replace-all" type="button" title="Replace all">All</button>
+            <button class="find-btn find-close" id="find-close" type="button" title="Close (Esc)">×</button>
           </div>
           <div class="evidence-bench" id="evidence-bench" hidden></div>
           <div class="article-meta">
@@ -3155,9 +3501,19 @@
 
       <aside class="right-panel" id="right-panel" data-mode="provenance">
         <div class="rp-empty" id="rp-empty">
-          <div class="rp-empty-inner">
-            <div class="rp-empty-glyph">⊨</div>
-            <div class="rp-empty-text">Click any underlined claim<br>to inspect its provenance path</div>
+          <div class="rp-empty-hint" id="rp-empty-hint">
+            <div class="rp-empty-inner">
+              <div class="rp-empty-glyph">⊨</div>
+              <div class="rp-empty-text">Click any underlined claim (or a paste activity entry below)<br>to inspect its provenance path</div>
+            </div>
+          </div>
+          <div class="activity-log" id="activity-log">
+            <div class="activity-log-head">
+              <span>Paste activity</span>
+              <span class="activity-log-count" id="activity-log-count">0</span>
+              <button class="activity-log-clear" id="activity-log-clear" type="button" title="Clear the paste log (does not touch pasted text in the article)">clear</button>
+            </div>
+            <div class="activity-log-list" id="activity-log-list"></div>
           </div>
         </div>
         <div class="rp-content" id="rp-content">
@@ -7926,6 +8282,12 @@ async function loadPersistedArticle() {
     body.querySelectorAll('[data-id]').forEach(el => {
       el.addEventListener('click', () => showClaim(el.dataset.id));
     });
+    // Any span that still carries a clipboard provenance chain is a paste —
+    // drop the visible underline so body copy reads as body copy.
+    body.querySelectorAll(`span.g[${PROVEO_HTML_ATTR}]`).forEach(el => {
+      el.classList.add('g-paste');
+      if (!el.title) el.title = 'Pasted with provenance — click to inspect';
+    });
     return true;
   } catch {
     return false;
@@ -7974,7 +8336,12 @@ function refreshToolbarState() {
   if (!tb) return;
   tb.querySelectorAll('.tbtn[data-cmd]').forEach(b => {
     const cmd = b.dataset.cmd;
-    if (['bold','italic','underline','strikeThrough','insertUnorderedList','insertOrderedList'].includes(cmd)) {
+    if ([
+      'bold','italic','underline','strikeThrough',
+      'insertUnorderedList','insertOrderedList',
+      'justifyLeft','justifyCenter','justifyRight','justifyFull',
+      'superscript','subscript',
+    ].includes(cmd)) {
       b.classList.toggle('active', isActiveCmd(cmd));
     }
   });
@@ -7982,6 +8349,14 @@ function refreshToolbarState() {
   tb.querySelectorAll('.tbtn[data-block]').forEach(b => {
     b.classList.toggle('active', b.dataset.block === block);
   });
+  // Sync the font-size select with the selection's effective size.
+  const sizeSelect = document.getElementById('tbtn-fontsize');
+  if (sizeSelect) {
+    try {
+      const size = document.queryCommandValue('fontSize');
+      if (size && sizeSelect.value !== String(size)) sizeSelect.value = String(size);
+    } catch {}
+  }
 }
 
 function runToolbarCmd(cmd) {
@@ -7994,7 +8369,262 @@ function runToolbarCmd(cmd) {
     document.execCommand('createLink', false, url);
     return;
   }
+  if (cmd === 'find') {
+    openFindBar();
+    return;
+  }
   document.execCommand(cmd, false, null);
+}
+
+/* ----------------------------------------------------------------------
+   COLOR PALETTES — text color + highlight color popovers. Uses the
+   `styleWithCSS` contentEditable mode so the emitted markup is inline
+   CSS rather than deprecated <font> tags. */
+const TEXT_COLOR_SWATCHES = [
+  '#1a1a1a','#555555','#8a8a8a','#b8b8b8','#d7d3c8','#ffffff','#b52a2a','#e08a1e',
+  '#c9a23a','#8ca34f','#3a9d8a','#2d7ab8','#3f5fb5','#7b4ca8','#b04a8a','#2a6d2a',
+];
+const HILITE_COLOR_SWATCHES = [
+  '','#fff3b0','#ffd9a8','#ffb8b8','#f8c0dd','#e2c6ff','#c5d8ff','#bfe6d8',
+  '#d8ecff','#e9efe2','#f2e9d8','#f5e3c3','#f3d0c0','#e6cfe6','#d4e5e0','#e8e8e8',
+];
+function buildPalette(id, swatches, applyFn) {
+  const panel = document.getElementById(id);
+  if (!panel) return;
+  panel.innerHTML = swatches.map(c => {
+    const bg = c === '' ? '' : `background:${c};`;
+    const title = c === '' ? 'No color' : c;
+    return `<button type="button" class="tbtn-swatch" data-value="${c}" style="${bg}" title="${title}"></button>`;
+  }).join('');
+  panel.addEventListener('mousedown', (e) => e.preventDefault());
+  panel.addEventListener('click', (e) => {
+    const b = e.target.closest('.tbtn-swatch');
+    if (!b) return;
+    applyFn(b.dataset.value);
+    panel.hidden = true;
+  });
+}
+function applyTextColor(value) {
+  const body = $('#article-body');
+  if (!body) return;
+  body.focus();
+  try { document.execCommand('styleWithCSS', false, true); } catch {}
+  if (!value) {
+    // Strip color by wrapping selection in a span that resets the color.
+    document.execCommand('foreColor', false, 'inherit');
+  } else {
+    document.execCommand('foreColor', false, value);
+    const chip = document.getElementById('tbtn-color-chip');
+    if (chip) chip.style.background = value;
+  }
+}
+function applyHiliteColor(value) {
+  const body = $('#article-body');
+  if (!body) return;
+  body.focus();
+  try { document.execCommand('styleWithCSS', false, true); } catch {}
+  if (!value) {
+    document.execCommand('hiliteColor', false, 'transparent');
+    document.execCommand('backColor', false, 'transparent');
+  } else {
+    const ok = document.execCommand('hiliteColor', false, value);
+    if (!ok) document.execCommand('backColor', false, value);
+    const chip = document.getElementById('tbtn-hilite-chip');
+    if (chip) chip.style.background = value;
+  }
+}
+function wirePalette(triggerId, paletteId) {
+  const trigger = document.getElementById(triggerId);
+  const panel = document.getElementById(paletteId);
+  if (!trigger || !panel) return;
+  trigger.addEventListener('mousedown', (e) => e.preventDefault());
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    // Close any other open palettes first.
+    document.querySelectorAll('.tbtn-palette').forEach(p => { if (p !== panel) p.hidden = true; });
+    panel.hidden = !panel.hidden;
+  });
+  document.addEventListener('click', (e) => {
+    if (panel.hidden) return;
+    if (!panel.contains(e.target) && e.target !== trigger && !trigger.contains(e.target)) panel.hidden = true;
+  });
+}
+
+/* ----------------------------------------------------------------------
+   FIND & REPLACE — lightweight in-article search. Walks the text nodes
+   of #article-body, wraps matches in <span class="find-mark">, and lets
+   the user jump through matches + replace individually or all at once. */
+const findState = {
+  open: false,
+  query: '',
+  matches: [],
+  index: -1,
+};
+function clearFindMarks() {
+  const body = $('#article-body');
+  if (!body) return;
+  body.querySelectorAll('span.find-mark').forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    parent.removeChild(el);
+    parent.normalize();
+  });
+}
+function runFind(query) {
+  findState.query = query || '';
+  clearFindMarks();
+  findState.matches = [];
+  findState.index = -1;
+  const body = $('#article-body');
+  if (!body || !query) { updateFindCount(); return; }
+  const needle = query.toLowerCase();
+  const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => {
+      if (!n.nodeValue) return NodeFilter.FILTER_REJECT;
+      // Skip text inside our own find-mark wrappers (shouldn't exist after clear, but be defensive).
+      let p = n.parentNode;
+      while (p && p !== body) {
+        if (p.classList && p.classList.contains('find-mark')) return NodeFilter.FILTER_REJECT;
+        p = p.parentNode;
+      }
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  const nodes = [];
+  let node;
+  while ((node = walker.nextNode())) nodes.push(node);
+  for (const n of nodes) {
+    const text = n.nodeValue;
+    const lower = text.toLowerCase();
+    let start = 0;
+    const pieces = [];
+    while (true) {
+      const idx = lower.indexOf(needle, start);
+      if (idx === -1) { pieces.push({ type: 'text', text: text.slice(start) }); break; }
+      if (idx > start) pieces.push({ type: 'text', text: text.slice(start, idx) });
+      pieces.push({ type: 'mark', text: text.slice(idx, idx + needle.length) });
+      start = idx + needle.length;
+    }
+    if (pieces.length === 1) continue;
+    const frag = document.createDocumentFragment();
+    for (const p of pieces) {
+      if (p.type === 'text') {
+        if (p.text) frag.appendChild(document.createTextNode(p.text));
+      } else {
+        const span = document.createElement('span');
+        span.className = 'find-mark';
+        span.textContent = p.text;
+        findState.matches.push(span);
+        frag.appendChild(span);
+      }
+    }
+    n.parentNode.replaceChild(frag, n);
+  }
+  if (findState.matches.length) jumpFind(0);
+  updateFindCount();
+}
+function jumpFind(delta) {
+  if (!findState.matches.length) return;
+  findState.matches.forEach(m => m.classList.remove('find-mark-current'));
+  findState.index = ((findState.index + delta) % findState.matches.length + findState.matches.length) % findState.matches.length;
+  const cur = findState.matches[findState.index];
+  cur.classList.add('find-mark-current');
+  cur.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  updateFindCount();
+}
+function updateFindCount() {
+  const el = document.getElementById('find-count');
+  if (!el) return;
+  if (!findState.matches.length) el.textContent = findState.query ? '0 / 0' : '';
+  else el.textContent = `${findState.index + 1} / ${findState.matches.length}`;
+}
+function replaceCurrent(replacement) {
+  if (!findState.matches.length) return;
+  const cur = findState.matches[findState.index];
+  if (!cur) return;
+  const t = document.createTextNode(replacement);
+  cur.parentNode.replaceChild(t, cur);
+  // Recompute matches so indices stay consistent.
+  const q = findState.query;
+  scheduleArticleSave();
+  runFind(q);
+}
+function replaceAll(replacement) {
+  if (!findState.matches.length) return;
+  // Snapshot because the list mutates as we replace.
+  const all = findState.matches.slice();
+  for (const el of all) {
+    const t = document.createTextNode(replacement);
+    if (el.parentNode) el.parentNode.replaceChild(t, el);
+  }
+  scheduleArticleSave();
+  runFind(findState.query);
+}
+function openFindBar() {
+  const bar = document.getElementById('find-bar');
+  const input = document.getElementById('find-input');
+  if (!bar || !input) return;
+  bar.hidden = false;
+  findState.open = true;
+  // Seed with current selection if any.
+  try {
+    const sel = window.getSelection();
+    const text = sel ? sel.toString() : '';
+    if (text && text.length < 200) input.value = text;
+  } catch {}
+  input.focus();
+  input.select();
+  if (input.value) runFind(input.value);
+}
+function closeFindBar() {
+  const bar = document.getElementById('find-bar');
+  if (!bar) return;
+  bar.hidden = true;
+  findState.open = false;
+  clearFindMarks();
+  findState.matches = [];
+  findState.index = -1;
+  findState.query = '';
+}
+function wireFindBar() {
+  const input = document.getElementById('find-input');
+  const replInput = document.getElementById('find-replace');
+  if (!input) return;
+  const debounced = (() => {
+    let t = null;
+    return (v) => {
+      clearTimeout(t);
+      t = setTimeout(() => runFind(v), 80);
+    };
+  })();
+  input.addEventListener('input', (e) => debounced(e.target.value));
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); jumpFind(e.shiftKey ? -1 : 1); }
+    else if (e.key === 'Escape') { e.preventDefault(); closeFindBar(); }
+  });
+  replInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); replaceCurrent(replInput.value); }
+    else if (e.key === 'Escape') { e.preventDefault(); closeFindBar(); }
+  });
+  document.getElementById('find-next')?.addEventListener('click', () => jumpFind(1));
+  document.getElementById('find-prev')?.addEventListener('click', () => jumpFind(-1));
+  document.getElementById('find-close')?.addEventListener('click', closeFindBar);
+  document.getElementById('find-replace-one')?.addEventListener('click', () => replaceCurrent(replInput?.value || ''));
+  document.getElementById('find-replace-all')?.addEventListener('click', () => replaceAll(replInput?.value || ''));
+  // Global ⌘F / Ctrl+F opens the find bar when the article mode is active.
+  document.addEventListener('keydown', (e) => {
+    const mod = e.metaKey || e.ctrlKey;
+    if (!mod) return;
+    const k = e.key.toLowerCase();
+    if (k === 'f') {
+      // Only hijack inside the write panel — leave the browser's native find
+      // available elsewhere.
+      const write = document.getElementById('mode-write');
+      if (!write || !write.classList.contains('active')) return;
+      e.preventDefault();
+      openFindBar();
+    }
+  });
 }
 function runToolbarBlock(tag) {
   const body = $('#article-body');
@@ -8054,6 +8684,10 @@ function wireEditor() {
     else if (k === 'i') { e.preventDefault(); runToolbarCmd('italic'); refreshToolbarState(); }
     else if (k === 'u') { e.preventDefault(); runToolbarCmd('underline'); refreshToolbarState(); }
     else if (k === 'k') { e.preventDefault(); runToolbarCmd('link'); }
+    else if (e.shiftKey && k === 'l') { e.preventDefault(); runToolbarCmd('justifyLeft'); refreshToolbarState(); }
+    else if (e.shiftKey && k === 'e') { e.preventDefault(); runToolbarCmd('justifyCenter'); refreshToolbarState(); }
+    else if (e.shiftKey && k === 'r') { e.preventDefault(); runToolbarCmd('justifyRight'); refreshToolbarState(); }
+    else if (e.shiftKey && k === 'j') { e.preventDefault(); runToolbarCmd('justifyFull'); refreshToolbarState(); }
   });
 
   // Ensure body always has at least one <p> so Enter produces paragraphs cleanly
@@ -8126,6 +8760,47 @@ function wireEditor() {
     refreshToolbarState();
     matrixCollab.scheduleCursorBroadcast();
   });
+
+  // Font-size picker — the native <select> steals focus, so stash the
+  // current body range before the dropdown opens and restore it on
+  // change so the size command applies to what the user meant.
+  const fontSize = document.getElementById('tbtn-fontsize');
+  let savedRange = null;
+  const saveSel = () => {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return;
+    const r = sel.getRangeAt(0);
+    if (body.contains(r.commonAncestorContainer)) savedRange = r.cloneRange();
+  };
+  const restoreSel = () => {
+    if (!savedRange) return;
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(savedRange);
+  };
+  fontSize?.addEventListener('mousedown', (e) => { e.stopPropagation(); saveSel(); });
+  fontSize?.addEventListener('focus', saveSel);
+  fontSize?.addEventListener('change', (e) => {
+    body.focus();
+    restoreSel();
+    try { document.execCommand('styleWithCSS', false, true); } catch {}
+    document.execCommand('fontSize', false, e.target.value);
+    scheduleArticleSave();
+  });
+
+  // Color palettes
+  buildPalette('tbtn-color-palette', TEXT_COLOR_SWATCHES, applyTextColor);
+  buildPalette('tbtn-hilite-palette', HILITE_COLOR_SWATCHES, applyHiliteColor);
+  wirePalette('tbtn-color', 'tbtn-color-palette');
+  wirePalette('tbtn-hilite', 'tbtn-hilite-palette');
+  // Initialise chip colors.
+  const colorChip = document.getElementById('tbtn-color-chip');
+  if (colorChip) colorChip.style.background = '#1a1a1a';
+  const hiliteChip = document.getElementById('tbtn-hilite-chip');
+  if (hiliteChip) hiliteChip.style.background = '#fff3b0';
+
+  // Find & replace bar
+  wireFindBar();
 
   updateWordCount();
   refreshToolbarState();
@@ -10931,9 +11606,13 @@ async function provInsertGroundedFromChain(chain) {
   // along as a data attribute so a later copy-from-editor still carries
   // the original chain even before the worker returns.
   const span = document.createElement('span');
-  span.className = 'g';
+  // `g-paste` keeps the claim attribution + click handler but drops the
+  // amber underline — pasted text reads as body copy. The provenance
+  // surfaces in the activity log and the inspector instead.
+  span.className = 'g g-paste';
   span.dataset.id = claimId;
   span.setAttribute(PROVEO_HTML_ATTR, provBase64Encode(JSON.stringify(chain)));
+  span.title = 'Pasted with provenance — click to inspect';
   span.textContent = text;
   range.insertNode(span);
   // Move caret to end of inserted span.
@@ -10944,9 +11623,145 @@ async function provInsertGroundedFromChain(chain) {
   sel.addRange(after);
   span.addEventListener('click', () => showClaim(claimId));
 
+  // Record the paste in the activity log so the user can still get back
+  // to the source even though the inserted span reads as plain text.
+  pasteLogAppend({
+    claimId,
+    text,
+    chain,
+  });
+
   await saveArticleNow();
   renderCounts();
   return claimId;
+}
+
+/* ----------------------------------------------------------------------
+   PASTE ACTIVITY LOG
+   ----------------------------------------------------------------------
+   A compact, clickable record of every paste-with-provenance that lands
+   in the article. The pasted text itself reads as plain body copy — this
+   is where the chain surfaces back to the user. Entries link to the
+   provenance inspector via showClaim(). Persisted to localStorage so it
+   survives reloads alongside the pasted spans. */
+const PASTE_LOG_KEY = 'proveo.paste_log.v1';
+const PASTE_LOG_MAX = 60;
+let PASTE_LOG = [];
+
+function pasteLogLoad() {
+  try {
+    const raw = localStorage.getItem(PASTE_LOG_KEY);
+    PASTE_LOG = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(PASTE_LOG)) PASTE_LOG = [];
+  } catch { PASTE_LOG = []; }
+}
+function pasteLogSave() {
+  try { localStorage.setItem(PASTE_LOG_KEY, JSON.stringify(PASTE_LOG)); } catch {}
+}
+function pasteLogAppend({ claimId, text, chain }) {
+  const origin = (chain && chain.origin) || {};
+  const firstHop = (chain && chain.hops && chain.hops[0]) || {};
+  const sourceName = origin.sourceName || firstHop.source_name || 'clipboard';
+  const page = origin.page ?? firstHop.page ?? null;
+  const row = origin.row ?? firstHop.row ?? null;
+  const col = origin.col ?? firstHop.col ?? null;
+  const hopCount = (chain && chain.hops && chain.hops.length) || 1;
+  PASTE_LOG.unshift({
+    id: 'pl_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    claimId,
+    text: (text || '').slice(0, 280),
+    sourceName,
+    sourceId: origin.sourceId || firstHop.source_id || null,
+    page, row, col,
+    hops: hopCount,
+    ts: new Date().toISOString(),
+  });
+  if (PASTE_LOG.length > PASTE_LOG_MAX) PASTE_LOG.length = PASTE_LOG_MAX;
+  pasteLogSave();
+  renderPasteLog();
+}
+function pasteLogClear() {
+  PASTE_LOG = [];
+  pasteLogSave();
+  renderPasteLog();
+}
+function pasteLogRelTime(iso) {
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 45) return 'just now';
+  if (diff < 90) return '1m';
+  if (diff < 3600) return Math.round(diff / 60) + 'm';
+  if (diff < 5400) return '1h';
+  if (diff < 86400) return Math.round(diff / 3600) + 'h';
+  return Math.round(diff / 86400) + 'd';
+}
+function pasteLogLocatorBits(entry) {
+  const bits = [];
+  if (entry.page != null) bits.push('p. ' + entry.page);
+  else if (entry.row != null) bits.push('row ' + entry.row);
+  if (entry.hops > 1) bits.push(entry.hops + ' hops');
+  return bits;
+}
+function renderPasteLog() {
+  const list = document.getElementById('activity-log-list');
+  const countEl = document.getElementById('activity-log-count');
+  const hint = document.getElementById('rp-empty-hint');
+  if (!list || !countEl) return;
+  countEl.textContent = PASTE_LOG.length;
+  // When there's nothing to show, shrink the hint back to full-size; when
+  // entries exist, compact it so the list gets the airtime.
+  if (hint) hint.classList.toggle('compact', PASTE_LOG.length > 0);
+  if (!PASTE_LOG.length) {
+    list.innerHTML = `<div class="activity-log-empty">Pastes carry provenance. Paste something you copied from a source and it'll land here.</div>`;
+    return;
+  }
+  list.innerHTML = PASTE_LOG.map(entry => {
+    const locator = pasteLogLocatorBits(entry);
+    const snippet = escapeHtml(entry.text || '').replace(/\s+/g, ' ').trim() || '(empty)';
+    const meta = [
+      `<span class="activity-item-src" title="${escapeHtml(entry.sourceName)}">${escapeHtml(entry.sourceName)}</span>`,
+      ...locator.map(b => `<span class="activity-item-sep">·</span><span>${escapeHtml(b)}</span>`),
+      `<span class="activity-item-sep">·</span><span class="activity-item-time">${pasteLogRelTime(entry.ts)}</span>`,
+    ].join('');
+    return `
+      <div class="activity-item" data-claim="${escapeHtml(entry.claimId)}" data-entry="${escapeHtml(entry.id)}" title="Open provenance inspector">
+        <span class="activity-item-icon">📋</span>
+        <div class="activity-item-body">
+          <div class="activity-item-text">${snippet}</div>
+          <div class="activity-item-meta">${meta}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+function wirePasteLog() {
+  pasteLogLoad();
+  renderPasteLog();
+  const list = document.getElementById('activity-log-list');
+  const clear = document.getElementById('activity-log-clear');
+  if (list) {
+    list.addEventListener('click', (e) => {
+      const item = e.target.closest('.activity-item');
+      if (!item) return;
+      const cid = item.dataset.claim;
+      if (!cid) return;
+      const span = document.querySelector(`#article-body [data-id="${cid}"]`);
+      if (span) {
+        span.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+      if (typeof showClaim === 'function') showClaim(cid);
+    });
+  }
+  if (clear) {
+    clear.addEventListener('click', () => {
+      if (!PASTE_LOG.length) return;
+      if (!confirm('Clear the paste activity log? This does not remove any pasted text from your article.')) return;
+      pasteLogClear();
+    });
+  }
+  // Refresh relative timestamps every 45s while the panel is idle.
+  setInterval(() => {
+    if (PASTE_LOG.length) renderPasteLog();
+  }, 45000);
 }
 
 function loadClipboard() {
@@ -11416,6 +12231,7 @@ async function init() {
   wireEvidenceDnd();
   wireCellTuple();
   wireClipboard();
+  wirePasteLog();
   wireWorkspace();
   wireInviteLanding();
   updateWorkspaceIndicator();
