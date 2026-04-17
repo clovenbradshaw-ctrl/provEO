@@ -2191,13 +2191,22 @@
           <div id="ws-members" class="ws-member-list"></div>
         </div>
         <div class="ws-form-row">
-          <label for="ws-e2ee-pass">End-to-end passphrase</label>
-          <div style="display:flex; gap:6px; align-items:center">
-            <input id="ws-e2ee-pass" class="ws-input" type="password" autocomplete="off" placeholder="shared secret — share out-of-band with collaborators" style="flex:1">
-            <button class="btn-sm" id="ws-e2ee-save">Save</button>
-            <button class="btn-sm" id="ws-e2ee-clear" title="Clear passphrase (sends go plaintext)">Clear</button>
+          <label>Encryption</label>
+          <div class="ws-section-sub" id="ws-e2ee-status" style="margin:0 0 8px">Establishing key…</div>
+          <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap">
+            <button class="btn-sm" id="ws-e2ee-rotate" title="Generate a new room key and share it with all current members">Rotate key</button>
+            <button class="btn-sm" id="ws-e2ee-toggle-advanced" type="button">Advanced…</button>
           </div>
-          <div class="ws-section-sub" id="ws-e2ee-status" style="margin-top:6px">Plaintext — to-device messages travel unencrypted through the homeserver.</div>
+          <div id="ws-e2ee-advanced" hidden style="margin-top:10px; padding:10px; border:0.5px dashed var(--color-border-tertiary); border-radius:4px">
+            <div class="ws-section-sub" style="margin:0 0 6px">
+              Optional: set a <strong>shared passphrase</strong> for this room. The passphrase never leaves your device — every member must type the same string. This overrides auto-key sharing and protects against a malicious homeserver that could otherwise see the auto-exchanged key.
+            </div>
+            <div style="display:flex; gap:6px; align-items:center">
+              <input id="ws-e2ee-pass" class="ws-input" type="password" autocomplete="off" placeholder="shared passphrase (out-of-band)" style="flex:1">
+              <button class="btn-sm" id="ws-e2ee-save">Save</button>
+              <button class="btn-sm" id="ws-e2ee-clear" title="Clear passphrase → revert to auto-shared key">Clear</button>
+            </div>
+          </div>
         </div>
         <label class="ws-toggle">
           <input type="checkbox" id="toggle-sample-in"> Show built-in sample article &amp; sources
@@ -4296,10 +4305,13 @@ function wireEditor() {
 const COLLAB_EVENT_STATE = 'net.proveo.state';
 const COLLAB_EVENT_CURSOR = 'net.proveo.cursor';
 const COLLAB_EVENT_HELLO = 'net.proveo.hello';
+const COLLAB_EVENT_KEY_REQUEST = 'net.proveo.key.request';
+const COLLAB_EVENT_KEY_GRANT = 'net.proveo.key.grant';
 const COLLAB_SNAPSHOT_DEBOUNCE_MS = 1200;
 const COLLAB_CURSOR_THROTTLE_MS = 180;
 const COLLAB_CURSOR_STALE_MS = 6000;
 const COLLAB_LOCAL_EDIT_BLOCK_MS = 2000;
+const COLLAB_KEY_WAIT_MS = 2500;  // wait for a peer's key.grant before minting our own
 
 /* Build the Map<userId, Map<deviceId, content>> structure sendToDevice
    expects. deviceId "*" means "all devices of that user". */
@@ -4314,27 +4326,40 @@ function buildToDeviceMap(targets, content) {
 }
 
 /* ----------------------------------------------------------------------
-   APPLICATION-LAYER E2EE (AES-256-GCM via WebCrypto)
+   APPLICATION-LAYER E2EE (AES-256-GCM via WebCrypto) — automatic
    ----------------------------------------------------------------------
    Matrix's native olm/Rust crypto requires loading a separate WASM blob
-   and an IndexedDB keystore — heavy for a single-file CDN app. This
-   module gives us plain-spoken symmetric encryption instead:
+   and an IndexedDB keystore — heavy for a single-file CDN app. Instead,
+   we ship our own AES-256-GCM envelope with an automatic key-exchange
+   protocol that runs over to-device messages:
 
-     - Key = PBKDF2(passphrase, salt = roomId, 200k iters, SHA-256 → 32B)
-     - Each payload sealed as { alg, fp, iv, ct } where:
-         alg  = 'aes-256-gcm'
-         fp   = SHA-256(key)[:8] (hex) — lets peers verify they share
-                the same passphrase without transmitting it
-         iv   = 12 random bytes, base64
-         ct   = AES-GCM ciphertext (payload JSON), base64
-     - Passphrase is stored per-room in localStorage and never leaves
-       this device. The server sees only {alg, fp, iv, ct}.
+     Join flow (matrixCollab.attach):
+       1. If a manual passphrase is stored → derive key, skip exchange.
+       2. Else if a stored raw room-key exists → import it, skip exchange.
+       3. Else broadcast net.proveo.key.request to every joined member's
+          devices (including our own other devices).
+       4. Wait up to COLLAB_KEY_WAIT_MS for a net.proveo.key.grant. If one
+          arrives, adopt it and persist.
+       5. If no grant arrives in time, mint a fresh random 256-bit key,
+          persist it, broadcast a net.proveo.key.grant so peers who come
+          online later can fetch it from us.
 
-   Limitations: no forward secrecy, no ratchet, no device verification.
-   Good enough to hide content from the homeserver operator; not a
-   replacement for Matrix's native E2EE if you need those properties.
+     Convergence rule: a peer's grant with an older key_ts wins (every
+     device eventually adopts the earliest-minted key). Ties are broken
+     by key-bytes lexicographic order.
+
+     Envelope (borrowed from EO-DB EncryptedPeerPayload):
+       { v: 1, alg: 'aes-256-gcm', fp, iv, ct }
+     where `fp` = SHA-256(key)[:16 hex] so peers confirm they share the
+     same key without transmitting it.
+
+   Caveats: key-exchange messages themselves are plaintext to the
+   homeserver (there's no pre-shared secret to protect them). A manual
+   passphrase (never on the wire) defeats that attack if the server is
+   untrusted.
 ---------------------------------------------------------------------- */
-const LS_E2EE_PREFIX = 'nl.e2ee.v1.';
+const LS_E2EE_PREFIX = 'nl.e2ee.v1.';          // stores passphrase
+const LS_E2EE_KEY_PREFIX = 'nl.e2ee.key.v1.';  // stores raw auto-key
 const E2EE_ALG = 'aes-256-gcm';
 const E2EE_PBKDF2_ITERS = 200000;
 
@@ -4359,9 +4384,31 @@ function toHex(buf) {
 
 const collabCrypto = {
   key: null,              // CryptoKey
-  keyRaw: null,           // Uint8Array(32) — used only for fingerprint
+  keyRaw: null,           // Uint8Array(32)
   fingerprint: null,      // hex short-hash of the key
   roomId: null,
+  mode: 'none',           // 'none' | 'auto' | 'passphrase'
+  keyTs: 0,               // minting timestamp (ms) — used for convergence
+  mintedBy: null,         // originating deviceId (informational)
+
+  async _installRaw(raw, roomId, mode, keyTs, mintedBy) {
+    if (!globalThis.crypto?.subtle) {
+      console.warn('[e2ee] WebCrypto unavailable');
+      return false;
+    }
+    if (!(raw instanceof Uint8Array) || raw.byteLength !== 32) {
+      throw new Error('room key must be exactly 32 bytes');
+    }
+    this.key = await crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+    this.keyRaw = raw;
+    this.roomId = roomId;
+    this.mode = mode;
+    this.keyTs = keyTs || Date.now();
+    this.mintedBy = mintedBy || null;
+    const fpBuf = await crypto.subtle.digest('SHA-256', raw);
+    this.fingerprint = toHex(fpBuf).slice(0, 16);
+    return true;
+  },
 
   async derive(passphrase, roomId) {
     this.clear();
@@ -4379,13 +4426,23 @@ const collabCrypto = {
       { name: 'PBKDF2', salt: enc.encode('proveo:' + roomId), iterations: E2EE_PBKDF2_ITERS, hash: 'SHA-256' },
       material, 256
     );
-    const raw = new Uint8Array(bits);
-    this.key = await crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
-    this.keyRaw = raw;
-    this.roomId = roomId;
-    const fpBuf = await crypto.subtle.digest('SHA-256', raw);
-    this.fingerprint = toHex(fpBuf).slice(0, 16);
-    return true;
+    return this._installRaw(new Uint8Array(bits), roomId, 'passphrase', Date.now(), null);
+  },
+
+  async importAutoKey(rawB64, roomId, keyTs, mintedBy) {
+    this.clear();
+    const raw = fromB64(rawB64);
+    return this._installRaw(raw, roomId, 'auto', keyTs, mintedBy);
+  },
+
+  async mintAutoKey(roomId, mintedBy) {
+    this.clear();
+    const raw = crypto.getRandomValues(new Uint8Array(32));
+    return this._installRaw(raw, roomId, 'auto', Date.now(), mintedBy);
+  },
+
+  exportRawKeyB64() {
+    return this.keyRaw ? toB64(this.keyRaw) : null;
   },
 
   clear() {
@@ -4393,6 +4450,9 @@ const collabCrypto = {
     this.keyRaw = null;
     this.fingerprint = null;
     this.roomId = null;
+    this.mode = 'none';
+    this.keyTs = 0;
+    this.mintedBy = null;
   },
 
   enabled() { return !!this.key; },
@@ -4433,6 +4493,19 @@ function storePassphrase(roomId, passphrase) {
   } catch {}
 }
 
+function loadStoredAutoKey(roomId) {
+  try {
+    const raw = localStorage.getItem(LS_E2EE_KEY_PREFIX + roomId);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function storeAutoKey(roomId, payload) {
+  try {
+    if (payload) localStorage.setItem(LS_E2EE_KEY_PREFIX + roomId, JSON.stringify(payload));
+    else localStorage.removeItem(LS_E2EE_KEY_PREFIX + roomId);
+  } catch {}
+}
+
 async function applyE2eePassphrase(roomId, passphrase) {
   if (!passphrase) { collabCrypto.clear(); return false; }
   const ok = await collabCrypto.derive(passphrase, roomId);
@@ -4443,14 +4516,16 @@ function renderE2eeStatus() {
   const status = $('#ws-e2ee-status');
   if (!status) return;
   const dot = $('#tbar-sync-dot');
+  const pass = $('#ws-e2ee-pass');
   if (collabCrypto.enabled()) {
-    status.innerHTML = `Encrypted · key fingerprint <span style="font-family:var(--font-mono)">${collabCrypto.fingerprint}</span> — share this passphrase only over a trusted channel.`;
+    const mode = collabCrypto.mode === 'passphrase' ? 'Passphrase-derived' : 'Auto-shared';
+    const mintedStr = collabCrypto.mintedBy ? ` · minted by ${escapeHtml(collabCrypto.mintedBy.slice(0, 10))}` : '';
+    status.innerHTML = `🔒 Encrypted (${mode}) · fp <span style="font-family:var(--font-mono)">${collabCrypto.fingerprint}</span>${mintedStr}`;
     if (dot) dot.setAttribute('data-e2ee', '1');
   } else {
-    status.textContent = 'Plaintext — to-device messages travel unencrypted through the homeserver.';
+    status.textContent = '⚠ Unencrypted — no key established yet.';
     if (dot) dot.removeAttribute('data-e2ee');
   }
-  const pass = $('#ws-e2ee-pass');
   if (pass && matrix.activeRoomId) pass.value = loadStoredPassphrase(matrix.activeRoomId);
   const labelEl = $('#tbar-sync-label');
   if (labelEl && collabCrypto.enabled() && !labelEl.textContent.includes('🔒')) {
@@ -4472,46 +4547,61 @@ const matrixCollab = {
   peerRevs: new Map(),        // userId -> last seen remote rev
   editingUntil: new Map(),    // userId -> timestamp when they stopped editing
 
-  attach(roomId) {
+  async attach(roomId) {
     this.detach();
     this.roomId = roomId;
     this.deviceId = matrix.client?.getDeviceId?.() || 'local';
     this.rev = 0;
+    this._keyWaitResolve = null;
+    this._keyWaitTimer = null;
 
     const client = matrix.client;
     if (!client) return;
 
     this.toDeviceListener = async (event) => {
       const type = event.getType();
-      if (type !== COLLAB_EVENT_STATE && type !== COLLAB_EVENT_CURSOR && type !== COLLAB_EVENT_HELLO) return;
+      const isCollabEvent = [
+        COLLAB_EVENT_STATE, COLLAB_EVENT_CURSOR, COLLAB_EVENT_HELLO,
+        COLLAB_EVENT_KEY_REQUEST, COLLAB_EVENT_KEY_GRANT
+      ].includes(type);
+      if (!isCollabEvent) return;
       const sender = event.getSender();
       let content = event.getContent() || {};
 
-      // Unseal if encrypted. If a sealed envelope arrives while we have
-      // no key (or the wrong key), drop it quietly rather than leak a
-      // confusing state onto the editor.
-      if (collabCrypto.isSealed(content)) {
-        if (!collabCrypto.enabled()) {
-          console.warn('[e2ee] sealed message received but no passphrase set');
+      // Key exchange messages are always plaintext (there's no shared
+      // key yet when we exchange them). Everything else must be sealed
+      // once a key exists.
+      const isKeyExchange = (type === COLLAB_EVENT_KEY_REQUEST || type === COLLAB_EVENT_KEY_GRANT);
+
+      if (!isKeyExchange) {
+        if (collabCrypto.isSealed(content)) {
+          if (!collabCrypto.enabled()) {
+            console.warn('[e2ee] sealed message received but no key yet; will request');
+            // Nudge: ask for the room key so we can catch up
+            this.sendKeyRequest().catch(() => {});
+            return;
+          }
+          try {
+            content = await collabCrypto.decrypt(content);
+          } catch (err) {
+            console.warn('[e2ee] decrypt failed', err.message);
+            return;
+          }
+        } else if (collabCrypto.enabled()) {
+          // We require encryption, peer sent plaintext — drop.
+          console.warn('[e2ee] rejected plaintext from', sender, '— room requires encryption');
           return;
         }
-        try {
-          content = await collabCrypto.decrypt(content);
-        } catch (err) {
-          console.warn('[e2ee] decrypt failed', err.message);
-          return;
-        }
-      } else if (collabCrypto.enabled()) {
-        // We require encryption, peer sent plaintext — drop.
-        console.warn('[e2ee] rejected plaintext from', sender, '— room requires encryption');
-        return;
       }
 
       if (sender === matrix.userId && content.origin_device === this.deviceId) return;
       if (content.room_id && content.room_id !== this.roomId) return;
+
       if (type === COLLAB_EVENT_STATE) this.applyRemoteState(sender, content);
       else if (type === COLLAB_EVENT_CURSOR) this.applyRemoteCursor(sender, content);
       else if (type === COLLAB_EVENT_HELLO) this.handleHello(sender, content);
+      else if (type === COLLAB_EVENT_KEY_REQUEST) this.handleKeyRequest(sender, content);
+      else if (type === COLLAB_EVENT_KEY_GRANT) this.handleKeyGrant(sender, content);
     };
     client.on('toDeviceEvent', this.toDeviceListener);
 
@@ -4531,9 +4621,200 @@ const matrixCollab = {
     // Periodic cleanup of stale cursors
     this._cleanupInterval = setInterval(() => this.cleanupStale(), 1500);
 
-    // Announce: ask peers (including our own other devices) to share
-    // their latest state if fresher than ours.
+    // Automatic key establishment. Passphrase override wins if set;
+    // otherwise reuse any locally-stored room key; otherwise ask peers
+    // and fall back to minting one if no peer responds in time.
+    await this.establishKey(roomId);
+
+    // Announce our rev so peers can push a fresher state if they have one.
     this.sendHello().catch(err => console.warn('[collab] hello failed', err));
+  },
+
+  async establishKey(roomId) {
+    // 1) Manual passphrase override
+    const pass = loadStoredPassphrase(roomId);
+    if (pass) {
+      try { await collabCrypto.derive(pass, roomId); }
+      catch (err) { console.warn('[e2ee] passphrase derive failed', err); }
+      renderE2eeStatus();
+      if (collabCrypto.enabled()) return;
+    }
+    // 2) Stored auto-key from a previous session
+    const stored = loadStoredAutoKey(roomId);
+    if (stored && stored.key_b64) {
+      try {
+        await collabCrypto.importAutoKey(stored.key_b64, roomId, stored.key_ts, stored.minted_by);
+        renderE2eeStatus();
+        // Still broadcast a grant so late-joiners can fetch from us
+        this.broadcastKeyGrant().catch(() => {});
+        return;
+      } catch (err) {
+        console.warn('[e2ee] stored auto-key invalid, will re-exchange', err);
+      }
+    }
+    // 3) Ask peers. If nobody responds, mint our own.
+    await this.requestOrMintKey(roomId);
+    renderE2eeStatus();
+  },
+
+  async requestOrMintKey(roomId) {
+    await this.sendKeyRequest();
+    // Wait for a grant — resolved early by handleKeyGrant, or by timeout.
+    await new Promise(resolve => {
+      this._keyWaitResolve = resolve;
+      this._keyWaitTimer = setTimeout(resolve, COLLAB_KEY_WAIT_MS);
+    });
+    clearTimeout(this._keyWaitTimer);
+    this._keyWaitTimer = null;
+    this._keyWaitResolve = null;
+    if (collabCrypto.enabled()) return;
+    // No peer responded — we're first. Mint and broadcast so stragglers
+    // can grab it when they arrive.
+    await collabCrypto.mintAutoKey(roomId, this.deviceId);
+    storeAutoKey(roomId, {
+      key_b64: collabCrypto.exportRawKeyB64(),
+      key_ts: collabCrypto.keyTs,
+      minted_by: this.deviceId
+    });
+    this.broadcastKeyGrant().catch(() => {});
+  },
+
+  async sendKeyRequest() {
+    if (!this.roomId || !matrix.client) return;
+    const content = {
+      room_id: this.roomId,
+      origin_device: this.deviceId,
+      ts: Date.now()
+    };
+    const targets = this.peerTargets({ includeSelf: true });
+    if (!targets.length) return;
+    try {
+      const map = buildToDeviceMap(targets, content);
+      await matrix.client.sendToDevice(COLLAB_EVENT_KEY_REQUEST, map);
+    } catch (err) {
+      try {
+        const obj = {};
+        for (const t of targets) { obj[t.userId] = obj[t.userId] || {}; obj[t.userId][t.deviceId || '*'] = content; }
+        await matrix.client.sendToDevice(COLLAB_EVENT_KEY_REQUEST, obj);
+      } catch (err2) { console.warn('[e2ee] key request failed', err2); }
+    }
+  },
+
+  async sendKeyGrantTo(targetUserId, targetDeviceId) {
+    if (!collabCrypto.enabled() || !this.roomId || !matrix.client) return;
+    // Only auto-mode keys are shareable; passphrase-derived keys never
+    // travel over the wire.
+    if (collabCrypto.mode !== 'auto') return;
+    const content = {
+      room_id: this.roomId,
+      origin_device: this.deviceId,
+      key_b64: collabCrypto.exportRawKeyB64(),
+      key_ts: collabCrypto.keyTs,
+      minted_by: collabCrypto.mintedBy || this.deviceId,
+      fp: collabCrypto.fingerprint,
+      ts: Date.now()
+    };
+    const target = [{ userId: targetUserId, deviceId: targetDeviceId || '*' }];
+    try {
+      const map = buildToDeviceMap(target, content);
+      await matrix.client.sendToDevice(COLLAB_EVENT_KEY_GRANT, map);
+    } catch (err) {
+      try {
+        const obj = { [targetUserId]: { [targetDeviceId || '*']: content } };
+        await matrix.client.sendToDevice(COLLAB_EVENT_KEY_GRANT, obj);
+      } catch (err2) { console.warn('[e2ee] key grant failed', err2); }
+    }
+  },
+
+  async broadcastKeyGrant() {
+    if (!collabCrypto.enabled() || collabCrypto.mode !== 'auto') return;
+    if (!this.roomId || !matrix.client) return;
+    const content = {
+      room_id: this.roomId,
+      origin_device: this.deviceId,
+      key_b64: collabCrypto.exportRawKeyB64(),
+      key_ts: collabCrypto.keyTs,
+      minted_by: collabCrypto.mintedBy || this.deviceId,
+      fp: collabCrypto.fingerprint,
+      ts: Date.now()
+    };
+    const targets = this.peerTargets({ includeSelf: true });
+    if (!targets.length) return;
+    try {
+      const map = buildToDeviceMap(targets, content);
+      await matrix.client.sendToDevice(COLLAB_EVENT_KEY_GRANT, map);
+    } catch (err) {
+      try {
+        const obj = {};
+        for (const t of targets) { obj[t.userId] = obj[t.userId] || {}; obj[t.userId][t.deviceId || '*'] = content; }
+        await matrix.client.sendToDevice(COLLAB_EVENT_KEY_GRANT, obj);
+      } catch (err2) { console.warn('[e2ee] key broadcast failed', err2); }
+    }
+  },
+
+  async handleKeyRequest(sender, content) {
+    if (!collabCrypto.enabled() || collabCrypto.mode !== 'auto') return;
+    await this.sendKeyGrantTo(sender, content.origin_device);
+  },
+
+  async handleKeyGrant(sender, content) {
+    if (!content.key_b64 || !content.room_id) return;
+    if (content.room_id !== this.roomId) return;
+    if (collabCrypto.mode === 'passphrase') return; // manual override wins
+
+    // If we have no key yet, adopt theirs.
+    if (!collabCrypto.enabled()) {
+      try {
+        await collabCrypto.importAutoKey(content.key_b64, this.roomId, content.key_ts, content.minted_by);
+        storeAutoKey(this.roomId, {
+          key_b64: content.key_b64,
+          key_ts: content.key_ts,
+          minted_by: content.minted_by
+        });
+        renderE2eeStatus();
+        showToast('encryption established · fp ' + collabCrypto.fingerprint);
+        if (this._keyWaitResolve) { this._keyWaitResolve(); this._keyWaitResolve = null; }
+      } catch (err) { console.warn('[e2ee] importing granted key failed', err); }
+      return;
+    }
+
+    // Convergence: if their key is the same, no-op. If different, keep
+    // the earlier one (or lexicographically smaller on a tie).
+    if (content.fp === collabCrypto.fingerprint) return;
+    const theirEarlier =
+      content.key_ts < collabCrypto.keyTs ||
+      (content.key_ts === collabCrypto.keyTs && content.key_b64 < (collabCrypto.exportRawKeyB64() || ''));
+    if (theirEarlier) {
+      console.warn('[e2ee] adopting earlier-minted key from peer');
+      try {
+        await collabCrypto.importAutoKey(content.key_b64, this.roomId, content.key_ts, content.minted_by);
+        storeAutoKey(this.roomId, {
+          key_b64: content.key_b64,
+          key_ts: content.key_ts,
+          minted_by: content.minted_by
+        });
+        renderE2eeStatus();
+        showToast('room key converged · fp ' + collabCrypto.fingerprint);
+      } catch (err) { console.warn('[e2ee] converging on peer key failed', err); }
+    } else {
+      // Our key is earlier — push it back so they converge on ours.
+      console.warn('[e2ee] peer has later key; broadcasting ours for convergence');
+      this.broadcastKeyGrant().catch(() => {});
+    }
+  },
+
+  async rotateAutoKey() {
+    if (!this.roomId) return;
+    if (collabCrypto.mode === 'passphrase') return; // can't rotate a passphrase key
+    await collabCrypto.mintAutoKey(this.roomId, this.deviceId);
+    storeAutoKey(this.roomId, {
+      key_b64: collabCrypto.exportRawKeyB64(),
+      key_ts: collabCrypto.keyTs,
+      minted_by: this.deviceId
+    });
+    renderE2eeStatus();
+    await this.broadcastKeyGrant();
+    showToast('key rotated · fp ' + collabCrypto.fingerprint);
   },
 
   detach() {
@@ -4546,6 +4827,9 @@ const matrixCollab = {
     clearTimeout(this.snapshotTimer);
     clearTimeout(this.cursorTimer);
     clearInterval(this._cleanupInterval);
+    clearTimeout(this._keyWaitTimer);
+    if (this._keyWaitResolve) { this._keyWaitResolve(); this._keyWaitResolve = null; }
+    this._keyWaitTimer = null;
     this.remoteCursors.forEach(c => c.el?.remove());
     this.remoteCursors.clear();
     this.peerRevs.clear();
@@ -5278,15 +5562,12 @@ async function selectWorkspaceRoom(roomId, { silent = false } = {}) {
   }));
   try { localStorage.setItem(LS_MX_ROOM, roomId); } catch {}
 
-  // Restore any saved passphrase for this room before attaching collab
-  // so the first hello/state messages are already sealed.
-  const storedPass = loadStoredPassphrase(roomId);
-  await applyE2eePassphrase(roomId, storedPass);
-
   updateWorkspaceIndicator();
   renderWorkspaceModal();
   renderE2eeStatus();
-  matrixCollab.attach(roomId);
+  // matrixCollab.attach now handles encryption setup on its own
+  // (passphrase override → stored auto-key → request-or-mint).
+  matrixCollab.attach(roomId).catch(err => console.warn('[collab] attach failed', err));
   if (!silent) showToast(`workspace: ${room.name || roomId}`);
 }
 
@@ -5417,8 +5698,26 @@ function wireWorkspace() {
   $('#toggle-sample').addEventListener('change', e => setSampleData(e.target.checked));
   $('#toggle-sample-in').addEventListener('change', e => setSampleData(e.target.checked));
 
-  // E2EE passphrase controls
+  // E2EE controls
   const passEl = $('#ws-e2ee-pass');
+  $('#ws-e2ee-toggle-advanced')?.addEventListener('click', () => {
+    const panel = $('#ws-e2ee-advanced');
+    if (!panel) return;
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden && passEl && matrix.activeRoomId) {
+      passEl.value = loadStoredPassphrase(matrix.activeRoomId);
+      setTimeout(() => passEl.focus(), 0);
+    }
+  });
+  $('#ws-e2ee-rotate')?.addEventListener('click', async () => {
+    if (!matrix.activeRoomId) { showToast('pick a workspace room first'); return; }
+    if (collabCrypto.mode === 'passphrase') {
+      showToast('passphrase mode — clear the passphrase to rotate the auto-key');
+      return;
+    }
+    if (!confirm('Rotate the room key? All current members need to be online to adopt it cleanly.')) return;
+    await matrixCollab.rotateAutoKey();
+  });
   $('#ws-e2ee-save')?.addEventListener('click', async () => {
     if (!matrix.activeRoomId) { showToast('pick a workspace room first'); return; }
     const pass = passEl.value.trim();
@@ -5427,9 +5726,7 @@ function wireWorkspace() {
     const ok = await applyE2eePassphrase(matrix.activeRoomId, pass);
     renderE2eeStatus();
     if (ok) {
-      showToast('end-to-end encryption on · fp ' + collabCrypto.fingerprint);
-      // Re-hello so peers (or our other devices) notice the shift and
-      // respond with their latest state under the new key.
+      showToast('passphrase active · fp ' + collabCrypto.fingerprint);
       matrixCollab.sendHello?.().catch(() => {});
     } else {
       showToast('e2ee setup failed — see console');
@@ -5441,7 +5738,9 @@ function wireWorkspace() {
     if (passEl) passEl.value = '';
     collabCrypto.clear();
     renderE2eeStatus();
-    showToast('encryption cleared · messages will be plaintext');
+    showToast('passphrase cleared · switching back to auto-shared key');
+    // Re-establish so the auto-key comes back online
+    await matrixCollab.establishKey(matrix.activeRoomId);
   });
   passEl?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') $('#ws-e2ee-save').click();
