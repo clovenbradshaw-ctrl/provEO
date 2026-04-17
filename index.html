@@ -1985,11 +1985,13 @@
     overflow: hidden;
   }
   .cite-modal-head {
-    padding: 14px 18px 12px;
+    padding: 18px 22px 14px;
     border-bottom: 0.5px solid var(--color-border-tertiary);
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
+    gap: 16px;
+    flex-shrink: 0;
   }
   .cite-modal-title {
     font-family: var(--font-serif);
@@ -1999,7 +2001,8 @@
   .cite-modal-sub {
     font-size: 11.5px;
     color: var(--color-text-secondary);
-    margin-top: 2px;
+    margin-top: 4px;
+    line-height: 1.45;
   }
   .cite-selected-claim {
     padding: 10px 18px;
@@ -2292,8 +2295,8 @@
     background: var(--color-background-primary);
     border: 0.5px solid var(--color-border-tertiary);
     border-radius: var(--border-radius-lg);
-    width: min(760px, 92vw);
-    max-height: 82vh;
+    width: min(780px, 92vw);
+    max-height: 90vh;
     display: flex;
     flex-direction: column;
     box-shadow: 0 12px 48px rgba(26,25,21,0.22);
@@ -2302,10 +2305,10 @@
   .src-viewer-text {
     flex: 1;
     overflow: auto;
-    padding: 16px 20px;
+    padding: 22px 26px;
     font-family: var(--font-mono);
     font-size: 12px;
-    line-height: 1.55;
+    line-height: 1.6;
     white-space: pre-wrap;
     color: var(--color-text-primary);
     background: var(--color-background-primary);
@@ -2369,22 +2372,24 @@
   }
   .src-viewer-binary .bin-download:hover { background: var(--color-background-tertiary); }
   .src-viewer-hint {
-    padding: 10px 18px;
+    padding: 12px 22px;
     font-size: 11.5px;
     color: var(--color-text-secondary);
     background: var(--color-background-secondary);
     border-top: 0.5px solid var(--color-border-tertiary);
+    flex-shrink: 0;
   }
   .src-viewer-tuple {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 8px 14px;
+    gap: 14px;
+    padding: 10px 18px;
     font-family: var(--font-mono);
     font-size: 11px;
     color: var(--color-text-secondary);
     background: var(--color-background-primary);
     border-top: 0.5px solid var(--color-border-tertiary);
+    flex-shrink: 0;
   }
   .src-viewer-tuple.is-empty { color: var(--color-text-tertiary); font-style: italic; }
   .src-viewer-tuple-label {
@@ -2411,15 +2416,15 @@
   .src-viewer-tuple-btn:not(:disabled):hover { background: var(--color-background-tertiary); }
 
   /* ---------- PDF VIEW (rendered original + audited extraction) ---------- */
-  .src-viewer-body.is-pdf { width: min(1180px, 96vw); }
+  .src-viewer-body.is-pdf { width: min(1240px, 96vw); }
   .src-viewer-pdf-wrap {
     flex: 1;
     overflow: auto;
-    padding: 16px;
+    padding: 22px 24px;
     background: var(--color-background-secondary);
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: 22px;
   }
   .pdf-page-card {
     background: var(--color-background-primary);
@@ -2428,14 +2433,15 @@
     overflow: hidden;
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    min-height: 220px;
+    min-height: 260px;
+    flex-shrink: 0;
   }
   .pdf-page-canvas-wrap {
     background: #2a2a2a;
     display: flex;
     align-items: flex-start;
     justify-content: center;
-    padding: 12px;
+    padding: 16px;
     overflow: auto;
     border-right: 0.5px solid var(--color-border-tertiary);
   }
@@ -2453,8 +2459,8 @@
   .pdf-page-head {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 8px 12px;
+    gap: 12px;
+    padding: 10px 16px;
     background: var(--color-background-secondary);
     border-bottom: 0.5px solid var(--color-border-tertiary);
     font-family: var(--font-mono);
@@ -2466,10 +2472,10 @@
   .pdf-page-text {
     flex: 1;
     overflow: auto;
-    padding: 10px 14px;
+    padding: 14px 18px;
     font-family: var(--font-mono);
-    font-size: 11.5px;
-    line-height: 1.55;
+    font-size: 12px;
+    line-height: 1.6;
     white-space: pre-wrap;
     color: var(--color-text-primary);
   }
@@ -2493,17 +2499,18 @@
   .method-badge.method-ocr    { background: var(--amber-fill); color: var(--amber-text); }
   .method-badge.method-failed { background: var(--blue-fill); color: var(--red-mid); }
   .pdf-doc-summary {
-    padding: 10px 14px;
+    padding: 14px 18px;
     background: var(--color-background-primary);
     border: 0.5px solid var(--color-border-tertiary);
     border-radius: var(--border-radius-md);
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 11.5px;
     color: var(--color-text-secondary);
     display: flex;
     flex-wrap: wrap;
-    gap: 14px;
+    gap: 18px;
     align-items: center;
+    flex-shrink: 0;
   }
   .pdf-doc-summary b { color: var(--color-text-primary); font-weight: 600; }
   .pdf-doc-summary .audit-link {
@@ -2518,17 +2525,19 @@
   }
   .pdf-audit-json {
     margin: 0;
-    padding: 10px 14px;
-    max-height: 240px;
+    padding: 16px 20px;
+    height: 320px;
+    max-height: 50vh;
     overflow: auto;
     background: var(--color-background-primary);
     border: 0.5px solid var(--color-border-tertiary);
     border-radius: var(--border-radius-md);
     font-family: var(--font-mono);
-    font-size: 11px;
-    line-height: 1.5;
+    font-size: 11.5px;
+    line-height: 1.55;
     color: var(--color-text-primary);
     white-space: pre;
+    flex-shrink: 0;
   }
 
   /* ---------- CSV / TSV TABLE VIEW (spreadsheet-style) ---------- */
@@ -2687,6 +2696,321 @@
     .chat-right { width: 248px; }
     .review-queue { width: 280px; }
     .editor-wrap, .review-article { padding: 24px 28px; }
+  }
+
+  /* ---------- PROVENANCE CLIPBOARD ---------- */
+  .clip-fab {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 1200;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px 10px 12px;
+    border-radius: 999px;
+    border: 0.5px solid var(--color-border-secondary);
+    background: var(--color-background-primary);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    cursor: pointer;
+    box-shadow: 0 6px 22px rgba(26,25,21,0.18);
+    transition: background 0.12s, transform 0.12s;
+  }
+  .clip-fab:hover { background: var(--color-background-tertiary); transform: translateY(-1px); }
+  .clip-fab-icon {
+    font-size: 14px;
+    line-height: 1;
+  }
+  .clip-fab-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 6px;
+    border-radius: 9px;
+    background: var(--amber-fill);
+    color: var(--amber-text);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 600;
+  }
+  .clip-fab.is-empty .clip-fab-count {
+    background: var(--color-background-tertiary);
+    color: var(--color-text-tertiary);
+  }
+  .clip-fab.just-added { animation: clip-fab-pulse 0.5s ease; }
+  @keyframes clip-fab-pulse {
+    0%   { transform: scale(1); box-shadow: 0 6px 22px rgba(26,25,21,0.18); }
+    40%  { transform: scale(1.08); box-shadow: 0 10px 28px rgba(186,132,38,0.45); }
+    100% { transform: scale(1); box-shadow: 0 6px 22px rgba(26,25,21,0.18); }
+  }
+
+  .clip-select-pill {
+    position: fixed;
+    z-index: 1300;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0;
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: 999px;
+    box-shadow: 0 6px 18px rgba(26,25,21,0.22);
+    transform: translate(-50%, -100%);
+    margin-top: -8px;
+  }
+  .clip-select-pill::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: -5px;
+    width: 10px;
+    height: 10px;
+    background: var(--color-background-primary);
+    border-right: 0.5px solid var(--color-border-secondary);
+    border-bottom: 0.5px solid var(--color-border-secondary);
+    transform: translateX(-50%) rotate(45deg);
+  }
+  .clip-select-btn {
+    appearance: none;
+    border: 0;
+    background: none;
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .clip-select-btn:hover { background: var(--color-background-tertiary); }
+  .clip-select-btn .plus { color: var(--amber-text); font-weight: 700; }
+
+  .clip-drawer {
+    position: fixed;
+    inset: 0;
+    z-index: 1400;
+    display: block;
+  }
+  .clip-drawer-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(26,25,21,0.28);
+  }
+  .clip-drawer-body {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(460px, 92vw);
+    background: var(--color-background-primary);
+    border-left: 0.5px solid var(--color-border-tertiary);
+    box-shadow: -12px 0 48px rgba(26,25,21,0.22);
+    display: flex;
+    flex-direction: column;
+    animation: clip-drawer-in 0.18s ease;
+  }
+  @keyframes clip-drawer-in {
+    from { transform: translateX(24px); opacity: 0; }
+    to   { transform: translateX(0);     opacity: 1; }
+  }
+  .clip-drawer-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 18px 22px 14px;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    flex-shrink: 0;
+  }
+  .clip-drawer-title {
+    font-family: var(--font-serif);
+    font-size: 16px;
+    font-weight: 500;
+  }
+  .clip-drawer-sub {
+    font-size: 11.5px;
+    color: var(--color-text-secondary);
+    margin-top: 4px;
+    line-height: 1.45;
+  }
+  .clip-drawer-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .clip-btn-icon {
+    appearance: none;
+    border: 0.5px solid var(--color-border-secondary);
+    background: var(--color-background-secondary);
+    color: var(--color-text-secondary);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 4px 10px;
+    border-radius: var(--border-radius-md);
+    cursor: pointer;
+  }
+  .clip-btn-icon:hover { background: var(--color-background-tertiary); color: var(--color-text-primary); }
+  .clip-drawer-list {
+    flex: 1;
+    overflow: auto;
+    padding: 14px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .clip-drawer-empty {
+    padding: 36px 18px;
+    text-align: center;
+    color: var(--color-text-tertiary);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .clip-drawer-empty .clip-empty-icon {
+    font-size: 28px;
+    display: block;
+    margin-bottom: 10px;
+    opacity: 0.7;
+  }
+  .clip-item {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    padding: 12px 14px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .clip-item.is-new {
+    border-color: var(--amber-text);
+    box-shadow: 0 0 0 2px var(--amber-fill);
+  }
+  .clip-item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-secondary);
+  }
+  .clip-item-src {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    flex: 1;
+    cursor: pointer;
+  }
+  .clip-item-src:hover { color: var(--teal-text); text-decoration: underline; }
+  .clip-item-src .clip-src-icon {
+    color: var(--color-text-tertiary);
+    margin-right: 4px;
+  }
+  .clip-item-time {
+    color: var(--color-text-tertiary);
+    font-size: 10.5px;
+    flex-shrink: 0;
+  }
+  .clip-item-text {
+    font-family: var(--font-serif);
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--color-text-primary);
+    background: var(--color-background-secondary);
+    border-left: 2px solid var(--amber-text);
+    padding: 8px 12px;
+    border-radius: 3px;
+    max-height: 7.5em;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .clip-item-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .clip-item-chip {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 3px;
+    background: var(--color-background-secondary);
+    color: var(--color-text-secondary);
+    border: 0.5px solid var(--color-border-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .clip-item-chip.method-native { background: var(--teal-fill); color: var(--teal-text); border-color: transparent; }
+  .clip-item-chip.method-ocr    { background: var(--amber-fill); color: var(--amber-text); border-color: transparent; }
+  .clip-item-chip.method-failed { background: var(--blue-fill); color: var(--red-mid); border-color: transparent; }
+  .clip-item-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-top: 4px;
+    border-top: 0.5px dashed var(--color-border-tertiary);
+  }
+  .clip-action {
+    appearance: none;
+    border: 0.5px solid var(--color-border-tertiary);
+    background: var(--color-background-primary);
+    color: var(--color-text-secondary);
+    font-family: var(--font-sans);
+    font-size: 11px;
+    padding: 4px 9px;
+    border-radius: var(--border-radius-md);
+    cursor: pointer;
+  }
+  .clip-action:hover { background: var(--color-background-tertiary); color: var(--color-text-primary); }
+  .clip-action.is-primary {
+    border-color: var(--color-border-secondary);
+    background: var(--color-background-secondary);
+    color: var(--color-text-primary);
+  }
+  .clip-action.is-danger { color: var(--red-mid); }
+  .clip-action.is-danger:hover { background: var(--blue-fill); color: var(--red-mid); }
+  .clip-action.is-ok { color: var(--teal-text); border-color: var(--teal-text); }
+  .clip-drawer-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 18px;
+    border-top: 0.5px solid var(--color-border-tertiary);
+    background: var(--color-background-secondary);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--color-text-tertiary);
+    flex-shrink: 0;
+  }
+  .clip-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 32px;
+    transform: translateX(-50%);
+    z-index: 1500;
+    background: var(--color-text-primary);
+    color: var(--color-background-primary);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    box-shadow: 0 6px 20px rgba(26,25,21,0.24);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.16s, transform 0.16s;
+  }
+  .clip-toast.is-on {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-4px);
   }
 </style>
 </head>
@@ -2865,7 +3189,7 @@
       <span class="src-viewer-tuple-spacer"></span>
       <button class="src-viewer-tuple-btn" id="src-viewer-tuple-copy" disabled>Copy JSON</button>
     </div>
-    <div class="src-viewer-hint">Tip: to cite, select text in your article (Write mode) and click <strong>＋ Anchor evidence</strong>.</div>
+    <div class="src-viewer-hint">Tip: select text to <strong>＋ Save to clipboard</strong> or <strong>＋ Anchor evidence</strong> — either keeps its provenance.</div>
     <div class="src-viewer-picker" id="src-viewer-picker" hidden>
       <span class="src-viewer-picker-label" id="src-viewer-picker-label">Selection mode — pick your evidence</span>
       <div class="src-viewer-ops" id="src-viewer-ops" hidden>
@@ -2883,6 +3207,42 @@
     </div>
   </div>
 </div>
+
+<!-- ===== PROVENANCE CLIPBOARD ===== -->
+<button id="clip-fab" class="clip-fab is-empty" type="button" title="Provenance clipboard">
+  <span class="clip-fab-icon">📋</span>
+  <span>Clipboard</span>
+  <span class="clip-fab-count" id="clip-fab-count">0</span>
+</button>
+
+<div id="clip-select-pill" class="clip-select-pill" hidden>
+  <button class="clip-select-btn" id="clip-select-add" type="button">
+    <span class="plus">＋</span> Save to clipboard
+  </button>
+</div>
+
+<aside id="clip-drawer" class="clip-drawer" hidden>
+  <div class="clip-drawer-backdrop" id="clip-drawer-backdrop"></div>
+  <div class="clip-drawer-body">
+    <div class="clip-drawer-head">
+      <div>
+        <div class="clip-drawer-title">Provenance clipboard</div>
+        <div class="clip-drawer-sub">Selected spans stay here with the source, page, and extraction method they came from.</div>
+      </div>
+      <div class="clip-drawer-actions">
+        <button class="clip-btn-icon" id="clip-clear" type="button">clear all</button>
+        <button class="rphead-close" id="clip-drawer-close" type="button">×</button>
+      </div>
+    </div>
+    <div class="clip-drawer-list" id="clip-drawer-list"></div>
+    <div class="clip-drawer-foot">
+      <span id="clip-drawer-count-note">0 items</span>
+      <span>select text in any source</span>
+    </div>
+  </div>
+</aside>
+
+<div id="clip-toast" class="clip-toast"></div>
 
 <!-- ===== WORKSPACE / MATRIX MODAL ===== -->
 <div id="ws-modal" class="cite-modal" hidden>
@@ -8208,6 +8568,7 @@ async function showSourceViewer(id, opts = {}) {
   const scrollTo = opts.scrollTo || null;
   const selecting = !!opts.selecting;
   const modal = $('#src-viewer');
+  modal._currentSrc = src;
   const body = modal.querySelector('.src-viewer-body');
   $('#src-viewer-title').textContent = src.name;
   const destBits = [];
@@ -8748,13 +9109,14 @@ function handleDrawerCellClick(td, shift) {
 }
 
 function hideSourceViewer() {
+  const modal = $('#src-viewer');
   const bar = $('#src-viewer-picker');
   if (bar) bar.hidden = true;
   const hint = $('.src-viewer-hint');
   if (hint) hint.hidden = false;
   const ops = $('#src-viewer-ops');
   if (ops) ops.hidden = true;
-  const body = $('#src-viewer').querySelector('.src-viewer-body');
+  const body = modal.querySelector('.src-viewer-body');
   if (body) { body.classList.remove('is-selecting'); body.classList.remove('is-highlight-mode'); }
   highlightMode = false;
   const hlBtn = $('#src-viewer-hl-toggle');
@@ -8762,7 +9124,9 @@ function hideSourceViewer() {
   // Revoke media object URLs so large video/image/PDF blobs don't
   // leak memory across repeated opens.
   revokeSrcViewerMedia();
-  $('#src-viewer').hidden = true;
+  modal._currentSrc = null;
+  modal.hidden = true;
+  if (typeof clipHidePill === 'function') clipHidePill();
 }
 function wireSourceViewer() {
   $('#src-viewer-close').addEventListener('click', hideSourceViewer);
@@ -9388,6 +9752,330 @@ async function bootMatrixIfPossible() {
   }
 }
 
+/* ---------- PROVENANCE CLIPBOARD ----------
+   Multi-item clipboard that keeps each saved span alongside its
+   chain of custody: which source it came from, which page, which
+   extraction method (native / OCR), the document sha256, and the
+   tool versions that produced it. Items live in localStorage so
+   they survive reloads within the same device. */
+const CLIPBOARD_KEY = 'proveo.clipboard.v1';
+const CLIPBOARD_MAX = 100;
+let CLIPBOARD = [];
+
+function loadClipboard() {
+  try {
+    const raw = localStorage.getItem(CLIPBOARD_KEY);
+    CLIPBOARD = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(CLIPBOARD)) CLIPBOARD = [];
+  } catch { CLIPBOARD = []; }
+}
+function saveClipboard() {
+  try { localStorage.setItem(CLIPBOARD_KEY, JSON.stringify(CLIPBOARD)); } catch {}
+}
+function clipRelTime(iso) {
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 45) return 'just now';
+  if (diff < 90) return '1 min ago';
+  if (diff < 3600) return Math.round(diff / 60) + ' min ago';
+  if (diff < 5400) return '1 hr ago';
+  if (diff < 86400) return Math.round(diff / 3600) + ' hr ago';
+  return Math.round(diff / 86400) + ' d ago';
+}
+function clipUpdateFab() {
+  const fab = $('#clip-fab');
+  const count = $('#clip-fab-count');
+  if (!fab || !count) return;
+  count.textContent = CLIPBOARD.length;
+  fab.classList.toggle('is-empty', CLIPBOARD.length === 0);
+}
+function clipToast(msg) {
+  const el = $('#clip-toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('is-on');
+  clearTimeout(clipToast._t);
+  clipToast._t = setTimeout(() => el.classList.remove('is-on'), 1400);
+}
+function clipSrcIcon(kind) {
+  return ({ pdf: '📄', csv: '📊', tsv: '📊', img: '🖼', video: '▶', audio: '🔊', txt: '📝', bin: '📎' })[kind] || '📄';
+}
+function clipSrcLabelHTML(p) {
+  let label = `<span class="clip-src-icon">${clipSrcIcon(p.sourceKind)}</span>${escapeHtml(p.sourceName || 'source')}`;
+  if (p.page != null) label += ` · page ${p.page}`;
+  else if (p.row != null) label += ` · row ${p.row}`;
+  return label;
+}
+function clipCiteFormat(item) {
+  const p = item.provenance || {};
+  const bits = [];
+  bits.push(p.sourceName || 'source');
+  if (p.page != null) bits.push('p. ' + p.page);
+  if (p.pageMethod) bits.push(p.pageMethod);
+  if (p.sha256) bits.push('sha256 ' + p.sha256.slice(0, 12));
+  return `"${item.text}" — ${bits.join(', ')}`;
+}
+async function clipCopyToSystem(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-1000px';
+      document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); ta.remove();
+      return true;
+    } catch { return false; }
+  }
+}
+function clipRenderDrawer() {
+  const list = $('#clip-drawer-list');
+  const countNote = $('#clip-drawer-count-note');
+  if (!list) return;
+  list.innerHTML = '';
+  if (!CLIPBOARD.length) {
+    list.innerHTML = `
+      <div class="clip-drawer-empty">
+        <span class="clip-empty-icon">📋</span>
+        Nothing saved yet.<br>
+        Select text in a source and click <strong>＋ Save to clipboard</strong> to keep it here with its provenance.
+      </div>`;
+    if (countNote) countNote.textContent = '0 items';
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  CLIPBOARD.forEach(item => {
+    const p = item.provenance || {};
+    const chips = [];
+    if (p.pageMethod) chips.push(`<span class="clip-item-chip method-${escapeHtml(p.pageMethod)}">${escapeHtml(p.pageMethod)}${p.pageConf != null ? ' · conf ' + p.pageConf : ''}</span>`);
+    if (p.destination) chips.push(`<span class="clip-item-chip">${escapeHtml(p.destination)}</span>`);
+    if (p.extractionEngine) chips.push(`<span class="clip-item-chip">${escapeHtml(p.extractionEngine)}</span>`);
+    if (p.sha256) chips.push(`<span class="clip-item-chip" title="${escapeHtml(p.sha256)}">sha ${escapeHtml(p.sha256.slice(0, 10))}…</span>`);
+    chips.push(`<span class="clip-item-chip">${item.length} ch</span>`);
+    const row = document.createElement('div');
+    row.className = 'clip-item';
+    row.dataset.id = item.id;
+    row.innerHTML = `
+      <div class="clip-item-head">
+        <span class="clip-item-src" data-action="view" title="Open source">${clipSrcLabelHTML(p)}</span>
+        <span class="clip-item-time" title="${escapeHtml(item.createdAt)}">${clipRelTime(item.createdAt)}</span>
+      </div>
+      <div class="clip-item-text">${escapeHtml(item.text)}</div>
+      <div class="clip-item-meta">${chips.join('')}</div>
+      <div class="clip-item-actions">
+        <button class="clip-action is-primary" data-action="copy-text">Copy text</button>
+        <button class="clip-action" data-action="copy-cite">Copy with citation</button>
+        <button class="clip-action" data-action="copy-json">Copy JSON</button>
+        <button class="clip-action" data-action="view">View source</button>
+        <button class="clip-action is-danger" data-action="remove">Remove</button>
+      </div>`;
+    frag.appendChild(row);
+  });
+  list.appendChild(frag);
+  if (countNote) countNote.textContent = CLIPBOARD.length + ' item' + (CLIPBOARD.length === 1 ? '' : 's');
+}
+function clipOpenDrawer() {
+  const d = $('#clip-drawer');
+  if (!d) return;
+  clipRenderDrawer();
+  d.hidden = false;
+}
+function clipCloseDrawer() {
+  const d = $('#clip-drawer');
+  if (d) d.hidden = true;
+}
+function clipBuildProvenance(range) {
+  const container = range.commonAncestorContainer;
+  const el = container.nodeType === 1 ? container : container.parentElement;
+  if (!el) return null;
+  const modal = $('#src-viewer');
+  if (!modal || modal.hidden || !modal.contains(el)) return null;
+  const src = modal._currentSrc;
+  if (!src) return null;
+  const audit = src.extraction || null;
+  const p = {
+    sourceId: src.id,
+    sourceName: src.name,
+    sourceKind: src.kind || null,
+    mime: src.mime || null,
+    sha256: src.sha256 || audit?.doc_sha256 || null,
+    destination: src.destination || null,
+    archive_url: src.archive_url || null,
+    matrix_mxc: src.matrix_mxc || null,
+    extractionEngine: audit?.engine || null,
+    ocrEngine: audit?.ocr_engine || null,
+  };
+  const pageCard = el.closest?.('.pdf-page-card');
+  if (pageCard) {
+    p.page = Number(pageCard.dataset.pageNum);
+    const pageAudit = audit?.pages?.find(x => x.n === p.page) || null;
+    if (pageAudit) {
+      p.pageMethod = pageAudit.method;
+      if (pageAudit.ocr_confidence != null) p.pageConf = pageAudit.ocr_confidence;
+      if (pageAudit.chars != null) p.pageChars = pageAudit.chars;
+    }
+  }
+  const tupleBar = $('#src-viewer-tuple');
+  if (tupleBar && tupleBar._tuple) {
+    p.tuple = tupleBar._tuple;
+    if (tupleBar._tuple.row != null) p.row = tupleBar._tuple.row;
+    if (tupleBar._tuple.col != null) p.col = tupleBar._tuple.col;
+  }
+  return p;
+}
+function clipAddFromSelection() {
+  const sel = window.getSelection?.();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+  const text = sel.toString().trim();
+  if (!text) return;
+  const range = sel.getRangeAt(0);
+  const prov = clipBuildProvenance(range);
+  if (!prov) { clipToast('Select text inside a source to save it'); return; }
+  const item = {
+    id: 'clip_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36),
+    text,
+    length: text.length,
+    createdAt: new Date().toISOString(),
+    provenance: prov,
+  };
+  CLIPBOARD.unshift(item);
+  if (CLIPBOARD.length > CLIPBOARD_MAX) CLIPBOARD.length = CLIPBOARD_MAX;
+  saveClipboard();
+  clipUpdateFab();
+  const fab = $('#clip-fab');
+  if (fab) {
+    fab.classList.remove('just-added');
+    void fab.offsetWidth;
+    fab.classList.add('just-added');
+  }
+  clipToast('Saved to clipboard');
+  clipHidePill();
+  sel.removeAllRanges();
+  const d = $('#clip-drawer');
+  if (d && !d.hidden) clipRenderDrawer();
+}
+function clipPositionPill() {
+  const sel = window.getSelection?.();
+  const pill = $('#clip-select-pill');
+  if (!pill) return;
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) { pill.hidden = true; return; }
+  const modal = $('#src-viewer');
+  if (!modal || modal.hidden) { pill.hidden = true; return; }
+  const range = sel.getRangeAt(0);
+  const container = range.commonAncestorContainer;
+  const el = container.nodeType === 1 ? container : container.parentElement;
+  if (!el || !modal.contains(el)) { pill.hidden = true; return; }
+  const rects = range.getClientRects();
+  const last = rects[rects.length - 1];
+  if (!last || (last.width === 0 && last.height === 0)) { pill.hidden = true; return; }
+  pill.hidden = false;
+  pill.style.left = last.right + 'px';
+  pill.style.top  = last.top + 'px';
+}
+function clipHidePill() {
+  const pill = $('#clip-select-pill');
+  if (pill) pill.hidden = true;
+}
+function wireClipboard() {
+  loadClipboard();
+  clipUpdateFab();
+
+  $('#clip-fab').addEventListener('click', () => {
+    const d = $('#clip-drawer');
+    if (!d) return;
+    if (d.hidden) clipOpenDrawer(); else clipCloseDrawer();
+  });
+  $('#clip-drawer-close').addEventListener('click', clipCloseDrawer);
+  $('#clip-drawer-backdrop').addEventListener('click', clipCloseDrawer);
+  $('#clip-clear').addEventListener('click', () => {
+    if (!CLIPBOARD.length) return;
+    if (!confirm('Clear all ' + CLIPBOARD.length + ' clipboard items?')) return;
+    CLIPBOARD = [];
+    saveClipboard();
+    clipUpdateFab();
+    clipRenderDrawer();
+  });
+  // Keep selection alive when clicking the pill button. Capture on
+  // mousedown in case the browser still collapses the selection on
+  // button focus.
+  const pillEl = $('#clip-select-pill');
+  let pendingSave = null;
+  pillEl.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    const sel = window.getSelection?.();
+    if (sel && !sel.isCollapsed) {
+      pendingSave = {
+        text: sel.toString(),
+        range: sel.getRangeAt(0).cloneRange(),
+      };
+    }
+  });
+  $('#clip-select-add').addEventListener('click', (e) => {
+    e.preventDefault();
+    if (pendingSave) {
+      // Restore selection if the browser dropped it
+      const sel = window.getSelection?.();
+      if (sel && (sel.rangeCount === 0 || sel.isCollapsed)) {
+        try { sel.removeAllRanges(); sel.addRange(pendingSave.range); } catch {}
+      }
+    }
+    pendingSave = null;
+    clipAddFromSelection();
+  });
+
+  $('#clip-drawer-list').addEventListener('click', async (e) => {
+    const actBtn = e.target.closest('[data-action]');
+    if (!actBtn) return;
+    const action = actBtn.dataset.action;
+    const itemEl = actBtn.closest('.clip-item');
+    if (!itemEl) return;
+    const id = itemEl.dataset.id;
+    const item = CLIPBOARD.find(x => x.id === id);
+    if (!item) return;
+    if (action === 'copy-text') {
+      const ok = await clipCopyToSystem(item.text);
+      clipToast(ok ? 'Copied text' : 'Copy failed');
+    } else if (action === 'copy-cite') {
+      const ok = await clipCopyToSystem(clipCiteFormat(item));
+      clipToast(ok ? 'Copied with citation' : 'Copy failed');
+    } else if (action === 'copy-json') {
+      const ok = await clipCopyToSystem(JSON.stringify(item, null, 2));
+      clipToast(ok ? 'Copied JSON' : 'Copy failed');
+    } else if (action === 'view') {
+      const sid = item.provenance?.sourceId;
+      if (sid) { clipCloseDrawer(); showSourceViewer(sid); }
+    } else if (action === 'remove') {
+      CLIPBOARD = CLIPBOARD.filter(x => x.id !== id);
+      saveClipboard();
+      clipUpdateFab();
+      clipRenderDrawer();
+    }
+  });
+
+  document.addEventListener('selectionchange', () => {
+    clearTimeout(wireClipboard._tSel);
+    wireClipboard._tSel = setTimeout(clipPositionPill, 50);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      clipHidePill();
+      const d = $('#clip-drawer');
+      if (d && !d.hidden) clipCloseDrawer();
+    } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'c' || e.key === 'C')) {
+      const sel = window.getSelection?.();
+      if (sel && !sel.isCollapsed) { e.preventDefault(); clipAddFromSelection(); }
+    }
+  });
+  setInterval(() => {
+    const d = $('#clip-drawer');
+    if (d && !d.hidden) clipRenderDrawer();
+  }, 30000);
+
+  window.__nlClipboard = {
+    items: () => CLIPBOARD.slice(),
+    clear: () => { CLIPBOARD = []; saveClipboard(); clipUpdateFab(); clipRenderDrawer(); },
+    export: () => JSON.stringify(CLIPBOARD, null, 2),
+  };
+}
+
 /* ---------- Boot status indicator ---------- */
 function setBootStatus(text, color) {
   const el = $('#boot-status');
@@ -9426,6 +10114,7 @@ async function init() {
   renderEvidenceBench();
   wireEvidenceDnd();
   wireCellTuple();
+  wireClipboard();
   wireWorkspace();
   updateWorkspaceIndicator();
   // Try to resume a stored Matrix session in the background — don't block boot.
