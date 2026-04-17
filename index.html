@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NL Explorer</title>
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1" defer></script>
 <style>
   /* Claude.ai-adjacent token system — refined, editorial */
   :root {
@@ -453,6 +454,16 @@
   }
   .tbtn b { font-family: var(--font-serif); font-weight: 700; }
   .tbtn i { font-family: var(--font-serif); font-style: italic; font-weight: 500; }
+  /* Phosphor icons inside toolbar buttons — override the italic/serif styling
+     that the .tbtn i rule above applies to the bold-italic letterform buttons. */
+  .tbtn i[class*="ph-"],
+  .tbtn i.ph {
+    font-family: 'Phosphor' !important;
+    font-style: normal !important;
+    font-weight: normal !important;
+    font-size: 15px;
+    line-height: 1;
+  }
   .tbar-sep {
     width: 1px;
     height: 16px;
@@ -3626,35 +3637,35 @@
               <div class="tbtn-palette" id="tbtn-color-palette" hidden></div>
             </div>
             <div class="tbtn-color-wrap">
-              <button class="tbtn tbtn-color" id="tbtn-hilite" title="Highlight color" aria-label="Highlight color"><span class="tbtn-color-label">🖍</span><span class="tbtn-color-chip" id="tbtn-hilite-chip"></span><span class="tbtn-caret">▾</span></button>
+              <button class="tbtn tbtn-color" id="tbtn-hilite" title="Highlight color" aria-label="Highlight color"><span class="tbtn-color-label"><i class="ph ph-highlighter"></i></span><span class="tbtn-color-chip" id="tbtn-hilite-chip"></span><span class="tbtn-caret">▾</span></button>
               <div class="tbtn-palette" id="tbtn-hilite-palette" hidden></div>
             </div>
             <span class="tbar-sep"></span>
             <button class="tbtn" data-block="h2" title="Heading" aria-label="Heading 2">H2</button>
             <button class="tbtn" data-block="h3" title="Subheading" aria-label="Heading 3">H3</button>
-            <button class="tbtn" data-block="blockquote" title="Quote" aria-label="Blockquote">❝</button>
-            <button class="tbtn" data-block="pre" title="Code block" aria-label="Code block">&lt;/&gt;</button>
+            <button class="tbtn" data-block="blockquote" title="Quote" aria-label="Blockquote"><i class="ph ph-quotes"></i></button>
+            <button class="tbtn" data-block="pre" title="Code block" aria-label="Code block"><i class="ph ph-code"></i></button>
             <span class="tbar-sep"></span>
-            <button class="tbtn" data-cmd="justifyLeft" title="Align left (⌘⇧L)" aria-label="Align left">⯇</button>
-            <button class="tbtn" data-cmd="justifyCenter" title="Align center (⌘⇧E)" aria-label="Align center">⯐</button>
-            <button class="tbtn" data-cmd="justifyRight" title="Align right (⌘⇧R)" aria-label="Align right">⯈</button>
-            <button class="tbtn" data-cmd="justifyFull" title="Justify (⌘⇧J)" aria-label="Justify">⯍</button>
+            <button class="tbtn" data-cmd="justifyLeft" title="Align left (⌘⇧L)" aria-label="Align left"><i class="ph ph-text-align-left"></i></button>
+            <button class="tbtn" data-cmd="justifyCenter" title="Align center (⌘⇧E)" aria-label="Align center"><i class="ph ph-text-align-center"></i></button>
+            <button class="tbtn" data-cmd="justifyRight" title="Align right (⌘⇧R)" aria-label="Align right"><i class="ph ph-text-align-right"></i></button>
+            <button class="tbtn" data-cmd="justifyFull" title="Justify (⌘⇧J)" aria-label="Justify"><i class="ph ph-text-align-justify"></i></button>
             <span class="tbar-sep"></span>
-            <button class="tbtn" data-cmd="outdent" title="Decrease indent" aria-label="Outdent">⇤</button>
-            <button class="tbtn" data-cmd="indent" title="Increase indent" aria-label="Indent">⇥</button>
+            <button class="tbtn" data-cmd="outdent" title="Decrease indent" aria-label="Outdent"><i class="ph ph-text-outdent"></i></button>
+            <button class="tbtn" data-cmd="indent" title="Increase indent" aria-label="Indent"><i class="ph ph-text-indent"></i></button>
             <span class="tbar-sep"></span>
-            <button class="tbtn" data-cmd="insertUnorderedList" title="Bulleted list" aria-label="Bulleted list">•</button>
-            <button class="tbtn" data-cmd="insertOrderedList" title="Numbered list" aria-label="Numbered list">1.</button>
-            <button class="tbtn" data-cmd="link" title="Link (⌘K)" aria-label="Insert link">🔗</button>
+            <button class="tbtn" data-cmd="insertUnorderedList" title="Bulleted list" aria-label="Bulleted list"><i class="ph ph-list-bullets"></i></button>
+            <button class="tbtn" data-cmd="insertOrderedList" title="Numbered list" aria-label="Numbered list"><i class="ph ph-list-numbers"></i></button>
+            <button class="tbtn" data-cmd="link" title="Link (⌘K)" aria-label="Insert link"><i class="ph ph-link"></i></button>
             <span class="tbar-sep"></span>
-            <button class="tbtn" data-cmd="superscript" title="Superscript" aria-label="Superscript">x²</button>
-            <button class="tbtn" data-cmd="subscript" title="Subscript" aria-label="Subscript">x₂</button>
-            <button class="tbtn" data-cmd="insertHorizontalRule" title="Horizontal rule" aria-label="Horizontal rule">―</button>
+            <button class="tbtn" data-cmd="superscript" title="Superscript" aria-label="Superscript"><i class="ph ph-text-superscript"></i></button>
+            <button class="tbtn" data-cmd="subscript" title="Subscript" aria-label="Subscript"><i class="ph ph-text-subscript"></i></button>
+            <button class="tbtn" data-cmd="insertHorizontalRule" title="Horizontal rule" aria-label="Horizontal rule"><i class="ph ph-minus"></i></button>
             <span class="tbar-sep"></span>
-            <button class="tbtn" data-cmd="find" title="Find &amp; replace (⌘F)" aria-label="Find and replace">🔍</button>
-            <button class="tbtn" data-cmd="removeFormat" title="Clear formatting" aria-label="Clear formatting">✕</button>
-            <button class="tbtn" data-cmd="undo" title="Undo (⌘Z)" aria-label="Undo">↶</button>
-            <button class="tbtn" data-cmd="redo" title="Redo (⇧⌘Z)" aria-label="Redo">↷</button>
+            <button class="tbtn" data-cmd="find" title="Find &amp; replace (⌘F)" aria-label="Find and replace"><i class="ph ph-magnifying-glass"></i></button>
+            <button class="tbtn" data-cmd="removeFormat" title="Clear formatting" aria-label="Clear formatting"><i class="ph ph-eraser"></i></button>
+            <button class="tbtn" data-cmd="undo" title="Undo (⌘Z)" aria-label="Undo"><i class="ph ph-arrow-counter-clockwise"></i></button>
+            <button class="tbtn" data-cmd="redo" title="Redo (⇧⌘Z)" aria-label="Redo"><i class="ph ph-arrow-clockwise"></i></button>
             <div class="presence-bar" id="presence-bar"></div>
             <div class="tbar-status">
               <span id="tbar-wordcount">0 words</span>
