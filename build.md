@@ -1,188 +1,474 @@
-revamp the entire ux and wire up backend changes as needed for this use case
+# Local LLM spec: EO-native entity recognition with DEF→EVA→REC learning
 
-# NL Explorer — UX Specification
-## Grounded in the Pipeline Architecture
+## Core principle
 
----
+The local model never generates article text. It emits typed classification events, each tagged with the EO operator that produced it. Human reactions are evaluation events. Accumulated evaluation pressure triggers rewrite events that restructure the encoding layer around the model — resolution rules, prototypes, thresholds, prompts. Model weights stay frozen. What learns is the layer on top.
 
-## What the Backend Actually Is
-
-This is the EO fold running on text as its domain.
-
-Nine pipeline stages, each mapping to an operator. The fold walks through each stage in dependency order and accumulates an operator log. Every entry in that log carries a character span, a document anchor, a confidence score, and the stage that produced it. The log is not metadata attached to provenance. The log *is* provenance — because the log is how the system knows anything at all.
-
-**stageINS** — mints content-addressed anchors for the document and for each discovered entity cluster. The identity threshold. Everything below INS is ephemeral signal. From INS forward, entries are permanent.
-
-**stageSIG** — noun phrase recurrences, definition syntax hits (`hereinafter`, `means`, `shall mean`), money/date/org/person detections. Ephemeral. The raw attention layer: what did the text ask the pipeline to notice?
-
-**stageSEG** — sentence and clause boundaries. The structural skeleton everything else hangs from.
-
-**stageCON** — SVO extraction via dependency parse. Subject-verb-object triples become edges in the graph. Two entities in the same clause with a verb connecting them is a logged relationship.
-
-**stageEVA** — cross-document value comparison. The same normalized span appearing with different values across documents is a conflict, logged with both values and a null resolution field. Also runs BFS graph traversal per entity, testing whether accumulated CON-reachable structure satisfies, extends, contracts, or conflicts with the entity's established DEF frame. EVA is the pipeline thinking.
-
-**stageNUL** — absence detection. Expected entities that don't appear. Defined terms that surface once then vanish. Disclosure fields that should be present and aren't. NUL is not nothing. It is the structured detection of structured silence.
-
-**stageDEF** — cross-document conflict registration. Where two documents have incompatible values for the same anchor, DEF logs both values and a null resolution. The null is explicit — the system stops at the boundary of what it can determine mechanically.
-
-**stageREC_from_eva** — fires when EVA finds conflicts or substantial frame extension. Produces an evolved DEF frame absorbing new reachable nodes. Marks the prior frame as superseded. REC is learning.
-
-**stageINFER_site_face** — infers entity type from structural position alone. Verb ratios, hub status in the CON graph, EVA result distribution, surface form count, definition load. No regex. No domain knowledge. Type emerges from position in the operator log the same way it emerges in language — from structural role, not from a label applied.
-
-The **wave fold** governs stage scheduling. Stages without dependencies on each other fan out in parallel. SIG and SEG are independent — they run concurrently. CON depends on both — it serializes after they converge. EO's helix dependency ordering is the scheduling grammar, not a metaphor about it.
+This makes the system structurally alive in the Tabbaa sense: encoding separated from execution, persistent across time, rewritable by accumulated evaluation. The reporter runs the ⊨EVA half of a loop whose ⊛REC half closes automatically.
 
 ---
 
-## The Three Modes
+## Stage 1 — ⊢DEF: model proposals
 
-The app has three modes. They share one log, one source library, one instruction set. The modes are entry points to the same underlying system, not separate tools.
+### Stage 1a — DEF-boundary (span detection)
 
----
+**Input:** raw text window from a source (sentence, paragraph, or cell).
+**Model task:** return character spans likely to be entities.
+**Output:** array of `{start, end, surface, type_candidate, confidence}`.
+**Latency:** ~3-5s for a 30-page PDF; ~0.5s for a CSV row batch.
 
-### Mode 1: Write
+```js
+{
+  op: 'DEF',
+  site: 'observation:obs_k7n3p4',
+  payload: {
+    subtype: 'boundary',
+    source_id: 'src_council_minutes',
+    location: { start: 2847, end: 2868 },
+    surface: 'Solaren International',
+    type_candidate: 'ORG',
+    confidence: 0.97,
+    rule_set_version: 'rs_v47',
+    agent: 'model:qwen-2.5-3b@v1.2',
+    rationale: 'Capitalized noun phrase; corporate suffix-like context'
+  }
+}
+```
 
-Michael is writing the article in the app. The pipeline runs live as he types.
+**Validation gate:** the span's text must match the source content at that offset exactly. The fold rejects malformed boundary DEFs at parse time. No silent acceptance of phantom spans.
 
-This is the most important mode to get right. If you write the article in the app, every sentence is simultaneously prose and an ingest event. The pipeline doesn't wait for you to finish. It runs continuously against the indexed source library.
+### Stage 1b — DEF-type (disambiguation)
 
-**The editor surface is a standard prose editor.** No special syntax. No markup. No metadata fields. You write. The pipeline works behind it.
+**Trigger:** runs only on boundary DEFs with `confidence < 0.9` or `len(type_candidates) > 1`.
+**Input:** the surface plus ~50 chars of surrounding context.
+**Model task:** classify the entity type with rationale.
+**Output:** `{type, confidence, alternatives: [{type, confidence}]}`.
+**Latency:** ~0.3s per ambiguous span; typically 10-20% of all spans.
 
-As each sentence completes, the pipeline processes it:
+```js
+{
+  op: 'DEF',
+  site: 'observation:obs_k7n3p4',
+  payload: {
+    subtype: 'type',
+    pi: ['obs_k7n3p4'],          // refines the boundary DEF
+    type: 'ORG',
+    confidence: 0.91,
+    alternatives: [{ type: 'PERSON', confidence: 0.06 }],
+    rule_set_version: 'rs_v47',
+    agent: 'model:qwen-2.5-3b@v1.2',
+    rationale: 'Preceded by "vendor"; succeeded by contract terms'
+  }
+}
+```
 
-- Entities in the sentence are matched against anchors in the source library
-- Numerical values are cross-referenced against stageEVA in the source logs
-- Relationships expressed (subject-verb-object) are compared to CON edges in the source graph
-- Absent sources for any claim are flagged as stageNUL events
+### Stage 1c — DEF-link (canonical resolution)
 
-**Visual feedback is in-line and minimal:**
+**Trigger:** every typed mention.
+**Input:** mention surface + context + pre-filtered candidate list (top 5-10 canonical entities by string similarity from the workspace entity table).
+**Model task:** score candidates; return best match or `null`.
+**Output:** `{entity_id | null, confidence, rationale, alternatives}`.
+**Latency:** ~0.2s per mention with batching; ~2-4s total per document.
 
-A solid amber underline appears under any claim that the pipeline has grounded mechanically. It appears silently — no popup, no interruption. You see it and know: that claim has a source.
+```js
+{
+  op: 'DEF',
+  site: 'claim:em_q8r4m2',
+  payload: {
+    subtype: 'link',
+    type: 'entity_mention',
+    pi: ['obs_k7n3p4'],
+    entity_id: 'org:solaren_intl',
+    confidence: 0.94,
+    alternatives: [
+      { entity_id: 'org:solaren_risk_mgmt', confidence: 0.31 }
+    ],
+    rule_set_version: 'rs_v47',
+    agent: 'model:qwen-2.5-3b@v1.2',
+    rationale: 'Surface matches canonical; "private security services" matches category tag'
+  }
+}
+```
 
-A dotted amber underline appears under a claim the pipeline partially matched — something is there but it didn't resolve cleanly.
+**Routing by confidence band:**
+- ≥0.95 → indexed and visible in main surfaces
+- 0.85–0.95 → indexed with amber tilde marker
+- <0.85 → pending review queue, not surfaced in search until confirmed
 
-A thin red underline appears when EVA has fired a conflict — you wrote something that contradicts what's in the source log.
+### Stage 1d — DEF-coref (within-document)
 
-No underline means the pipeline either hasn't processed the sentence yet or found no mechanical footing for the claim. That's fine for synthesized language. It's a signal for factual claims.
+**Trigger:** after all mentions in a document are linked.
+**Input:** ordered list of mentions in the document.
+**Model task:** group mentions referring to the same entity.
+**Output:** array of chains `[{members: [obsIds], canonical_mention, confidence}]`.
+**Latency:** ~2-3s per document.
 
-**The right panel during writing is the claim inspector.** Not always visible. You invoke it by clicking any underlined span. It shows:
+```js
+{
+  op: 'DEF',
+  site: 'link:coref_p2h9x1',
+  payload: {
+    subtype: 'coref',
+    kind: 'coreference',
+    members: ['obs_k7n3p4', 'obs_m8l2q7', 'obs_n4r8w3'],
+    canonical_mention: 'obs_k7n3p4',
+    scope: { source_id: 'src_council_minutes', document_only: true },
+    confidence: 0.88,
+    rule_set_version: 'rs_v47',
+    agent: 'model:qwen-2.5-3b@v1.2'
+  }
+}
+```
 
-- The log path that produced the annotation — which stage, which source document, which span
-- For conflicts: both values, both sources, the EVA entry that caught it
-- For NUL: what the pipeline expected based on surrounding context and why it expected it
-- A "release" button that dismisses the annotation if it's wrong — which feeds the instruction set
+**Within-document only.** Cross-document coreference is out of scope; cross-document linkage happens through DEF-link's canonical entity table.
 
-The claim inspector closes when you click back into the document. It never takes focus away from writing.
+### Stage 1e — DEF-alias (candidate proposal)
 
-**The bottom status bar** shows live counts as you work: grounded claims, partial matches, active conflicts, absent-source flags. These are small numbers in a row at the bottom of the screen. Not badges. Not alerts. Just a count you can glance at.
+**Trigger:** runs on unresolved mentions (DEF-link returned `null`) periodically as a background task.
+**Input:** unresolved mention + workspace entity table.
+**Model task:** propose that this surface should become an alias of an existing entity.
+**Output:** `{surface, candidate_canonical_id, confidence, rationale}`.
+**Latency:** ~1-2s per unresolved mention; runs out-of-band, not blocking ingest.
 
-**When you're done writing**, you switch to Review. The mode switch triggers a full ingest pass over the complete article — the live pipeline catches most things, but the full pass runs stageREC and stageINFER_site_face across the whole document at once, which can surface things the incremental pass missed.
-
----
-
-### Mode 2: Review
-
-Whether you wrote in the app or imported an existing article, Review is where you walk through every annotated claim and confirm, correct, or release it.
-
-**The layout is a split:** article on the left, review queue on the right. The article is read-only in this mode. You are not editing. You are auditing.
-
-The queue shows claims in document order. Each card shows:
-
-- The claim text, with two sentences of surrounding context
-- Claim type: grounded / partial / conflict / absent / synthesized
-- For grounded: the operation chain from source to claim — stage by stage, readable as plain language
-- For conflicts: both values side by side with their sources
-- For absent: what was expected and why
-- Three actions: **Confirm** · **Correct** · **Release**
-
-Confirm is one tap. The claim is approved, the annotation is locked, the provenance is attached. The article now has a cite-through for that claim.
-
-Correct opens a text field and a source picker. You describe what's wrong. You can optionally point to the right source span. The correction becomes a DEF event in the meta-log — the system's own behavior is being corrected, not just the claim. The correction is attributed, timestamped, and feeds the instruction set review queue.
-
-Release removes the annotation. The claim appears without provenance in the published output. A released claim is not the same as an unsupported claim — the system tried and was wrong. That is logged too.
-
-**The queue can be filtered** by claim type. Work through conflicts first — those are the claims most likely to be wrong. Then absent flags — those are the claims most likely to be under-supported. Grounded claims last — those you're mostly just confirming.
-
-**Merge candidates** appear as a special queue section. These are entity clusters the pipeline thinks might be the same thing under different surface forms — `"the Authority"` and `"Authority"` and `"the Metro Authority"`. Confirming a merge collapses them to a single anchor. Rejecting it keeps them separate and logs a disambiguation rule so the pipeline doesn't propose the same merge again.
-
----
-
-### Mode 3: Chat
-
-The user asks a question. The system routes the question to either the fold or the LLM, depending on whether the answer is mechanically derivable.
-
-**Fold-computable answers** require no LLM at all. "What is NDP's relationship to OHS?" is a graph query. Walk the CON edges from NDP. Find OHS. Return the path — the verb chains, the document anchors, the spans. The answer is a subgraph. Every node in it links to a character span in a primary source. The LLM is not consulted.
-
-**LLM-evaluated answers** are needed when the question asks for synthesis, interpretation, or summary that can't be expressed as graph traversal. The LLM receives the operator log as context, not raw documents. It works from structured operator entries — anchors, frames, CON paths, EVA conflicts — not from full document text. This constrains what it can hallucinate, because the input is already structured.
-
-LLM output is ingested back through the pipeline before rendering. Claims in the LLM's response are processed through stageSIG and stageCON against the existing log. Grounded claims get amber underlines. Conflicts with the log surface as EVA events. The response is never rendered as a flat block of prose.
-
-**Response structure on screen:**
-
-The prose response renders normally. Grounded claims are underlined amber. Conflicting claims are underlined red. Claims the pipeline can't evaluate are undecorated.
-
-Below the prose response, a collapsed evidence panel shows every grounded claim as a card. Each card: the claim text, the log path, the source span, the raw result before formatting, and a re-derive button that replays the fold against the source documents live to confirm the claim still holds.
-
-The re-derive button is the trust anchor of the whole chat interface. It means the reader isn't being asked to trust the system's current output. They can watch the system re-derive the answer from the sources in real time.
-
-**NUL claims in chat** — the pipeline can also report what the LLM's response conspicuously omits. If the question is about NDP's budget and the response doesn't mention the conflict between the public budget figure and the internal document figure, the pipeline flags the omission. NUL fires on the LLM response the same way it fires on any document.
-
----
-
-## The Instruction Set
-
-The instruction set is a meta-log — a separate append-only log that records what the pipeline has learned about how to process text, not what it found in any specific document.
-
-It lives in its own panel. It is not part of the claim inspector. It is not part of the review queue. It is its own surface because it is a different kind of knowledge.
-
-**Every instruction has:**
-
-- Rule type: COREF, XREF, EXTRACTION, MERGE, CONFLICT_THRESHOLD, ABSENCE_PATTERN
-- Plain language description — written by the system, editable by the user
-- Trigger: `human_correction` · `llm_reflection` · `recursive` (fired by another rule)
-- Scope: which operators and source types this rule applies to
-- Firing count since creation
-- Conflict list: other rules that partially overlap, with a resolve option
-
-**The recursive trigger is where the system gets smarter.** When a rule fires, the firing is logged. When three or more firings result in downstream corrections — meaning the rule was right but incomplete — the system generates a candidate refinement. The refinement shows in a review queue inside the instruction set panel. You approve, edit, or reject it.
-
-A rule that improves a rule. This is the DEF/EVA/REC cycle applied to the pipeline itself. DEF establishes how the pipeline should behave. EVA tests whether the behavior satisfies the standard. REC restructures the frame when it doesn't.
-
-**Instruction corrections are themselves auditable.** Every time you edit a rule, the prior version is preserved. You can see the full history of how any rule evolved. You can revert. You can compare.
-
-**The instruction set can be exported** as a portable JSON file, independent of any document corpus. When you start a new investigation — a new set of source documents — you can import the instruction set from the previous investigation as a prior. The pipeline starts smarter than it started last time.
-
-This is the generalizable intelligence. The document corpus is the specific knowledge. The instruction set is the method. Keep them separate.
-
----
-
-## Export Formats
-
-**HTML** — the article with provenance embedded as data attributes on every annotated span. A self-contained provenance drawer script is included. The article can be pasted anywhere and the provenance works without a server. When a reader clicks a claim, they see the log path in a right-side drawer. This is the publication format.
-
-**Markdown** — terse inline citations (`[^m1]`) with a generated footnotes section containing source file, location, and operation. For editors and CMS pipelines that strip HTML attributes.
-
-**JSON (full audit)** — two root keys: `claims` (the full log-path schema for every confirmed claim) and `sources` (the indexed source documents with content hashes). A reader with the JSON and the original source documents can independently reconstruct every derivation. This is the archival format and the format for submitting evidence in formal proceedings.
-
-**Diff** — when source documents are updated, a diff export shows which prior claims now mismatch their sources, which are now unsupported, and which new claims are supportable that weren't before. The update format.
-
----
-
-## What the Published Article Looks Like to a Reader
-
-The article reads normally. One affordance: a small indicator in the top right — "N claims verified · M sources" — that a reader can click to open a summary of the provenance layer.
-
-Clicking any sentence opens the paragraph drawer, which lists every annotated claim in that paragraph with its type and a one-line provenance summary. Clicking a specific claim expands the full log path.
-
-NUL claims — absent evidence — are visible in the drawer if the author chose to surface them. "The filing does not contain a disclosure of X" is a claim with provenance. It should be citable the same way a positive claim is.
-
-The drawer can be navigated by keyboard. A reader going through a long investigation piece can step through every grounded claim in document order and verify each one without leaving the page.
+```js
+{
+  op: 'DEF',
+  site: 'proposal:alias_w3k8s2',
+  payload: {
+    subtype: 'alias',
+    surface: 'Solaren Risk Management',
+    pi: ['obs_n4r8w3', 'obs_m2q5p9'],   // multiple unresolved obs supporting this
+    candidate_canonical_id: 'org:solaren_intl',
+    confidence: 0.82,
+    rule_set_version: 'rs_v47',
+    agent: 'model:qwen-2.5-3b@v1.2',
+    rationale: 'String similarity 0.74; co-occurs with NDP and security context across 3 sources'
+  }
+}
+```
 
 ---
 
-## One Design Constraint That Cannot Be Compromised
+## Stage 2 — ⊨EVA: evaluation events
 
-The pipeline stages are the provenance. Not a representation of the provenance. The stages.
+Every reaction to a DEF is an EVA event. EVAs evaluate; they never overwrite.
 
-This means the UI can never show a provenance path it computed separately from the log. Every underline, every drawer entry, every conflict flag traces back to a real log entry with a real stage, span, anchor, and confidence score. If the log doesn't have it, the UI doesn't show it.
+### Stage 2a — Direct human EVA (weight 1.0)
 
-This is what makes the whole system different from a citation manager or a fact-checker. Those systems add provenance as a layer on top of a document. This system derives the document as a projection of the provenance. The provenance was always underneath. The article made it visible.
+**Trigger:** explicit user action — Accept/Reject button, manual entity edit, alias confirm/deny.
+**Input:** target DEF event + verdict + optional reframe target.
+
+```js
+{
+  op: 'EVA',
+  site: 'claim:em_q8r4m2',
+  payload: {
+    target_event: 'em_q8r4m2',
+    verdict: 'confirm' | 'reject' | 'reframe' | 'defer',
+    weight: 1.0,
+    agent: 'human:user_k2m4',
+    reframe_to: null | { entity_id: 'org:solaren_risk_mgmt' },
+    note: 'optional reporter note'
+  }
+}
+```
+
+### Stage 2b — Inferred human EVA (weight 0.5)
+
+**Trigger:** reporter performs an action that implies agreement or disagreement with a DEF without explicitly evaluating it.
+
+Cases:
+- Reporter anchors a claim whose source span overlaps a DEF-link → silent confirm
+- Reporter manually links a span the model already linked to a different entity → silent reframe
+- Reporter retracts a claim whose span contains a DEF-link → silent reject
+
+**Conservative rule:** inferred EVAs only fire when the user's action is unambiguous. If the action is consistent with multiple interpretations, no EVA is emitted.
+
+```js
+{
+  op: 'EVA',
+  site: 'claim:em_q8r4m2',
+  payload: {
+    target_event: 'em_q8r4m2',
+    verdict: 'confirm',
+    weight: 0.5,
+    agent: 'human:user_k2m4',
+    inferred_from: { action: 'anchor_claim', claim_id: 'cl_b3p7n5' }
+  }
+}
+```
+
+### Stage 2c — System consistency EVA (weight 0.2)
+
+**Trigger:** the fold detects internal inconsistencies between DEF events. Runs as part of every fold pass.
+
+Cases:
+- Coref chain members linked to different canonical IDs (one or both are wrong)
+- Two DEFs assert different types for the same surface in the same source
+- Confirmed entity X appears in a DEF-link as alternative to the model's primary choice; primary was rejected
+
+**Lowest weight** because it's structural inference, not human judgment. Used as tie-breaker, not primary signal.
+
+```js
+{
+  op: 'EVA',
+  site: 'claim:em_q8r4m2',
+  payload: {
+    target_event: 'em_q8r4m2',
+    verdict: 'reject',
+    weight: 0.2,
+    agent: 'system:consistency_check',
+    detected: 'coref_chain_disagrees',
+    related_events: ['em_x4j2k7', 'em_m9p3l1']
+  }
+}
+```
+
+---
+
+## Stage 3 — ⊛REC: ruleset rewrites
+
+⊛REC fires when accumulated EVA pressure on a specific rule or threshold crosses a trigger. Five things REC can rewrite. Each has its own trigger logic, its own evidence requirement, and produces a new `rule_set_version`.
+
+### Stage 3a — REC-alias-add
+
+**Trigger:** ≥3 confirms on reframes pointing the same unresolved surface at the same canonical ID, with total weight ≥2.0.
+**Effect:** adds the surface as an alias of the canonical entity in the resolution table.
+**Visible:** "Alias added: 'Solaren Risk Management' → Solaren International, based on 3 confirmations."
+
+```js
+{
+  op: 'REC',
+  site: 'ruleset:rs_v48',
+  payload: {
+    rewrite_type: 'alias_add',
+    previous_version: 'rs_v47',
+    target: { entity_id: 'org:solaren_intl' },
+    change: { add_alias: 'Solaren Risk Management' },
+    triggered_by: ['eva_3k4m', 'eva_8p2n', 'eva_q7w5'],
+    evidence_weight: 2.4,
+    agent: 'system:rewrite_engine'
+  }
+}
+```
+
+### Stage 3b — REC-alias-remove
+
+**Trigger:** ≥5 rejects of model DEFs that used a particular alias for resolution, with total weight ≥3.0.
+**Effect:** removes the alias from the canonical entity; future DEF-link calls won't propose this match.
+**Visible:** "Alias removed: 'Solaren Energy' was incorrectly mapped to Solaren International (5 rejections)."
+
+### Stage 3c — REC-entity-split
+
+**Trigger:** ≥3 reframes partitioning a canonical entity's mentions across two distinct targets.
+**Effect:** splits the canonical entity into two; existing DEF-links are *not* automatically reassigned but flagged for review.
+**Visible:** "Entity split: Solaren International → [Solaren International, Solaren Risk Management] based on reporter reframes. 14 prior mentions need review."
+
+```js
+{
+  op: 'REC',
+  site: 'ruleset:rs_v52',
+  payload: {
+    rewrite_type: 'entity_split',
+    previous_version: 'rs_v51',
+    target: { entity_id: 'org:solaren_intl' },
+    change: {
+      split_into: ['org:solaren_intl', 'org:solaren_risk_mgmt'],
+      pending_review_count: 14
+    },
+    triggered_by: ['eva_…', 'eva_…', 'eva_…'],
+    evidence_weight: 3.1,
+    agent: 'system:rewrite_engine'
+  }
+}
+```
+
+### Stage 3d — REC-entity-merge
+
+**Trigger:** explicit reporter action — "merge these two entities" — plus ≥1 confirming reframe in either direction.
+**Effect:** unifies two canonical entities into one; aliases combine; mentions reassign.
+**Visible:** "Entities merged: 'Solaren Intl. LLC' → Solaren International by reporter."
+
+### Stage 3e — REC-threshold-lower
+
+**Trigger:** last 20 confirms for a specific entity averaged ≥0.85 confidence with no rejects in that window.
+**Effect:** lowers the display threshold for that entity from default to 0.80; previously hidden DEFs surface.
+**Visible:** "Threshold lowered for Nashville Downtown Partnership (97% accuracy at confidence 0.85+)."
+
+### Stage 3f — REC-threshold-raise
+
+**Trigger:** last 20 rejects for an entity averaged ≥0.90 confidence.
+**Effect:** raises the display threshold; entity gets flagged for ambiguity review.
+**Visible:** "Threshold raised for 'Torres' (multiple matching entities; needs disambiguation)."
+
+### Stage 3g — REC-prototype-update
+
+**Trigger:** continuous; runs after every confirmed DEF-link. Updates the few-shot prototype set for the entity.
+**Effect:** adds the confirmed mention's context as a positive exemplar in the entity's prototype set; evicts oldest exemplar if set size exceeds limit (default 10).
+**Visible:** silent — runs as background maintenance. Reporter can view current prototypes in the entity profile.
+
+```js
+{
+  op: 'REC',
+  site: 'ruleset:rs_v49',
+  payload: {
+    rewrite_type: 'prototype_update',
+    previous_version: 'rs_v48',
+    target: { entity_id: 'org:solaren_intl' },
+    change: {
+      add_prototype: {
+        context: '...the contract with Solaren International for security services...',
+        source_id: 'src_council_minutes',
+        confirmed_via: 'eva_q3p7'
+      },
+      evict_prototype: 'proto_2x9k'    // oldest in set
+    },
+    triggered_by: ['eva_q3p7'],
+    evidence_weight: 1.0,
+    agent: 'system:rewrite_engine'
+  }
+}
+```
+
+### Stage 3h — REC-type-rule
+
+**Trigger:** ≥4 EVAs reframing a specific surface→type mapping in a specific context, with total weight ≥3.0.
+**Effect:** adds a context-specific type rule. "Torres within 50 chars of Councilmember → PERSON, p:torres_v" overrides general disambiguation.
+**Visible:** "Rule added: 'Torres' near 'Councilmember' → Councilmember Torres."
+
+### Stage 3i — REC-prompt-addition
+
+**Trigger:** ≥5 rejects of the same error pattern. Detected by clustering rejected DEFs on (surface_pattern, context_pattern, wrong_target).
+**Human review required.** REC-prompt-addition does not fire automatically — it queues a proposed prompt change for the reporter to approve.
+**Effect:** appends an instruction to the model's system prompt for this workspace. Prompt is versioned; each addition links back to triggering EVAs.
+**Visible:** "Prompt addition proposed: 'Treat "the Partnership" as coreferent to NDP by default.' Based on 6 corrections. Approve?"
+
+```js
+{
+  op: 'REC',
+  site: 'ruleset:rs_v55',
+  payload: {
+    rewrite_type: 'prompt_addition',
+    previous_version: 'rs_v54',
+    change: {
+      append_to_prompt: 'When evaluating entities in Nashville municipal documents, treat "the Partnership" and "NDP" as coreferent to org:ndp by default unless context indicates otherwise.'
+    },
+    triggered_by: ['eva_…', 'eva_…', 'eva_…', 'eva_…', 'eva_…', 'eva_…'],
+    evidence_weight: 5.4,
+    agent: 'human:user_k2m4',           // human-approved, not auto
+    approval: { approved_by: 'user_k2m4', at: '2026-04-17T15:23:00Z' }
+  }
+}
+```
+
+---
+
+## Stage 4 — Counter-rewrites
+
+Rule 9: no rewrite is immune to supersession. The system tracks downstream EVA pressure on each REC event itself.
+
+**Trigger for counter-REC:** if a REC event is followed by ≥3 rejects on DEFs that used the new rule, with total weight ≥2.0, the system queues a counter-REC for review.
+**Effect:** reverts the previous REC. Resolution table, threshold, prototype, or prompt returns to prior state. Both the original REC and the counter-REC stay in the log.
+**Visible:** "Recent rule reverted: alias 'Solaren Risk Management' caused 4 misclassifications. Reverted to previous state."
+
+```js
+{
+  op: 'REC',
+  site: 'ruleset:rs_v50',
+  payload: {
+    rewrite_type: 'revert',
+    previous_version: 'rs_v49',
+    target: { reverts: 'rec_v48' },     // the REC being undone
+    change: { revert_to: 'rs_v47' },
+    triggered_by: ['eva_3w7m', 'eva_p4k8', 'eva_n2j5'],
+    evidence_weight: 2.3,
+    agent: 'system:rewrite_engine'
+  }
+}
+```
+
+---
+
+## Stage 5 — Validation gates
+
+Each stage has a validation gate that prevents malformed or pathological events from entering the log.
+
+**DEF gate:** validates that source spans match actual source content; rejects DEFs that reference offsets outside the source or text that doesn't match. Validates that referenced canonical entity IDs exist in the current ruleset.
+
+**EVA gate:** validates that target_event exists. Validates that reframe_to is a valid canonical ID. Rejects EVAs from agents that aren't authenticated to this workspace.
+
+**REC gate:** validates that triggered_by EVAs exist and have sufficient combined weight to meet the trigger. Rejects REC events that lack EVA evidence (Rule 4 enforcement: no skipped ⊨EVA).
+
+---
+
+## Stage 6 — Revalidation
+
+When a REC fires, prior DEFs produced under the old ruleset are *potentially stale*. Revalidation strategy is lazy, not eager.
+
+**Mark stale.** All DEFs with `rule_set_version` older than the current version are tagged stale in the index. Stale ≠ wrong; they remain in the log and remain resolvable.
+
+**Lazy revalidation.** When a stale DEF is viewed in the entity profile or in search results, the model runs once on the current ruleset for that span. If the new DEF agrees with the old, both stay (the old is no longer stale). If they disagree, both stay and the conflict surfaces in the review queue.
+
+**Manual batch revalidation.** A workspace settings action — "Revalidate workspace under current ruleset" — runs in the background, processing all stale DEFs. Progress visible; pausable; resumable.
+
+**Frozen audit trail.** Old DEFs are never deleted. A reporter can replay any past `rule_set_version` against the log to see what the system thought at that point in time.
+
+---
+
+## Stage 7 — UI surfaces for the loop
+
+### Stage 7a — Per-entity loop indicator
+
+In the entity profile, a small status line:
+
+> Loop · 47 DEFs · 42 confirms · 3 rejects · 2 reframes · last REC 2h ago (alias added)
+
+Hover expands to a recent-events strip showing the last 10 DEF/EVA/REC events for this entity.
+
+### Stage 7b — Pending EVA queue
+
+Persistent badge in the workspace bar: *"12 model suggestions await review."*
+Click opens a batch-review modal. Each suggestion shows: surface, context, proposed canonical entity, model rationale, three buttons (Confirm / Reject / Reframe). Reporter can rip through 50 in 60 seconds.
+
+### Stage 7c — Ruleset changelog
+
+Workspace settings → Ruleset history. Vertical timeline of every REC event:
+
+> rs_v48 · 2h ago · alias_add · "Solaren Risk Management" → Solaren International · triggered by 3 confirmations · [revert]
+> rs_v47 · 4h ago · prototype_update · Nashville Downtown Partnership · silent · [view]
+> rs_v46 · 6h ago · threshold_lower · Solaren International (0.85 → 0.80) · [revert]
+
+Each row links to the EVAs that triggered it. Reporters who distrust the automation audit here. Reporters who trust it never visit.
+
+### Stage 7d — Resistance profile dashboard
+
+A summary view per workspace:
+
+- DEF rate (events per day)
+- EVA rate, broken down by source (direct / inferred / system)
+- REC rate, broken down by type
+- Counter-REC rate (how often the system is reverting itself)
+- Average time from DEF to first EVA
+- Pending EVA count
+
+Reporter can adjust trigger thresholds directly from this dashboard if the loop is moving too aggressively or too cautiously.
+
+---
+
+## Stage 8 — Failure mode prevention
+
+Mapped to the loop document's three pathologies:
+
+**Suppressed ⊛REC → sclerosis.** Prevented by Stage 3 automatic triggers. Accumulated EVA pressure cannot stagnate; trigger thresholds force rule rewrites.
+
+**Skipped ⊨EVA → ideology.** Prevented by Stage 5 REC validation gate. RECs require EVA evidence; the system cannot rewrite rules from internal reasoning alone.
+
+**Skipped ⊢DEF → chaos.** Prevented by Stage 1 ruleset versioning. New rulesets don't invalidate old DEFs; reporters never see categories destabilize beneath them.
+
+---
+
+## The model's actual job, one sentence
+
+**The model proposes definitions constrained by the current ruleset. The reporter evaluates them. The ruleset rewrites itself when evaluation pressure accumulates. Nothing else happens.**
+
+If a proposed feature puts the model outside that sentence — generating article text, answering questions, ranking results, mutating definitions without EVA evidence — it's in a different pipeline and has to be spec'd separately under its own operator discipline. This pipeline is ⊢DEF → ⊨EVA → ⊛REC, fully closed, continuously learning, structurally preserved across every model version, reporter correction, and workspace expansion that follows.
