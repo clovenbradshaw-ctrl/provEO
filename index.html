@@ -364,6 +364,14 @@
   }
   .article-body p { margin-bottom: 16px; }
   .article-body p:last-child { margin-bottom: 0; }
+  .article-body h1 {
+    font-family: var(--font-serif);
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.22;
+    margin: 28px 0 12px;
+    letter-spacing: -0.015em;
+  }
   .article-body h2 {
     font-family: var(--font-serif);
     font-size: 20px;
@@ -379,12 +387,54 @@
     line-height: 1.35;
     margin: 20px 0 10px;
   }
+  .article-body h4 {
+    font-family: var(--font-serif);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.4;
+    margin: 18px 0 8px;
+  }
+  .article-body h5 {
+    font-family: var(--font-serif);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.45;
+    margin: 16px 0 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-secondary);
+  }
+  .article-body h1.title {
+    font-size: 34px;
+    letter-spacing: -0.02em;
+    margin-top: 8px;
+  }
+  .article-body h2.subtitle {
+    font-weight: 400;
+    font-style: italic;
+    color: var(--color-text-secondary);
+    font-size: 18px;
+    margin-top: 0;
+  }
   .article-body blockquote {
     border-left: 3px solid var(--color-border-secondary);
     padding: 2px 0 2px 16px;
     margin: 16px 0;
     color: var(--color-text-secondary);
     font-style: italic;
+  }
+  .article-body blockquote.pullquote {
+    border-left: none;
+    border-top: 0.5px solid var(--color-border-secondary);
+    border-bottom: 0.5px solid var(--color-border-secondary);
+    padding: 14px 24px;
+    margin: 24px 0;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 20px;
+    line-height: 1.4;
+    color: var(--color-text-primary);
+    text-align: center;
   }
   .article-body ul, .article-body ol { margin: 0 0 16px 24px; padding: 0; }
   .article-body li { margin-bottom: 6px; }
@@ -499,6 +549,86 @@
     border-color: var(--color-border-secondary);
     color: var(--color-text-primary);
   }
+  /* Paragraph-style dropdown (custom — replaces native <select>). */
+  .tbtn-style-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    height: 28px;
+  }
+  .tbtn-style {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: transparent;
+    border: 0.5px solid transparent;
+    color: var(--color-text-primary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    height: 28px;
+    padding: 0 6px 0 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    min-width: 104px;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .tbtn-style:hover,
+  .tbtn-style[aria-expanded="true"] {
+    background: var(--color-bg-secondary, rgba(0,0,0,0.04));
+    border-color: var(--color-border-tertiary);
+  }
+  .tbtn-style-label {
+    flex: 1;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tbtn-style-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 50;
+    min-width: 200px;
+    padding: 4px;
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: 4px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  }
+  .tbtn-style-menu .tbtn-style-opt {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 6px 10px;
+    border: 0;
+    background: transparent;
+    font-family: var(--font-serif);
+    color: var(--color-text-primary);
+    border-radius: 3px;
+    cursor: pointer;
+    line-height: 1.2;
+  }
+  .tbtn-style-menu .tbtn-style-opt:hover,
+  .tbtn-style-menu .tbtn-style-opt[aria-selected="true"] {
+    background: var(--color-bg-secondary, rgba(0,0,0,0.06));
+  }
+  .tbtn-style-menu .tbtn-style-sep {
+    height: 0.5px;
+    background: var(--color-border-tertiary);
+    margin: 4px 2px;
+  }
+  .tbtn-style-menu .tbtn-style-opt[data-style="title"]      { font-size: 18px; font-weight: 700; }
+  .tbtn-style-menu .tbtn-style-opt[data-style="subtitle"]   { font-size: 14px; font-style: italic; color: var(--color-text-secondary); }
+  .tbtn-style-menu .tbtn-style-opt[data-style="h1"]         { font-size: 17px; font-weight: 700; }
+  .tbtn-style-menu .tbtn-style-opt[data-style="h2"]         { font-size: 15px; font-weight: 600; }
+  .tbtn-style-menu .tbtn-style-opt[data-style="h3"]         { font-size: 13px; font-weight: 600; }
+  .tbtn-style-menu .tbtn-style-opt[data-style="h4"]         { font-size: 12px; font-weight: 600; }
+  .tbtn-style-menu .tbtn-style-opt[data-style="h5"]         { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+  .tbtn-style-menu .tbtn-style-opt[data-style="p"]          { font-size: 13px; }
+  .tbtn-style-menu .tbtn-style-opt[data-style="blockquote"] { font-size: 13px; font-style: italic; }
+  .tbtn-style-menu .tbtn-style-opt[data-style="pullquote"]  { font-size: 13px; font-style: italic; text-align: center; }
+  .tbtn-style-menu .tbtn-style-opt[data-style="pre"]        { font-family: var(--font-mono); font-size: 12px; }
   /* Text-color / highlight-color triggers + popovers. */
   .tbtn-color-wrap { position: relative; display: inline-flex; }
   .tbtn-color {
@@ -3624,19 +3754,19 @@
       <div class="center">
         <div class="editor-wrap">
           <div class="editor-toolbar" id="editor-toolbar" role="toolbar" aria-label="Formatting">
-            <div class="tbtn-select-wrap" title="Font size">
-              <select class="tbtn-select" id="tbtn-fontsize" aria-label="Font size">
-                <option value="2">Small</option>
-                <option value="3" selected>Normal</option>
-                <option value="5">Large</option>
-                <option value="6">Huge</option>
-              </select>
+            <div class="tbtn-style-wrap" title="Paragraph style">
+              <button type="button" class="tbtn-style" id="tbtn-block-style" aria-haspopup="listbox" aria-expanded="false">
+                <span class="tbtn-style-label" id="tbtn-block-style-label">Normal</span>
+                <span class="tbtn-caret">▾</span>
+              </button>
+              <div class="tbtn-style-menu" id="tbtn-block-style-menu" role="listbox" hidden></div>
             </div>
             <span class="tbar-sep"></span>
             <button class="tbtn" data-cmd="bold" title="Bold (⌘B)" aria-label="Bold"><b>B</b></button>
             <button class="tbtn" data-cmd="italic" title="Italic (⌘I)" aria-label="Italic"><i>I</i></button>
             <button class="tbtn" data-cmd="underline" title="Underline (⌘U)" aria-label="Underline"><span style="text-decoration:underline">U</span></button>
             <button class="tbtn" data-cmd="strikeThrough" title="Strikethrough" aria-label="Strikethrough"><span style="text-decoration:line-through">S</span></button>
+            <button class="tbtn" data-cmd="inlineCode" title="Inline code" aria-label="Inline code"><span style="font-family:var(--font-mono);font-size:12px">&lt;/&gt;</span></button>
             <span class="tbar-sep"></span>
             <div class="tbtn-color-wrap">
               <button class="tbtn tbtn-color" id="tbtn-color" title="Text color" aria-label="Text color"><span class="tbtn-color-label">A</span><span class="tbtn-color-chip" id="tbtn-color-chip"></span><span class="tbtn-caret">▾</span></button>
@@ -3646,11 +3776,6 @@
               <button class="tbtn tbtn-color" id="tbtn-hilite" title="Highlight color" aria-label="Highlight color"><span class="tbtn-color-label"><i class="ph ph-highlighter"></i></span><span class="tbtn-color-chip" id="tbtn-hilite-chip"></span><span class="tbtn-caret">▾</span></button>
               <div class="tbtn-palette" id="tbtn-hilite-palette" hidden></div>
             </div>
-            <span class="tbar-sep"></span>
-            <button class="tbtn" data-block="h2" title="Heading" aria-label="Heading 2">H2</button>
-            <button class="tbtn" data-block="h3" title="Subheading" aria-label="Heading 3">H3</button>
-            <button class="tbtn" data-block="blockquote" title="Quote" aria-label="Blockquote"><i class="ph ph-quotes"></i></button>
-            <button class="tbtn" data-block="pre" title="Code block" aria-label="Code block"><i class="ph ph-code"></i></button>
             <span class="tbar-sep"></span>
             <button class="tbtn" data-cmd="justifyLeft" title="Align left (⌘⇧L)" aria-label="Align left"><i class="ph ph-text-align-left"></i></button>
             <button class="tbtn" data-cmd="justifyCenter" title="Align center (⌘⇧E)" aria-label="Align center"><i class="ph ph-text-align-center"></i></button>
@@ -10905,7 +11030,7 @@ function setSyncStatus(state, label) {
 function isActiveCmd(cmd) {
   try { return document.queryCommandState(cmd); } catch { return false; }
 }
-function currentBlockTag() {
+function currentBlockNode() {
   const sel = window.getSelection();
   if (!sel || !sel.rangeCount) return null;
   let node = sel.getRangeAt(0).startContainer;
@@ -10914,10 +11039,24 @@ function currentBlockTag() {
   if (node.nodeType === 3) node = node.parentNode;
   while (node && node !== body) {
     const tag = node.nodeName.toLowerCase();
-    if (['p','h1','h2','h3','h4','blockquote','pre','li'].includes(tag)) return tag;
+    if (['p','h1','h2','h3','h4','h5','h6','blockquote','pre','li'].includes(tag)) return node;
     node = node.parentNode;
   }
   return null;
+}
+function currentBlockTag() {
+  const n = currentBlockNode();
+  return n ? n.nodeName.toLowerCase() : null;
+}
+// Style key maps block-tag + class combinations to a single dropdown key.
+function currentBlockStyleKey() {
+  const n = currentBlockNode();
+  if (!n) return null;
+  const tag = n.nodeName.toLowerCase();
+  if (tag === 'h1' && n.classList.contains('title')) return 'title';
+  if (tag === 'h2' && n.classList.contains('subtitle')) return 'subtitle';
+  if (tag === 'blockquote' && n.classList.contains('pullquote')) return 'pullquote';
+  return tag;
 }
 function refreshToolbarState() {
   const tb = $('#editor-toolbar');
@@ -10937,13 +11076,18 @@ function refreshToolbarState() {
   tb.querySelectorAll('.tbtn[data-block]').forEach(b => {
     b.classList.toggle('active', b.dataset.block === block);
   });
-  // Sync the font-size select with the selection's effective size.
-  const sizeSelect = document.getElementById('tbtn-fontsize');
-  if (sizeSelect) {
-    try {
-      const size = document.queryCommandValue('fontSize');
-      if (size && sizeSelect.value !== String(size)) sizeSelect.value = String(size);
-    } catch {}
+  // Sync the paragraph-style dropdown label + aria-selected.
+  const styleKey = currentBlockStyleKey() || 'p';
+  const label = document.getElementById('tbtn-block-style-label');
+  if (label) {
+    const opt = STYLE_OPTIONS.find(o => o.key === styleKey);
+    label.textContent = opt ? opt.label : 'Normal';
+  }
+  const menu = document.getElementById('tbtn-block-style-menu');
+  if (menu) {
+    menu.querySelectorAll('.tbtn-style-opt').forEach(el => {
+      el.setAttribute('aria-selected', el.dataset.style === styleKey ? 'true' : 'false');
+    });
   }
 }
 
@@ -10961,7 +11105,84 @@ function runToolbarCmd(cmd) {
     openFindBar();
     return;
   }
+  if (cmd === 'inlineCode') {
+    toggleInlineCode();
+    return;
+  }
   document.execCommand(cmd, false, null);
+}
+
+/* ----------------------------------------------------------------------
+   PARAGRAPH-STYLE DROPDOWN
+   Replaces the old font-size <select>. Options cover display styles
+   (Title, Subtitle), headings 1–5, paragraph, quotes, pullquote, and
+   code blocks. Class-bearing styles (title/subtitle/pullquote) apply a
+   class on top of the standard tag so the serialized HTML round-trips
+   through storage.saveArticle without a custom schema. */
+const STYLE_OPTIONS = [
+  { key: 'title',      label: 'Title',      tag: 'h1',         cls: 'title' },
+  { key: 'subtitle',   label: 'Subtitle',   tag: 'h2',         cls: 'subtitle' },
+  { sep: true },
+  { key: 'h1',         label: 'Heading 1',  tag: 'h1' },
+  { key: 'h2',         label: 'Heading 2',  tag: 'h2' },
+  { key: 'h3',         label: 'Heading 3',  tag: 'h3' },
+  { key: 'h4',         label: 'Heading 4',  tag: 'h4' },
+  { key: 'h5',         label: 'Heading 5',  tag: 'h5' },
+  { sep: true },
+  { key: 'p',          label: 'Normal',     tag: 'p' },
+  { key: 'blockquote', label: 'Quote',      tag: 'blockquote' },
+  { key: 'pullquote',  label: 'Pullquote',  tag: 'blockquote', cls: 'pullquote' },
+  { key: 'pre',        label: 'Code block', tag: 'pre' },
+];
+const STYLE_MANAGED_CLASSES = ['title', 'subtitle', 'pullquote'];
+
+function applyBlockStyle(key) {
+  const body = $('#article-body');
+  if (!body) return;
+  const opt = STYLE_OPTIONS.find(o => o.key === key && !o.sep);
+  if (!opt) return;
+  body.focus();
+  // formatBlock is a no-op if the current block already matches the target
+  // tag — but we may still need to swap classes (e.g. h1 -> h1.title).
+  document.execCommand('formatBlock', false, opt.tag);
+  const node = currentBlockNode();
+  if (!node) return;
+  STYLE_MANAGED_CLASSES.forEach(c => node.classList.remove(c));
+  if (opt.cls) node.classList.add(opt.cls);
+  if (node.classList.length === 0) node.removeAttribute('class');
+}
+
+function toggleInlineCode() {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return;
+  const body = $('#article-body');
+  if (!body) return;
+  const range = sel.getRangeAt(0);
+  if (!body.contains(range.commonAncestorContainer)) return;
+  // If caret / selection sits inside an existing <code>, unwrap it.
+  let anc = range.commonAncestorContainer;
+  if (anc.nodeType === 3) anc = anc.parentNode;
+  const existing = anc.closest ? anc.closest('code') : null;
+  if (existing && body.contains(existing)) {
+    const parent = existing.parentNode;
+    while (existing.firstChild) parent.insertBefore(existing.firstChild, existing);
+    parent.removeChild(existing);
+    parent.normalize();
+    return;
+  }
+  if (range.collapsed) return;
+  const text = range.toString();
+  if (!text) return;
+  const code = document.createElement('code');
+  code.textContent = text;
+  range.deleteContents();
+  range.insertNode(code);
+  // Place caret after the inserted code.
+  const after = document.createRange();
+  after.setStartAfter(code);
+  after.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(after);
 }
 
 /* ----------------------------------------------------------------------
@@ -11349,10 +11570,11 @@ function wireEditor() {
     matrixCollab.scheduleCursorBroadcast();
   });
 
-  // Font-size picker — the native <select> steals focus, so stash the
-  // current body range before the dropdown opens and restore it on
-  // change so the size command applies to what the user meant.
-  const fontSize = document.getElementById('tbtn-fontsize');
+  // Paragraph-style dropdown. The menu is a regular DOM popover, so like
+  // the color palettes we need to stash/restore the selection ourselves —
+  // the trigger button steals focus from the editor on mousedown.
+  const styleBtn = document.getElementById('tbtn-block-style');
+  const styleMenu = document.getElementById('tbtn-block-style-menu');
   let savedRange = null;
   const saveSel = () => {
     const sel = window.getSelection();
@@ -11366,15 +11588,47 @@ function wireEditor() {
     sel.removeAllRanges();
     sel.addRange(savedRange);
   };
-  fontSize?.addEventListener('mousedown', (e) => { e.stopPropagation(); saveSel(); });
-  fontSize?.addEventListener('focus', saveSel);
-  fontSize?.addEventListener('change', (e) => {
-    body.focus();
-    restoreSel();
-    try { document.execCommand('styleWithCSS', false, true); } catch {}
-    document.execCommand('fontSize', false, e.target.value);
-    scheduleArticleSave();
-  });
+  if (styleBtn && styleMenu) {
+    // Populate menu items once.
+    styleMenu.innerHTML = STYLE_OPTIONS.map(o => {
+      if (o.sep) return '<div class="tbtn-style-sep" role="separator"></div>';
+      return `<button type="button" class="tbtn-style-opt" role="option" data-style="${o.key}">${o.label}</button>`;
+    }).join('');
+    const closeMenu = () => {
+      styleMenu.hidden = true;
+      styleBtn.setAttribute('aria-expanded', 'false');
+    };
+    const openMenu = () => {
+      styleMenu.hidden = false;
+      styleBtn.setAttribute('aria-expanded', 'true');
+    };
+    styleBtn.addEventListener('mousedown', (e) => { e.preventDefault(); saveSel(); });
+    styleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (styleMenu.hidden) openMenu(); else closeMenu();
+    });
+    styleMenu.addEventListener('mousedown', (e) => e.preventDefault());
+    styleMenu.addEventListener('click', (e) => {
+      const opt = e.target.closest('.tbtn-style-opt');
+      if (!opt) return;
+      restoreSel();
+      applyBlockStyle(opt.dataset.style);
+      closeMenu();
+      refreshToolbarState();
+      scheduleArticleSave();
+      matrixCollab.scheduleBroadcast();
+    });
+    document.addEventListener('click', (e) => {
+      if (styleMenu.hidden) return;
+      if (e.target.closest('#tbtn-block-style-wrap')) return;
+      if (e.target.closest('#tbtn-block-style')) return;
+      if (e.target.closest('#tbtn-block-style-menu')) return;
+      closeMenu();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !styleMenu.hidden) closeMenu();
+    });
+  }
 
   // Color palettes
   buildPalette('tbtn-color-palette', TEXT_COLOR_SWATCHES, applyTextColor);
