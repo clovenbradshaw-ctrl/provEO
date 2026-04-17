@@ -1885,6 +1885,105 @@
     border-top: 0.5px solid var(--color-border-tertiary);
   }
 
+  /* ---------- CSV / TSV TABLE VIEW (spreadsheet-style) ---------- */
+  .src-viewer-body.is-table { width: min(1180px, 96vw); }
+  .src-viewer-table-wrap {
+    flex: 1;
+    overflow: auto;
+    background: var(--color-background-primary);
+    position: relative;
+  }
+  .src-viewer-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    color: var(--color-text-primary);
+    width: max-content;
+    min-width: 100%;
+  }
+  .src-viewer-table th,
+  .src-viewer-table td {
+    border-right: 0.5px solid var(--color-border-tertiary);
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    padding: 7px 12px;
+    vertical-align: top;
+    text-align: left;
+    max-width: 320px;
+    min-width: 64px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .src-viewer-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--color-background-secondary);
+    color: var(--color-text-secondary);
+    font-weight: 500;
+    font-size: 11.5px;
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+    border-bottom: 0.5px solid var(--color-border-secondary);
+    user-select: none;
+  }
+  .src-viewer-table tbody tr:nth-child(even) td {
+    background: color-mix(in srgb, var(--color-background-secondary) 38%, var(--color-background-primary));
+  }
+  .src-viewer-table tbody tr:hover td {
+    background: var(--teal-fill);
+  }
+  .src-viewer-table td.num,
+  .src-viewer-table th.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .src-viewer-table td.money {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--teal-text);
+  }
+  .src-viewer-table td.date {
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-secondary);
+  }
+  .src-viewer-table td.empty {
+    color: var(--color-text-tertiary);
+    font-style: italic;
+  }
+  .src-viewer-table th.rowno,
+  .src-viewer-table td.rowno {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    width: 44px;
+    min-width: 44px;
+    max-width: 44px;
+    text-align: right;
+    background: var(--color-background-secondary);
+    color: var(--color-text-tertiary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    border-right: 0.5px solid var(--color-border-secondary);
+  }
+  .src-viewer-table thead th.rowno { z-index: 3; }
+  .src-viewer-table tbody tr:hover td.rowno {
+    color: var(--color-text-secondary);
+    background: var(--color-background-tertiary);
+  }
+  .src-viewer-table-footer {
+    padding: 6px 14px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--color-text-tertiary);
+    background: var(--color-background-secondary);
+    border-top: 0.5px solid var(--color-border-tertiary);
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
   .toast {
     position: fixed;
     bottom: 24px;
@@ -2105,6 +2204,8 @@
       <button class="rphead-close" id="src-viewer-close">×</button>
     </div>
     <div class="src-viewer-text" id="src-viewer-text"></div>
+    <div class="src-viewer-table-wrap" id="src-viewer-table-wrap" hidden></div>
+    <div class="src-viewer-table-footer" id="src-viewer-table-footer" hidden></div>
     <div class="src-viewer-hint">Tip: to cite, select text in your article (Write mode) and click <strong>＋ Cite source</strong>.</div>
   </div>
 </div>
@@ -5215,10 +5316,109 @@ function renderPresence() {
    From here the user can read, then switch back to Write mode and select
    article text to cite against this source via the existing cite flow.
 ====================================================================== */
+/* Parse CSV/TSV into a 2D array. Handles RFC-4180 quoted fields, escaped
+   quotes (""), embedded newlines, and both CRLF and LF line endings. */
+function parseDelimited(text, delimiter) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else {
+        field += c;
+      }
+    } else {
+      if (c === '"') {
+        inQuotes = true;
+      } else if (c === delimiter) {
+        row.push(field); field = '';
+      } else if (c === '\n') {
+        row.push(field); field = '';
+        rows.push(row); row = [];
+      } else if (c === '\r') {
+        // swallow — handled by following \n or end-of-input
+        if (text[i + 1] !== '\n') {
+          row.push(field); field = '';
+          rows.push(row); row = [];
+        }
+      } else {
+        field += c;
+      }
+    }
+  }
+  if (field.length || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
+  // drop a trailing empty row if the file ended with a newline
+  if (rows.length && rows[rows.length - 1].length === 1 && rows[rows.length - 1][0] === '') {
+    rows.pop();
+  }
+  return rows;
+}
+
+function classifyCell(v) {
+  if (v == null || v === '') return 'empty';
+  const s = String(v).trim();
+  if (/^-?\$[\d,]+(\.\d+)?$/.test(s) || /^-?[\d,]+(\.\d+)?\s*(USD|EUR|GBP)$/i.test(s)) return 'money';
+  if (/^\d{4}-\d{2}-\d{2}(T[\d:.]+Z?)?$/.test(s) || /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(s)) return 'date';
+  if (/^-?[\d,]+(\.\d+)?%?$/.test(s) && /\d/.test(s)) return 'num';
+  return '';
+}
+
+function renderCsvTable(text, kind) {
+  const delimiter = kind === 'tsv' ? '\t' : ',';
+  const rows = parseDelimited(text, delimiter);
+  if (!rows.length) return { html: '<div style="padding:24px;color:var(--color-text-tertiary)">(empty file)</div>', rowCount: 0, colCount: 0 };
+  const header = rows[0];
+  const body = rows.slice(1);
+  const colCount = header.length;
+  // Pre-classify columns by sampling up to 30 non-empty cells to set header alignment
+  const colClass = header.map((_, ci) => {
+    const counts = { money: 0, date: 0, num: 0, other: 0 };
+    let seen = 0;
+    for (let r = 0; r < body.length && seen < 30; r++) {
+      const cls = classifyCell(body[r][ci]);
+      if (cls === 'empty') continue;
+      seen++;
+      counts[cls === '' ? 'other' : cls]++;
+    }
+    if (!seen) return '';
+    if (counts.money >= seen * 0.6) return 'money';
+    if (counts.date >= seen * 0.6) return 'date';
+    if (counts.num >= seen * 0.6) return 'num';
+    return '';
+  });
+
+  const headHtml = header.map((h, ci) => {
+    const cls = colClass[ci] === 'money' || colClass[ci] === 'num' ? ' class="num"' : '';
+    return `<th${cls}>${escapeHtml(h)}</th>`;
+  }).join('');
+  const bodyHtml = body.map((r, ri) => {
+    const cells = [];
+    for (let ci = 0; ci < colCount; ci++) {
+      const v = r[ci] == null ? '' : r[ci];
+      const cls = classifyCell(v) || colClass[ci] || '';
+      const clsAttr = cls ? ` class="${cls}"` : '';
+      cells.push(`<td${clsAttr} title="${escapeHtml(v)}">${v === '' ? '' : escapeHtml(v)}</td>`);
+    }
+    return `<tr><td class="rowno">${ri + 1}</td>${cells.join('')}</tr>`;
+  }).join('');
+
+  const html = `<table class="src-viewer-table"><thead><tr><th class="rowno">#</th>${headHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`;
+  return { html, rowCount: body.length, colCount };
+}
+
 async function showSourceViewer(id) {
   const src = USER_SOURCES[id] || SOURCES.find(s => s.id === id);
   if (!src) return;
   const modal = $('#src-viewer');
+  const body = modal.querySelector('.src-viewer-body');
   $('#src-viewer-title').textContent = src.name;
   const destBits = [];
   if (src.destination) destBits.push(`destination: ${src.destination}`);
@@ -5227,17 +5427,43 @@ async function showSourceViewer(id) {
   if (src.sha256) destBits.push(`sha256: <span style="font-family:var(--font-mono)">${escapeHtml(src.sha256.slice(0, 16))}…</span>`);
   $('#src-viewer-sub').innerHTML = `${(src.kind || 'txt').toUpperCase()} · ${escapeHtml(src.meta || '')}${destBits.length ? ' · ' + destBits.join(' · ') : ''}`;
   const textEl = $('#src-viewer-text');
+  const tableWrap = $('#src-viewer-table-wrap');
+  const tableFooter = $('#src-viewer-table-footer');
+  // Reset to text view by default
+  body.classList.remove('is-table');
+  tableWrap.hidden = true;
+  tableWrap.innerHTML = '';
+  tableFooter.hidden = true;
+  tableFooter.innerHTML = '';
+  textEl.hidden = false;
   textEl.textContent = 'Loading…';
   modal.hidden = false;
   try {
     if (USER_SOURCES[id]) {
       const text = await ensureSourceText(id);
-      textEl.textContent = text || '(empty file)';
+      const ext = (/\.([^.]+)$/.exec(src.name) || [])[1]?.toLowerCase();
+      const isTable = (src.kind === 'csv') || ext === 'csv' || ext === 'tsv';
+      if (isTable && text) {
+        const tableKind = ext === 'tsv' ? 'tsv' : 'csv';
+        const { html, rowCount, colCount } = renderCsvTable(text, tableKind);
+        tableWrap.innerHTML = html;
+        tableFooter.innerHTML = `<span>${rowCount.toLocaleString()} rows · ${colCount} columns</span><span>${tableKind.toUpperCase()}</span>`;
+        textEl.hidden = true;
+        tableWrap.hidden = false;
+        tableFooter.hidden = false;
+        body.classList.add('is-table');
+      } else {
+        textEl.textContent = text || '(empty file)';
+      }
     } else {
       textEl.textContent = '(This is a built-in sample source — no raw text is stored. Upload your own file to view its contents.)';
     }
   } catch (err) {
     console.warn('[src-viewer] failed to load', err);
+    textEl.hidden = false;
+    tableWrap.hidden = true;
+    tableFooter.hidden = true;
+    body.classList.remove('is-table');
     textEl.textContent = '(failed to load source text)';
   }
 }
