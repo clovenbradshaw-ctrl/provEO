@@ -523,6 +523,98 @@
     background: var(--blue-fill);
   }
 
+  /* ---------- EVIDENCE BENCH ---------- */
+  .evidence-bench {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 0.5px dashed var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    margin-bottom: 14px;
+    background: var(--color-background-secondary);
+    flex-wrap: wrap;
+  }
+  .evidence-bench[hidden] { display: none; }
+  .evidence-bench .bench-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+  }
+  .bench-chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    flex: 1;
+  }
+  .bench-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px 4px 10px;
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    cursor: grab;
+    max-width: 260px;
+    transition: border-color 0.12s, box-shadow 0.12s;
+  }
+  .bench-chip:hover { border-color: var(--color-text-primary); }
+  .bench-chip.dragging { opacity: 0.5; }
+  .bench-chip-src {
+    font-weight: 600;
+    color: var(--color-text-primary);
+    flex-shrink: 0;
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .bench-chip-text {
+    color: var(--color-text-secondary);
+    font-family: var(--font-serif);
+    font-size: 11.5px;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .bench-chip-del {
+    background: transparent;
+    border: 0;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    padding: 0 4px;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .bench-chip-del:hover { color: var(--red-text); }
+
+  /* Source viewer header actions + highlight-mode toggle */
+  .src-viewer-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #src-viewer-hl-toggle {
+    font-size: 10.5px;
+    padding: 3px 8px;
+  }
+  #src-viewer-hl-toggle.active {
+    background: var(--amber-fill);
+    color: var(--amber-text);
+    border-color: var(--amber-mid);
+  }
+  .src-viewer-body.is-highlight-mode #src-viewer-text {
+    cursor: text;
+    background: color-mix(in srgb, var(--amber-fill) 30%, var(--color-background-primary));
+  }
+
   /* ---------- STATUS BAR ---------- */
   .statusbar {
     height: 34px;
@@ -2441,6 +2533,7 @@
               <span id="tbar-sync-label">local</span>
             </div>
           </div>
+          <div class="evidence-bench" id="evidence-bench" hidden></div>
           <div class="article-meta">
             <span>Untitled draft</span>
             <span class="sep">·</span>
@@ -2531,7 +2624,10 @@
         <div class="cite-modal-title" id="src-viewer-title">Source</div>
         <div class="cite-modal-sub" id="src-viewer-sub"></div>
       </div>
-      <button class="rphead-close" id="src-viewer-close">×</button>
+      <div class="src-viewer-head-actions">
+        <button class="btn-sm" id="src-viewer-hl-toggle" aria-pressed="false">Highlight mode</button>
+        <button class="rphead-close" id="src-viewer-close">×</button>
+      </div>
     </div>
     <div class="src-viewer-text" id="src-viewer-text"></div>
     <div class="src-viewer-table-wrap" id="src-viewer-table-wrap" hidden></div>
@@ -4563,6 +4659,137 @@ function wireUploads() {
 }
 
 /* ======================================================================
+   EVIDENCE BENCH (READING LANE)
+   ----------------------------------------------------------------------
+   A reader highlights passages in the source viewer while reading —
+   each highlight becomes an unbound evidence chip on a bench strip
+   under the editor toolbar. Clicking a chip while a claim is selected
+   in the article binds it (opens the anchor drawer with source + span
+   pre-filled). Drag-and-drop works the same way — drop on an article
+   text selection. Chips persist across viewer open/close via
+   localStorage.
+====================================================================== */
+const EVIDENCE_LS_KEY = 'nl.evidenceBench.v1';
+
+let evidenceBench = [];
+let highlightMode = false;
+
+function loadEvidenceBench() {
+  try {
+    const raw = localStorage.getItem(EVIDENCE_LS_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) evidenceBench = parsed;
+  } catch {}
+}
+
+function saveEvidenceBench() {
+  try {
+    localStorage.setItem(EVIDENCE_LS_KEY, JSON.stringify(evidenceBench));
+  } catch {}
+}
+
+function addEvidenceChip(chip) {
+  evidenceBench.push({ id: 'ev_' + ulid().slice(-8), ...chip });
+  saveEvidenceBench();
+  renderEvidenceBench();
+}
+
+function removeEvidenceChip(id) {
+  evidenceBench = evidenceBench.filter(c => c.id !== id);
+  saveEvidenceBench();
+  renderEvidenceBench();
+}
+
+function renderEvidenceBench() {
+  const strip = $('#evidence-bench');
+  if (!strip) return;
+  if (!evidenceBench.length) {
+    strip.hidden = true;
+    strip.innerHTML = '';
+    return;
+  }
+  strip.hidden = false;
+  strip.innerHTML = `
+    <span class="bench-label">Evidence bench · ${evidenceBench.length}</span>
+    <div class="bench-chips">
+      ${evidenceBench.map(c => {
+        const preview = (c.highlight || '').slice(0, 60);
+        return `
+          <div class="bench-chip" draggable="true" data-id="${c.id}"
+               title="${escapeHtml(c.src)} — click or drop on a text selection to bind.">
+            <span class="bench-chip-src">${escapeHtml(c.src)}</span>
+            <span class="bench-chip-text">${escapeHtml(preview)}${c.highlight && c.highlight.length > 60 ? '…' : ''}</span>
+            <button class="bench-chip-del" data-id="${c.id}" aria-label="remove">×</button>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+  $$('.bench-chip-del', strip).forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      removeEvidenceChip(btn.dataset.id);
+    });
+  });
+  $$('.bench-chip', strip).forEach(chip => {
+    chip.addEventListener('click', () => bindEvidenceChip(chip.dataset.id));
+    chip.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('text/x-evidence-id', chip.dataset.id);
+      e.dataTransfer.effectAllowed = 'copy';
+      chip.classList.add('dragging');
+    });
+    chip.addEventListener('dragend', () => chip.classList.remove('dragging'));
+  });
+}
+
+/* Bind an evidence chip to the article text currently selected.
+   Opens the anchor drawer in confirm state with the target pre-filled. */
+function bindEvidenceChip(chipId) {
+  const chip = evidenceBench.find(c => c.id === chipId);
+  if (!chip) return;
+  const info = getArticleSelectionRange();
+  if (!info) { showToast('Select text in the article first'); return; }
+  pendingSelection = info;
+  openAnchorDrawer(info.text);
+  // Skip picker — go straight to confirm with this chip as target.
+  drawerState.sourceId = chip.sourceId;
+  drawerState.target = {
+    kind: 'quote',
+    src: chip.src,
+    sourceId: chip.sourceId,
+    start: chip.start,
+    end: chip.end,
+    text: chip.highlight,
+    before: chip.before,
+    after: chip.after,
+    spanLabel: chip.spanLabel,
+    highlight: chip.highlight
+  };
+  drawerState.substate = 'confirm';
+  hideSourceViewer();
+  renderDrawer();
+}
+
+function wireEvidenceDnd() {
+  const body = $('#article-body');
+  if (!body) return;
+  body.addEventListener('dragover', e => {
+    if (!e.dataTransfer) return;
+    if (!Array.from(e.dataTransfer.types || []).includes('text/x-evidence-id')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  });
+  body.addEventListener('drop', e => {
+    if (!e.dataTransfer) return;
+    const id = e.dataTransfer.getData('text/x-evidence-id');
+    if (!id) return;
+    e.preventDefault();
+    bindEvidenceChip(id);
+  });
+}
+
+/* ======================================================================
    ANCHOR DRAWER
    ----------------------------------------------------------------------
    Anchoring an evidence span lives in the right panel as a drawer, not
@@ -5119,6 +5346,45 @@ function openSourceViewerForPicking(sourceId) {
   drawerState.selectedCells = [];
   drawerState.derivedOp = null;
   showSourceViewer(sourceId, { selecting: true });
+}
+
+/* Capture a text-range selection in the source viewer as an unbound
+   evidence chip on the bench. Highlight-mode path. */
+function captureHighlightForBench() {
+  const viewer = $('#src-viewer');
+  if (!viewer || viewer.hidden) return;
+  const textEl = $('#src-viewer-text');
+  if (!textEl || textEl.hidden) return;
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+  const range = sel.getRangeAt(0);
+  if (!textEl.contains(range.startContainer) || !textEl.contains(range.endContainer)) return;
+  const text = sel.toString();
+  if (!text.trim()) return;
+  const full = textEl.textContent;
+  const preRange = range.cloneRange();
+  preRange.selectNodeContents(textEl);
+  preRange.setEnd(range.startContainer, range.startOffset);
+  const start = preRange.toString().length;
+  const end = start + text.length;
+  // Resolve source by title
+  const title = $('#src-viewer-title').textContent;
+  const srcEntry = Object.values(USER_SOURCES).find(s => s.name === title)
+                || SOURCES.find(s => s.name === title);
+  if (!srcEntry) return;
+  const before = contextBefore(full, start);
+  const after  = contextAfter(full, end);
+  const spanLabel = locatorLabel(srcEntry, { start, end }, full);
+  addEvidenceChip({
+    src: srcEntry.name,
+    sourceId: srcEntry.id,
+    start, end,
+    highlight: text,
+    before, after,
+    spanLabel
+  });
+  sel.removeAllRanges();
+  showToast('evidence saved to bench');
 }
 
 /* Commit a text-range selection in the source viewer as the drawer target. */
@@ -6916,7 +7182,10 @@ function hideSourceViewer() {
   const ops = $('#src-viewer-ops');
   if (ops) ops.hidden = true;
   const body = $('#src-viewer').querySelector('.src-viewer-body');
-  if (body) body.classList.remove('is-selecting');
+  if (body) { body.classList.remove('is-selecting'); body.classList.remove('is-highlight-mode'); }
+  highlightMode = false;
+  const hlBtn = $('#src-viewer-hl-toggle');
+  if (hlBtn) { hlBtn.setAttribute('aria-pressed', 'false'); hlBtn.classList.remove('active'); }
   $('#src-viewer').hidden = true;
 }
 function wireSourceViewer() {
@@ -6926,15 +7195,32 @@ function wireSourceViewer() {
     if (e.key === 'Escape' && !$('#src-viewer').hidden) hideSourceViewer();
   });
 
-  // Text-selection capture — when the drawer is picking, any mouseup with
-  // a non-collapsed selection inside #src-viewer-text is the target.
+  // Text-selection capture — when the drawer is picking, any mouseup
+  // with a non-collapsed selection inside #src-viewer-text is the
+  // drawer target. When highlight mode is on (no drawer), the same
+  // mouseup builds an unbound evidence chip.
   const textEl = $('#src-viewer-text');
   if (textEl) {
     textEl.addEventListener('mouseup', () => {
       const body = $('#src-viewer').querySelector('.src-viewer-body');
-      if (!body || !body.classList.contains('is-selecting')) return;
-      // Only commit on release; tiny delay to let the selection finalize.
-      setTimeout(captureViewerTextSelection, 0);
+      if (body && body.classList.contains('is-selecting')) {
+        setTimeout(captureViewerTextSelection, 0);
+        return;
+      }
+      if (highlightMode) setTimeout(captureHighlightForBench, 0);
+    });
+  }
+
+  // Highlight mode toggle
+  const hlBtn = $('#src-viewer-hl-toggle');
+  if (hlBtn) {
+    hlBtn.addEventListener('click', () => {
+      highlightMode = !highlightMode;
+      hlBtn.setAttribute('aria-pressed', String(highlightMode));
+      hlBtn.classList.toggle('active', highlightMode);
+      const body = $('#src-viewer').querySelector('.src-viewer-body');
+      if (body) body.classList.toggle('is-highlight-mode', highlightMode);
+      showToast(highlightMode ? 'Highlight mode on' : 'Highlight mode off');
     });
   }
 
@@ -7563,6 +7849,9 @@ async function init() {
   wireSelectionToolbar();
   wireSourceViewer();
   wireAnchorDrawer();
+  loadEvidenceBench();
+  renderEvidenceBench();
+  wireEvidenceDnd();
   wireCellTuple();
   wireWorkspace();
   updateWorkspaceIndicator();
