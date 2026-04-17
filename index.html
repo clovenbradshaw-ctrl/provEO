@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NL Explorer</title>
+<title>PROVeo</title>
 <script src="https://unpkg.com/@phosphor-icons/web@2.1.1" defer></script>
 <style>
   /* Claude.ai-adjacent token system — refined, editorial */
@@ -3585,7 +3585,7 @@
 
   <!-- ===== TOPBAR ===== -->
   <div class="topbar">
-    <span class="appname"><span class="dot"></span>NL Explorer</span>
+    <span class="appname"><span class="dot"></span>PROVeo</span>
     <div class="modetabs" id="modetabs">
       <button class="mtab active" data-mode="write">Write</button>
       <button class="mtab" data-mode="review">Review</button>
@@ -13466,7 +13466,7 @@ async function matrixLoginWithPassword(homeserver, user, password) {
   const res = await tmp.login('m.login.password', {
     identifier: { type: 'm.id.user', user: user.startsWith('@') ? user.split(':')[0].slice(1) : user },
     password,
-    initial_device_display_name: 'NL Explorer'
+    initial_device_display_name: 'PROVeo'
   });
   const session = {
     homeserver: base,
