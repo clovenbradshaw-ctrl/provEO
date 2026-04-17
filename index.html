@@ -3578,6 +3578,7 @@
     </div>
     <div class="topright">
       <span id="boot-status" style="font-family: var(--font-mono); font-size: 10.5px; color: var(--color-text-secondary); margin-right: 4px;">booting…</span>
+      <button id="stage1-badge" hidden title="DEF proposals awaiting review" style="font-family: var(--font-mono); font-size: 10.5px; color: var(--color-amber, #BA7517); margin-right: 6px; background: transparent; border: 1px solid currentColor; border-radius: 3px; padding: 2px 6px; cursor: pointer;">0 await review</button>
       <div class="srcbadge"><div class="statdot statdot-green"></div>3 indexed</div>
       <button class="ws-btn" id="ws-btn" title="Workspace / Matrix">
         <span class="ws-dot" id="ws-dot"></span>
@@ -5852,6 +5853,301 @@ async function removeEntityAlias(entityId, alias) {
   });
 }
 
+/* ======================================================================
+   RULESET VERSIONING (Stage 1 supporting infrastructure)
+   ----------------------------------------------------------------------
+   Every DEF event carries the rule_set_version under which it was
+   produced. Stage 3 ⊛REC events bump the version; Stage 6 revalidation
+   later replays old DEFs against newer rulesets. For Stage 1 we
+   bootstrap at rs_v1 — REC-class bumps land with the ⊛REC pipeline.
+====================================================================== */
+
+const INITIAL_RULESET_VERSION = 'rs_v1';
+let RULE_SET_VERSION = INITIAL_RULESET_VERSION;
+
+function currentRuleSetVersion() {
+  return RULE_SET_VERSION;
+}
+
+function bumpRuleSetVersion() {
+  const n = parseInt(RULE_SET_VERSION.replace(/^rs_v/, ''), 10) + 1;
+  RULE_SET_VERSION = `rs_v${Number.isFinite(n) ? n : 2}`;
+  return RULE_SET_VERSION;
+}
+
+/* ======================================================================
+   STAGE 1 — ⊢DEF: model proposals
+   ----------------------------------------------------------------------
+   The local model never generates article text. It emits typed
+   classification events, each tagged with the EO operator that
+   produced it. Stage 1 has five substages:
+
+     1a  DEF-boundary  span detection         subtype='boundary'
+     1b  DEF-type      type disambiguation    subtype='type'
+     1c  DEF-link      canonical resolution   subtype='link'
+     1d  DEF-coref     within-document chain  subtype='coref'
+     1e  DEF-alias     alias candidate        subtype='alias'
+
+   Stage 5 DEF validation gate is enforced at append time on
+   DEF-boundary: the span's text must match the source content at its
+   offsets exactly, or the event is rejected (no silent acceptance of
+   phantom spans).
+
+   Confidence bands on DEF-link drive UI routing:
+     ≥0.95  indexed      — visible in main surfaces
+     ≥0.85  amber        — indexed with amber tilde marker
+      <0.85 review       — pending review queue, hidden from search
+====================================================================== */
+
+const DEF_BAND_INDEXED = 'indexed';
+const DEF_BAND_AMBER   = 'amber';
+const DEF_BAND_REVIEW  = 'review';
+
+function confidenceBand(c) {
+  const n = typeof c === 'number' ? c : 0;
+  if (n >= 0.95) return DEF_BAND_INDEXED;
+  if (n >= 0.85) return DEF_BAND_AMBER;
+  return DEF_BAND_REVIEW;
+}
+
+// Stage 5 DEF validation gate for boundary DEFs. Spec: "the span's
+// text must match the source content at that offset exactly. The fold
+// rejects malformed boundary DEFs at parse time."
+function validateDefBoundary(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return { valid: false, reason: 'missing payload' };
+  }
+  const { source_id, location, surface } = payload;
+  if (!source_id) return { valid: false, reason: 'missing source_id' };
+  if (!location || typeof location.start !== 'number' || typeof location.end !== 'number') {
+    return { valid: false, reason: 'missing or malformed location' };
+  }
+  if (location.start < 0 || location.end <= location.start) {
+    return { valid: false, reason: 'bad offsets' };
+  }
+  const text = SOURCE_TEXT[source_id];
+  if (typeof text !== 'string') {
+    return { valid: false, reason: 'source text unavailable' };
+  }
+  if (location.end > text.length) {
+    return { valid: false, reason: 'offsets exceed source length' };
+  }
+  if (text.slice(location.start, location.end) !== surface) {
+    return { valid: false, reason: 'surface does not match source at offsets' };
+  }
+  return { valid: true };
+}
+
+async function emitDefEvent(site, payload, { author = 'system' } = {}) {
+  return appendEvent({
+    op: 'DEF',
+    site,
+    resolution: 'Figure',
+    payload,
+    author
+  });
+}
+
+// Stage 1a. DEF-boundary per annotation. Validation gate runs before
+// append. Rejected boundaries do NOT produce downstream type/link
+// DEFs — the whole chain for that annotation is dropped.
+async function emitDefBoundary({ obsId, sourceId, annotation, ruleSetVersion }) {
+  const payload = {
+    subtype: 'boundary',
+    source_id: sourceId,
+    location: annotation.location,
+    surface: annotation.surface,
+    type_candidate: annotation.type || 'UNK',
+    confidence: annotation.confidence != null ? annotation.confidence : 0.9,
+    rule_set_version: ruleSetVersion,
+    agent: `model:${annotation.model}@${annotation.model_version}`,
+    rationale: annotation.rationale || 'Model-tagged span detector'
+  };
+  // CSV cell spans (row/col) bypass the offset-match gate; only text
+  // spans carry start/end that we can validate against SOURCE_TEXT.
+  if (annotation.location && annotation.location.start != null) {
+    const gate = validateDefBoundary(payload);
+    if (!gate.valid) {
+      console.warn('[stage1/DEF-boundary] rejected:', gate.reason, {
+        sourceId, surface: annotation.surface, location: annotation.location
+      });
+      return null;
+    }
+  }
+  return emitDefEvent(`observation:${obsId}`, payload);
+}
+
+// Stage 1b. DEF-type. Spec trigger: confidence < 0.9 OR >1 type
+// candidate. Refines the boundary DEF via pi.
+async function emitDefType({ obsId, annotation, ruleSetVersion }) {
+  const conf = annotation.confidence != null ? annotation.confidence : 0.9;
+  const alternatives = Array.isArray(annotation.alternatives) ? annotation.alternatives : [];
+  if (conf >= 0.9 && alternatives.length <= 1) return null;
+  return emitDefEvent(`observation:${obsId}`, {
+    subtype: 'type',
+    pi: [obsId],
+    type: annotation.type || 'UNK',
+    confidence: conf,
+    alternatives,
+    rule_set_version: ruleSetVersion,
+    agent: `model:${annotation.model}@${annotation.model_version}`,
+    rationale: annotation.rationale || 'Type classification on ambiguous span'
+  });
+}
+
+// Alias similarity scorer. Exact longest-alias match → 0.97; substring
+// either direction → 0.82..0.94 scaled by length ratio; otherwise 0.
+function scoreAliasMatch(surface, alias) {
+  if (!surface || !alias) return 0;
+  const s = surface.trim().toLowerCase();
+  const a = alias.trim().toLowerCase();
+  if (!s || !a) return 0;
+  if (s === a) return 0.97;
+  if (s.includes(a) || a.includes(s)) {
+    const ratio = Math.min(s.length, a.length) / Math.max(s.length, a.length);
+    return 0.82 + 0.12 * ratio;
+  }
+  return 0;
+}
+
+function resolveCanonicalFromEntities(surface) {
+  const scored = [];
+  for (const [eid, e] of Object.entries(ENTITIES || {})) {
+    if (!e || !Array.isArray(e.aliases)) continue;
+    let best = 0;
+    let bestAlias = null;
+    for (const alias of e.aliases) {
+      const s = scoreAliasMatch(surface, alias);
+      if (s > best) { best = s; bestAlias = alias; }
+    }
+    if (best > 0) scored.push({ entity_id: eid, alias: bestAlias, confidence: best, type: e.type });
+  }
+  scored.sort((x, y) => y.confidence - x.confidence);
+  return scored;
+}
+
+// Stage 1c. DEF-link. Every typed mention. null entity_id is a valid
+// outcome (unresolved). Confidence band drives UI routing downstream.
+async function emitDefLink({ obsId, annotation, ruleSetVersion }) {
+  const mentionId = 'em_' + obsId;
+  const ranked = resolveCanonicalFromEntities(annotation.surface);
+  const primary = ranked[0] || null;
+  const alternatives = ranked.slice(1, 4).map(r => ({ entity_id: r.entity_id, confidence: r.confidence }));
+  const entityId   = primary ? primary.entity_id : null;
+  const confidence = primary ? primary.confidence : 0;
+  const band       = confidenceBand(confidence);
+  const rationale  = primary
+    ? `Surface matches alias "${primary.alias}" of ${primary.entity_id}`
+    : 'No alias in the resolution table matches this surface';
+  return emitDefEvent(`claim:${mentionId}`, {
+    subtype: 'link',
+    type: 'entity_mention',
+    pi: [obsId],
+    mention_id: mentionId,
+    entity_id: entityId,
+    confidence,
+    band,
+    alternatives,
+    rule_set_version: ruleSetVersion,
+    agent: `model:${annotation.model}@${annotation.model_version}`,
+    rationale
+  });
+}
+
+// Stage 1d. DEF-coref: group mentions in the same source by entity_id.
+// Within-document only — cross-document linkage is DEF-link's job.
+async function emitDefCoref({ sourceId, obsByEntity, ruleSetVersion }) {
+  const events = [];
+  for (const [entityId, obsIds] of Object.entries(obsByEntity || {})) {
+    if (!entityId || obsIds.length < 2) continue;
+    const corefId = 'coref_' + ulid().slice(-10);
+    const evt = await emitDefEvent(`link:${corefId}`, {
+      subtype: 'coref',
+      kind: 'coreference',
+      members: obsIds.slice(),
+      canonical_mention: obsIds[0],
+      entity_id: entityId,
+      scope: { source_id: sourceId, document_only: true },
+      confidence: 0.88,
+      rule_set_version: ruleSetVersion,
+      agent: 'model:local_resolver@1',
+      rationale: `Mentions share canonical entity ${entityId}`
+    });
+    events.push(evt);
+  }
+  return events;
+}
+
+// Stage 1e. DEF-alias: for unresolved mentions (DEF-link returned
+// entity_id: null) propose alias candidates against the closest
+// entity table match. Spec describes it as periodic background work;
+// Stage 1 emits proposals inline — the queue gate is the same.
+async function emitDefAliasProposals({ unresolved, ruleSetVersion }) {
+  const byKey = new Map();
+  for (const { obsId, surface } of unresolved) {
+    const key = (surface || '').trim().toLowerCase();
+    if (!key) continue;
+    const bucket = byKey.get(key) || { surface, obsIds: [] };
+    bucket.obsIds.push(obsId);
+    byKey.set(key, bucket);
+  }
+  const events = [];
+  for (const { surface, obsIds } of byKey.values()) {
+    const ranked = resolveCanonicalFromEntities(surface);
+    const candidate = ranked[0];
+    if (!candidate || candidate.confidence < 0.75) continue;
+    const proposalId = 'alias_' + ulid().slice(-10);
+    const evt = await emitDefEvent(`proposal:${proposalId}`, {
+      subtype: 'alias',
+      surface,
+      pi: obsIds,
+      candidate_canonical_id: candidate.entity_id,
+      confidence: candidate.confidence,
+      rule_set_version: ruleSetVersion,
+      agent: 'model:local_resolver@1',
+      rationale: `Surface close to alias "${candidate.alias}" of ${candidate.entity_id}; awaiting confirmation`
+    });
+    events.push(evt);
+  }
+  return events;
+}
+
+// Orchestrator: runs Stage 1a–1e for a single source. Called after
+// OBS events are emitted so DEF-boundary / DEF-link can pi-reference
+// existing obsIds. Returns per-substage counts for logging.
+async function runStage1Defs({ sourceId, obsPairs }) {
+  if (!Array.isArray(obsPairs) || !obsPairs.length) {
+    return { boundary: 0, type: 0, link: 0, coref: 0, alias: 0 };
+  }
+  const rsv = currentRuleSetVersion();
+  let boundary = 0, type = 0, link = 0;
+  const obsByEntity = {};
+  const unresolved = [];
+  for (const { obsId, annotation } of obsPairs) {
+    const b = await emitDefBoundary({ obsId, sourceId, annotation, ruleSetVersion: rsv });
+    if (!b) continue; // validation gate rejection drops the whole chain
+    boundary++;
+    const t = await emitDefType({ obsId, annotation, ruleSetVersion: rsv });
+    if (t) type++;
+    const l = await emitDefLink({ obsId, annotation, ruleSetVersion: rsv });
+    if (l) {
+      link++;
+      const eid = l.payload && l.payload.entity_id;
+      if (eid) (obsByEntity[eid] = obsByEntity[eid] || []).push(obsId);
+      else unresolved.push({ obsId, surface: annotation.surface });
+    }
+  }
+  const corefEvents = await emitDefCoref({ sourceId, obsByEntity, ruleSetVersion: rsv });
+  const aliasEvents = await emitDefAliasProposals({ unresolved, ruleSetVersion: rsv });
+  return {
+    boundary,
+    type,
+    link,
+    coref: corefEvents.length,
+    alias: aliasEvents.length
+  };
+}
+
 /* ---------- Fold worker — runs on a blob URL ---------- */
 /* The fold here is Phase A: it only handles claim-status mutations.
    All the provenance-producing events (SIG/INS/CON/DEF for source
@@ -5882,6 +6178,16 @@ self.addEventListener('message', (ev) => {
   // the caller-supplied entities table. They are NOT log events — rule
   // edits propagate on the next fold without re-ingesting sources.
   const mentions = {}; // mentionId -> M-entry shape
+
+  // Stage 1 — DEF projection. D[obsId] carries { boundary, type, link }
+  // payloads for that observation; corefs land in D.__coref; alias
+  // proposals in D.__aliases. pendingReview is the queue of link DEFs
+  // in band='review' plus alias proposals. amberMentions is a set
+  // (object) of mentionIds whose DEF-link band is 'amber'.
+  const D = {};
+  const pendingReview = [];
+  const amberMentions = {};
+  const defCounts = { boundary: 0, type: 0, link: 0, coref: 0, alias: 0 };
 
   for (const raw of events) {
     let evt;
@@ -6085,6 +6391,47 @@ self.addEventListener('message', (ev) => {
       continue;
     }
 
+    // DEF — Stage 1 typed classification event. Subtypes:
+    //   boundary, type, link (keyed by obsId via evt.site or payload.pi),
+    //   coref (keyed by link:<corefId>),
+    //   alias (keyed by proposal:<aliasId>, awaiting human confirm).
+    if (evt.op === 'DEF' && evt.payload && evt.payload.subtype) {
+      const p = evt.payload;
+      if (p.subtype === 'boundary' && evt.site && evt.site.startsWith('observation:')) {
+        const obsId = evt.site.slice('observation:'.length);
+        (D[obsId] = D[obsId] || {}).boundary = Object.assign({ event_id: evt.id, ts: evt.ts }, p);
+        defCounts.boundary++;
+        continue;
+      }
+      if (p.subtype === 'type' && evt.site && evt.site.startsWith('observation:')) {
+        const obsId = evt.site.slice('observation:'.length);
+        (D[obsId] = D[obsId] || {}).type = Object.assign({ event_id: evt.id, ts: evt.ts }, p);
+        defCounts.type++;
+        continue;
+      }
+      if (p.subtype === 'link') {
+        const obsId = Array.isArray(p.pi) ? p.pi[0] : null;
+        if (obsId) (D[obsId] = D[obsId] || {}).link = Object.assign({ event_id: evt.id, ts: evt.ts }, p);
+        defCounts.link++;
+        if (p.band === 'review') pendingReview.push({ kind: 'link', event_id: evt.id, ts: evt.ts, payload: p });
+        if (p.band === 'amber' && p.mention_id) amberMentions[p.mention_id] = true;
+        continue;
+      }
+      if (p.subtype === 'coref') {
+        (D.__coref = D.__coref || []).push({ event_id: evt.id, ts: evt.ts, payload: p });
+        defCounts.coref++;
+        continue;
+      }
+      if (p.subtype === 'alias') {
+        (D.__aliases = D.__aliases || []).push({ event_id: evt.id, ts: evt.ts, payload: p });
+        defCounts.alias++;
+        pendingReview.push({ kind: 'alias', event_id: evt.id, ts: evt.ts, payload: p });
+        continue;
+      }
+      // Unknown subtype — skip silently; the log is forward-compatible.
+      continue;
+    }
+
     // REC on a claim: a reframe — retract, dissolve, reanchor, fill.
     // Payloads may carry a replacement prov (reanchor/fill).
     if (evt.op === 'REC' && evt.site && evt.site.startsWith('claim:')) {
@@ -6188,7 +6535,27 @@ self.addEventListener('message', (ev) => {
     }
   }
 
-  self.postMessage({ type: 'state', claims, sources, G, M, S, mentions, entityIndex });
+  // Overlay Stage 1 DEF-link metadata onto synthesized mentions so the
+  // UI can read confidence band, rationale, rule_set_version, and
+  // alternatives off the mention without re-walking D.
+  for (const [obsId, d] of Object.entries(D)) {
+    if (obsId === '__coref' || obsId === '__aliases' || !d || !d.link) continue;
+    const l = d.link;
+    const mentionId = l.mention_id || ('em_' + obsId);
+    const m = mentions[mentionId];
+    if (!m) continue;
+    if (typeof l.confidence === 'number') m.def_confidence = l.confidence;
+    if (l.band) m.def_band = l.band;
+    if (l.rule_set_version) m.rule_set_version = l.rule_set_version;
+    if (l.rationale) m.def_rationale = l.rationale;
+    if (Array.isArray(l.alternatives)) m.def_alternatives = l.alternatives;
+  }
+
+  self.postMessage({
+    type: 'state',
+    claims, sources, G, M, S, mentions, entityIndex,
+    D, pendingReview, amberMentions, defCounts
+  });
 });
 `;
 
@@ -6220,7 +6587,11 @@ async function fold() {
           M: ev.data.M || {},
           S: ev.data.S || {},
           mentions: ev.data.mentions || {},
-          entityIndex: ev.data.entityIndex || {}
+          entityIndex: ev.data.entityIndex || {},
+          D: ev.data.D || {},
+          pendingReview: ev.data.pendingReview || [],
+          amberMentions: ev.data.amberMentions || {},
+          defCounts: ev.data.defCounts || { boundary: 0, type: 0, link: 0, coref: 0, alias: 0 }
         });
       }
     };
@@ -6239,6 +6610,43 @@ let S_VIEW = {};
 // Keyed by mentionId. entityIndex: entity_id -> [obsId, ...].
 let MENTIONS = {};
 let ENTITY_INDEX = {};
+// Stage 1 DEF projections.
+let D_VIEW = {};
+let PENDING_REVIEW = [];
+let AMBER_MENTIONS = {};
+let DEF_COUNTS = { boundary: 0, type: 0, link: 0, coref: 0, alias: 0 };
+
+// Stage 1 status badge. Spec §7b: "Pending EVA queue — Persistent
+// badge in the workspace bar: '12 model suggestions await review.'"
+// Stage 1 populates the count from DEF-link review-band events and
+// DEF-alias proposals; the queue interaction itself is Stage 2 work.
+function refreshStage1Badge() {
+  const el = typeof document !== 'undefined' && document.getElementById
+    ? document.getElementById('stage1-badge')
+    : null;
+  if (!el) return;
+  const n = Array.isArray(PENDING_REVIEW) ? PENDING_REVIEW.length : 0;
+  if (!n) { el.hidden = true; return; }
+  el.hidden = false;
+  el.textContent = `${n} DEF${n === 1 ? '' : 's'} await review`;
+}
+
+// Developer surface: expose Stage 1 state on window for inspection.
+// Keeps the UI minimal while still letting the log be audited.
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'PROVEO_STAGE1', {
+    configurable: true,
+    get() {
+      return {
+        rule_set_version: RULE_SET_VERSION,
+        def_counts: DEF_COUNTS,
+        pending_review: PENDING_REVIEW,
+        amber_mentions: AMBER_MENTIONS,
+        D: D_VIEW
+      };
+    }
+  });
+}
 
 /* Convenience: append an event then refold and install into CLAIMS + USER_SOURCES */
 async function appendEventAndRefold(e) {
@@ -6251,6 +6659,11 @@ async function appendEventAndRefold(e) {
   S_VIEW = state.S;
   MENTIONS = state.mentions || {};
   ENTITY_INDEX = state.entityIndex || {};
+  D_VIEW = state.D || {};
+  PENDING_REVIEW = state.pendingReview || [];
+  AMBER_MENTIONS = state.amberMentions || {};
+  DEF_COUNTS = state.defCounts || DEF_COUNTS;
+  refreshStage1Badge();
 }
 
 /* ---------- Seed on first run ---------- */
@@ -6604,11 +7017,12 @@ function localHeuristicNer(text) {
   return pruned;
 }
 
-// Emit an OBS event per annotation. Returns the number emitted so the
-// caller can surface a count. Caller is responsible for refolding after.
+// Emit an OBS event per annotation. Returns the obs↔annotation pairs
+// so downstream Stage 1 DEF emitters can pi-reference the obsIds.
+// Caller is responsible for refolding after.
 async function emitDerivedObsForAnnotations(annotations, { sourceId, position }) {
-  if (!Array.isArray(annotations) || !annotations.length) return 0;
-  let n = 0;
+  if (!Array.isArray(annotations) || !annotations.length) return [];
+  const pairs = [];
   for (const a of annotations) {
     const obsId = 'o_' + ulid().slice(-10);
     await appendEvent({
@@ -6629,9 +7043,9 @@ async function emitDerivedObsForAnnotations(annotations, { sourceId, position })
       },
       author: 'system'
     });
-    n++;
+    pairs.push({ obsId, annotation: a });
   }
-  return n;
+  return pairs;
 }
 
 // Extract entities from whatever channels are available, in order:
@@ -6774,24 +7188,37 @@ async function handleUpload(files) {
       // with agent=model:<name>@<version> so downstream never mistakes
       // derived reads for human reads.
       const annotations = resolveAnnotationsForSource(proveo, text, kind);
-      await emitDerivedObsForAnnotations(annotations, {
+      const obsPairs = await emitDerivedObsForAnnotations(annotations, {
         sourceId: id,
         position: { workspace: matrix.activeRoomId || 'local' }
       });
+      // Stage 1 ⊢DEF: model proposals. Each annotation produces a
+      // boundary DEF (validated against source text), an optional type
+      // DEF, and a link DEF with a confidence band. After the per-
+      // annotation chain, coref and alias-proposal DEFs fire.
+      const defCounts = await runStage1Defs({ sourceId: id, obsPairs });
 
-      // Single refold after SRC + any derived OBS — keeps the projected
-      // state coherent (resolution can't see OBS that were filed after
-      // this SRC's refold point).
+      // Single refold after SRC + any derived OBS + DEFs — keeps the
+      // projected state coherent (resolution can't see OBS that were
+      // filed after this SRC's refold point).
       const state = await fold();
       CLAIMS = state.claims;
       USER_SOURCES = state.sources;
       G_VIEW = state.G; M_VIEW = state.M; S_VIEW = state.S;
       MENTIONS = state.mentions || {};
       ENTITY_INDEX = state.entityIndex || {};
+      D_VIEW = state.D || {};
+      PENDING_REVIEW = state.pendingReview || [];
+      AMBER_MENTIONS = state.amberMentions || {};
+      DEF_COUNTS = state.defCounts || DEF_COUNTS;
+      refreshStage1Badge();
 
       added++;
       if (annotations.length) {
         console.log(`[entities] ${file.name}: ${annotations.length} annotations emitted`);
+        console.log(`[stage1] ${file.name}: DEF ` +
+          `boundary=${defCounts.boundary} type=${defCounts.type} ` +
+          `link=${defCounts.link} coref=${defCounts.coref} alias=${defCounts.alias}`);
       }
     } catch (err) {
       console.error('[upload] failed for', file.name, err);
@@ -6989,10 +7416,12 @@ async function handleAutoArchiveUpload(files) {
       });
 
       const annotations = resolveAnnotationsForSource(proveo, localText, kind);
-      await emitDerivedObsForAnnotations(annotations, {
+      const obsPairs = await emitDerivedObsForAnnotations(annotations, {
         sourceId: id,
         position: { workspace: matrix.activeRoomId || 'local' }
       });
+      // Stage 1 ⊢DEF: same pipeline as the local upload path.
+      const defCounts = await runStage1Defs({ sourceId: id, obsPairs });
 
       const state = await fold();
       CLAIMS = state.claims;
@@ -7000,6 +7429,11 @@ async function handleAutoArchiveUpload(files) {
       G_VIEW = state.G; M_VIEW = state.M; S_VIEW = state.S;
       MENTIONS = state.mentions || {};
       ENTITY_INDEX = state.entityIndex || {};
+      D_VIEW = state.D || {};
+      PENDING_REVIEW = state.pendingReview || [];
+      AMBER_MENTIONS = state.amberMentions || {};
+      DEF_COUNTS = state.defCounts || DEF_COUNTS;
+      refreshStage1Badge();
 
       added++;
       const archiveUrl = proveo?.archive?.url;
@@ -7009,6 +7443,9 @@ async function handleAutoArchiveUpload(files) {
           : 'archived');
       if (annotations.length) {
         console.log(`[entities] ${file.name}: ${annotations.length} annotations emitted`);
+        console.log(`[stage1] ${file.name}: DEF ` +
+          `boundary=${defCounts.boundary} type=${defCounts.type} ` +
+          `link=${defCounts.link} coref=${defCounts.coref} alias=${defCounts.alias}`);
       }
     } catch (err) {
       console.error('[auto-archive] failed for', file.name, err);
@@ -13064,6 +13501,11 @@ async function init() {
   G_VIEW = state.G; M_VIEW = state.M; S_VIEW = state.S;
   MENTIONS = state.mentions || {};
   ENTITY_INDEX = state.entityIndex || {};
+  D_VIEW = state.D || {};
+  PENDING_REVIEW = state.pendingReview || [];
+  AMBER_MENTIONS = state.amberMentions || {};
+  DEF_COUNTS = state.defCounts || DEF_COUNTS;
+  refreshStage1Badge();
 
   renderSources();
 
@@ -13176,6 +13618,11 @@ async function init() {
       CLAIMS = s.claims; USER_SOURCES = s.sources;
       G_VIEW = s.G; M_VIEW = s.M; S_VIEW = s.S;
       MENTIONS = s.mentions || {}; ENTITY_INDEX = s.entityIndex || {};
+      D_VIEW = s.D || {};
+      PENDING_REVIEW = s.pendingReview || [];
+      AMBER_MENTIONS = s.amberMentions || {};
+      DEF_COUNTS = s.defCounts || DEF_COUNTS;
+      refreshStage1Badge();
       renderSources(); renderCounts();
       console.log('refolded'); return s;
     }
