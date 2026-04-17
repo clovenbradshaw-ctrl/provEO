@@ -3062,6 +3062,201 @@
     opacity: 1;
     transform: translateX(-50%) translateY(-4px);
   }
+
+  /* ---------- ACTIVITY LOG (paste provenance) ---------- */
+  .plog-fab {
+    position: fixed;
+    right: 18px;
+    bottom: 72px;
+    z-index: 1200;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px 10px 12px;
+    border-radius: 999px;
+    border: 0.5px solid var(--color-border-secondary);
+    background: var(--color-background-primary);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    cursor: pointer;
+    box-shadow: 0 6px 22px rgba(26,25,21,0.18);
+    transition: background 0.12s, transform 0.12s;
+  }
+  .plog-fab:hover { background: var(--color-background-tertiary); transform: translateY(-1px); }
+  .plog-fab-icon { font-size: 14px; line-height: 1; }
+  .plog-fab-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 6px;
+    border-radius: 9px;
+    background: var(--amber-fill);
+    color: var(--amber-text);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 600;
+  }
+  .plog-fab.is-empty .plog-fab-count {
+    background: var(--color-background-tertiary);
+    color: var(--color-text-tertiary);
+  }
+  .plog-fab.just-added { animation: clip-fab-pulse 0.5s ease; }
+
+  .plog-drawer[hidden] { display: none; }
+  .plog-drawer {
+    position: fixed;
+    inset: 0;
+    z-index: 1400;
+    display: block;
+  }
+  .plog-drawer-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(26,25,21,0.28);
+  }
+  .plog-drawer-body {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(420px, 92vw);
+    background: var(--color-background-primary);
+    border-left: 0.5px solid var(--color-border-tertiary);
+    box-shadow: -12px 0 48px rgba(26,25,21,0.22);
+    display: flex;
+    flex-direction: column;
+    animation: clip-drawer-in 0.18s ease;
+  }
+  .plog-drawer-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 18px 22px 14px;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    flex-shrink: 0;
+  }
+  .plog-drawer-title {
+    font-family: var(--font-serif);
+    font-size: 16px;
+    font-weight: 500;
+  }
+  .plog-drawer-sub {
+    font-size: 11.5px;
+    color: var(--color-text-secondary);
+    margin-top: 4px;
+    line-height: 1.45;
+  }
+  .plog-drawer-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .plog-drawer-list {
+    flex: 1;
+    overflow: auto;
+    padding: 10px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .plog-drawer-empty {
+    padding: 36px 18px;
+    text-align: center;
+    color: var(--color-text-tertiary);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .plog-drawer-empty .plog-empty-icon {
+    font-size: 28px;
+    display: block;
+    margin-bottom: 10px;
+    opacity: 0.7;
+  }
+  .plog-item {
+    appearance: none;
+    text-align: left;
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    padding: 10px 12px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .plog-item:hover {
+    background: var(--color-background-tertiary);
+    border-color: var(--color-border-secondary);
+  }
+  .plog-item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-secondary);
+  }
+  .plog-item-op {
+    color: var(--amber-text);
+    font-weight: 600;
+  }
+  .plog-item-ts {
+    color: var(--color-text-tertiary);
+    font-weight: 500;
+  }
+  .plog-item-text {
+    font-family: var(--font-serif);
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--color-text-primary);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .plog-item-src {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--color-text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .plog-item-src-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+  }
+  .plog-item-src-loc {
+    color: var(--color-text-tertiary);
+    flex-shrink: 0;
+  }
+  .plog-item-open {
+    color: var(--color-text-tertiary);
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  .plog-drawer-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 18px;
+    border-top: 0.5px solid var(--color-border-tertiary);
+    background: var(--color-background-secondary);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--color-text-tertiary);
+    flex-shrink: 0;
+  }
 </style>
 </head>
 <body>
@@ -3293,6 +3488,34 @@
 </aside>
 
 <div id="clip-toast" class="clip-toast"></div>
+
+<!-- ===== ACTIVITY LOG (paste provenance) ===== -->
+<button id="plog-fab" class="plog-fab is-empty" type="button" title="Activity log — paste provenance">
+  <span class="plog-fab-icon">⌸</span>
+  <span>Log</span>
+  <span class="plog-fab-count" id="plog-fab-count">0</span>
+</button>
+
+<aside id="plog-drawer" class="plog-drawer" hidden>
+  <div class="plog-drawer-backdrop" id="plog-drawer-backdrop"></div>
+  <div class="plog-drawer-body">
+    <div class="plog-drawer-head">
+      <div>
+        <div class="plog-drawer-title">Activity log</div>
+        <div class="plog-drawer-sub">Every paste with a provenance chain. Click an entry to open its inspector.</div>
+      </div>
+      <div class="plog-drawer-actions">
+        <button class="clip-btn-icon" id="plog-clear" type="button">clear</button>
+        <button class="rphead-close" id="plog-drawer-close" type="button">×</button>
+      </div>
+    </div>
+    <div class="plog-drawer-list" id="plog-drawer-list"></div>
+    <div class="plog-drawer-foot">
+      <span id="plog-count-note">0 entries</span>
+      <span>paste inside the editor</span>
+    </div>
+  </div>
+</aside>
 
 <!-- ===== WORKSPACE / MATRIX MODAL ===== -->
 <div id="ws-modal" class="cite-modal" hidden>
@@ -8086,7 +8309,7 @@ function wireEditor() {
       if (pasted) next.text = pasted;
       try {
         await provInsertGroundedFromChain(next);
-        showToast?.('pasted with provenance');
+        showToast?.('pasted · provenance in activity log');
       } catch (err) {
         console.warn('[proveo] provenance paste failed, falling back', err);
         document.execCommand('insertText', false, pasted);
@@ -10846,9 +11069,11 @@ function provToProvContent(chain) {
   };
 }
 
-// Materialize a pasted provenance chain as a grounded claim span inside
-// the article body. Emits OBS → CLAIM through the fold, wraps the inserted
-// text in `<span class="g" data-id="...">`, and hooks up click → inspector.
+// Materialize a pasted provenance chain as a plain text node in the
+// article body. Emits OBS → CLAIM through the fold so the provenance
+// lives in the event log, but the inserted text carries no visible
+// annotation — the claim is reached from the activity log drawer, which
+// calls showClaim(claimId) to open the right-panel inspector.
 async function provInsertGroundedFromChain(chain) {
   const body = $('#article-body');
   if (!body) return null;
@@ -10926,23 +11151,23 @@ async function provInsertGroundedFromChain(chain) {
     author: 'human'
   });
 
-  // Insert a grounded span at the caret. The span carries the claim id
-  // so clicking it opens the inspector; a base64 copy of the chain rides
-  // along as a data attribute so a later copy-from-editor still carries
-  // the original chain even before the worker returns.
-  const span = document.createElement('span');
-  span.className = 'g';
-  span.dataset.id = claimId;
-  span.setAttribute(PROVEO_HTML_ATTR, provBase64Encode(JSON.stringify(chain)));
-  span.textContent = text;
-  range.insertNode(span);
-  // Move caret to end of inserted span.
+  // Insert the pasted text as a plain text node — no span, no underline.
+  // The provenance lives in the event log and in the activity log drawer.
+  const textNode = document.createTextNode(text);
+  range.insertNode(textNode);
   const after = document.createRange();
-  after.setStartAfter(span);
+  after.setStartAfter(textNode);
   after.collapse(true);
   sel.removeAllRanges();
   sel.addRange(after);
-  span.addEventListener('click', () => showClaim(claimId));
+
+  pasteLogAdd({
+    id: claimId,
+    text,
+    sourceName: prov.sourceName || prov.src || 'clipboard',
+    page: prov.page ?? null,
+    ts: provNowIso(),
+  });
 
   await saveArticleNow();
   renderCounts();
@@ -11373,6 +11598,152 @@ function wireClipboard() {
   };
 }
 
+/* ---------- ACTIVITY LOG (paste provenance) ----------
+   When a paste carries a provenance chain, we append OBS/CLAIM events to
+   the event log AND push a row here. The pasted text is inserted plain —
+   the only way to reach the provenance is through this drawer, which opens
+   the right-panel inspector via showClaim(claimId). */
+const PLOG_KEY = 'proveo.paste_log.v1';
+const PLOG_MAX = 200;
+let PLOG = [];
+
+function pasteLogLoad() {
+  try {
+    const raw = localStorage.getItem(PLOG_KEY);
+    PLOG = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(PLOG)) PLOG = [];
+  } catch { PLOG = []; }
+}
+function pasteLogSave() {
+  try { localStorage.setItem(PLOG_KEY, JSON.stringify(PLOG)); } catch {}
+}
+function pasteLogAdd(entry) {
+  PLOG.unshift(entry);
+  if (PLOG.length > PLOG_MAX) PLOG.length = PLOG_MAX;
+  pasteLogSave();
+  pasteLogUpdateFab({ pulse: true });
+  const d = $('#plog-drawer');
+  if (d && !d.hidden) pasteLogRenderDrawer();
+}
+function pasteLogUpdateFab({ pulse = false } = {}) {
+  const fab = $('#plog-fab');
+  const count = $('#plog-fab-count');
+  if (!fab || !count) return;
+  count.textContent = PLOG.length;
+  fab.classList.toggle('is-empty', PLOG.length === 0);
+  if (pulse) {
+    fab.classList.remove('just-added');
+    void fab.offsetWidth;
+    fab.classList.add('just-added');
+  }
+}
+function pasteLogRelTime(iso) {
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 45) return 'just now';
+  if (diff < 90) return '1m ago';
+  if (diff < 3600) return Math.round(diff / 60) + 'm ago';
+  if (diff < 7200) return '1h ago';
+  if (diff < 86400) return Math.round(diff / 3600) + 'h ago';
+  return Math.round(diff / 86400) + 'd ago';
+}
+function pasteLogRenderDrawer() {
+  const list = $('#plog-drawer-list');
+  const note = $('#plog-count-note');
+  if (!list) return;
+  if (!PLOG.length) {
+    list.innerHTML = `
+      <div class="plog-drawer-empty">
+        <span class="plog-empty-icon">⌸</span>
+        No paste provenance yet.<br>
+        Paste text that carries a provEO chain and it'll appear here.
+      </div>`;
+    if (note) note.textContent = '0 entries';
+    return;
+  }
+  list.innerHTML = PLOG.map(e => {
+    const src = escapeHtml(e.sourceName || 'clipboard');
+    const loc = e.page != null ? `p.${escapeHtml(String(e.page))}` : '';
+    const preview = escapeHtml(e.text || '');
+    return `
+      <button class="plog-item" type="button" data-claim-id="${escapeHtml(e.id)}">
+        <div class="plog-item-head">
+          <span class="plog-item-op">CLAIM · paste</span>
+          <span class="plog-item-ts">${escapeHtml(pasteLogRelTime(e.ts))}</span>
+        </div>
+        <div class="plog-item-text">${preview}</div>
+        <div class="plog-item-src">
+          <span class="plog-item-src-name">${src}</span>
+          ${loc ? `<span class="plog-item-src-loc">${loc}</span>` : ''}
+          <span class="plog-item-open">↗</span>
+        </div>
+      </button>`;
+  }).join('');
+  if (note) note.textContent = PLOG.length + (PLOG.length === 1 ? ' entry' : ' entries');
+}
+function pasteLogOpenDrawer() {
+  const d = $('#plog-drawer');
+  if (!d) return;
+  pasteLogRenderDrawer();
+  d.hidden = false;
+}
+function pasteLogCloseDrawer() {
+  const d = $('#plog-drawer');
+  if (!d) return;
+  d.hidden = true;
+}
+
+function wirePasteLog() {
+  pasteLogLoad();
+  pasteLogUpdateFab();
+
+  $('#plog-fab')?.addEventListener('click', () => {
+    const d = $('#plog-drawer');
+    if (!d) return;
+    if (d.hidden) pasteLogOpenDrawer(); else pasteLogCloseDrawer();
+  });
+  $('#plog-drawer-close')?.addEventListener('click', pasteLogCloseDrawer);
+  $('#plog-drawer-backdrop')?.addEventListener('click', pasteLogCloseDrawer);
+  $('#plog-clear')?.addEventListener('click', () => {
+    if (!PLOG.length) return;
+    if (!confirm('Clear ' + PLOG.length + ' activity-log ' + (PLOG.length === 1 ? 'entry' : 'entries') + '? The underlying event log is not affected.')) return;
+    PLOG = [];
+    pasteLogSave();
+    pasteLogUpdateFab();
+    pasteLogRenderDrawer();
+  });
+
+  $('#plog-drawer-list')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-claim-id]');
+    if (!btn) return;
+    const id = btn.dataset.claimId;
+    if (!id) return;
+    pasteLogCloseDrawer();
+    // Make sure we're in Write mode so the right-panel inspector is visible.
+    if (typeof switchMode === 'function') switchMode('write');
+    if (typeof setRightPanelMode === 'function') setRightPanelMode('provenance');
+    showClaim(id);
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      const d = $('#plog-drawer');
+      if (d && !d.hidden) pasteLogCloseDrawer();
+    }
+  });
+
+  // Refresh relative timestamps while the drawer is open.
+  setInterval(() => {
+    const d = $('#plog-drawer');
+    if (d && !d.hidden) pasteLogRenderDrawer();
+  }, 30000);
+
+  window.__nlPasteLog = {
+    items: () => PLOG.slice(),
+    clear: () => { PLOG = []; pasteLogSave(); pasteLogUpdateFab(); pasteLogRenderDrawer(); },
+    export: () => JSON.stringify(PLOG, null, 2),
+  };
+}
+
 /* ---------- Boot status indicator ---------- */
 function setBootStatus(text, color) {
   const el = $('#boot-status');
@@ -11416,6 +11787,7 @@ async function init() {
   wireEvidenceDnd();
   wireCellTuple();
   wireClipboard();
+  wirePasteLog();
   wireWorkspace();
   wireInviteLanding();
   updateWorkspaceIndicator();
