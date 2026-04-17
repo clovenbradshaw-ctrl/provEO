@@ -253,9 +253,10 @@
   .sadd-stack .sadd { margin: 0; }
   .sadd-row {
     display: flex;
+    flex-direction: column;
     gap: 6px;
   }
-  .sadd-row .sarc { flex: 1; min-width: 0; }
+  .sadd-row .sarc { width: 100%; min-width: 0; }
   .sarc {
     padding: 9px 8px;
     border: 0.5px dashed var(--color-border-secondary);
