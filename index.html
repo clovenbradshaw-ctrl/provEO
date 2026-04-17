@@ -552,7 +552,7 @@
     border-radius: 50%;
   }
 
-  /* ---------- RIGHT PANEL (PROVENANCE) ---------- */
+  /* ---------- RIGHT PANEL (PROVENANCE + ANCHOR DRAWER) ---------- */
   .right-panel {
     width: 400px;
     flex-shrink: 0;
@@ -560,6 +560,164 @@
     display: flex;
     flex-direction: column;
     background: var(--color-background-primary);
+  }
+  /* Drawer mode: swap the provenance inspector for the anchor drawer. */
+  .right-panel[data-mode="provenance"] .rp-drawer { display: none; }
+  .right-panel[data-mode="sourcing"] .rp-empty,
+  .right-panel[data-mode="sourcing"] .rp-content { display: none; }
+  .right-panel[data-mode="sourcing"] .rp-drawer { display: flex; }
+  .rp-drawer {
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+  }
+  .drawer-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 16px;
+  }
+  .drawer-claim {
+    background: var(--color-background-secondary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    padding: 10px 12px;
+    margin-bottom: 14px;
+  }
+  .drawer-claim-text {
+    font-family: var(--font-serif);
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--color-text-primary);
+    margin-top: 4px;
+  }
+  .drawer-label {
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    margin-bottom: 6px;
+  }
+  .drawer-section { margin-bottom: 14px; }
+  .drawer-hint {
+    margin-top: 10px;
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--color-text-secondary);
+  }
+  .drawer-src-item {
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: border-color 0.12s, background 0.12s;
+    background: var(--color-background-primary);
+  }
+  .drawer-src-item:hover {
+    border-color: var(--color-text-primary);
+    background: var(--color-background-secondary);
+  }
+  .drawer-src-name { font-family: var(--font-mono); font-size: 12px; font-weight: 500; }
+  .drawer-src-meta { font-size: 10.5px; color: var(--color-text-secondary); margin-top: 3px; }
+  .drawer-source-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 11px;
+    background: var(--color-background-secondary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+  }
+  .drawer-source-change {
+    margin-left: auto;
+    background: transparent;
+    border: 0;
+    color: var(--color-text-tertiary);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    cursor: pointer;
+  }
+  .drawer-source-change:hover { color: var(--color-text-primary); }
+  .drawer-target-view {
+    background: var(--color-background-secondary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    padding: 10px 12px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+  }
+  .drawer-target-meta {
+    font-size: 10.5px;
+    color: var(--color-text-secondary);
+    margin-top: 4px;
+  }
+  .drawer-empty {
+    padding: 20px 12px;
+    text-align: center;
+    color: var(--color-text-secondary);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  .drawer-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 0.5px solid var(--color-border-tertiary);
+  }
+  .btn-sm-primary {
+    background: var(--color-text-primary);
+    color: var(--color-background-primary);
+    border-color: var(--color-text-primary);
+    margin-left: auto;
+  }
+  .btn-sm-primary:hover { background: var(--color-text-primary); opacity: 0.88; }
+
+  /* Source viewer — selection-mode cues */
+  .src-viewer-body.is-selecting #src-viewer-text { cursor: text; }
+  .src-viewer-body.is-selecting .src-viewer-table-wrap td:not(.rowno) { cursor: crosshair; }
+  .src-viewer-body.is-selecting .src-viewer-table-wrap td.picked {
+    background: var(--amber-fill);
+    color: var(--amber-text);
+    box-shadow: inset 0 0 0 1.5px var(--amber-mid);
+    font-weight: 600;
+  }
+  .src-viewer-picker {
+    padding: 10px 16px;
+    border-top: 0.5px solid var(--color-border-tertiary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--color-background-secondary);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+  }
+  .src-viewer-picker[hidden] { display: none; }
+  .src-viewer-picker-label { color: var(--color-text-primary); }
+  .src-viewer-ops { display: flex; align-items: center; gap: 4px; }
+  .src-viewer-picker-ops-label {
+    color: var(--color-text-secondary);
+    font-size: 10.5px;
+    margin-right: 4px;
+  }
+  .src-viewer-op {
+    padding: 3px 8px;
+    border: 0.5px solid var(--color-border-secondary);
+    background: transparent;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    border-radius: 3px;
+    cursor: pointer;
+    color: var(--color-text-primary);
+  }
+  .src-viewer-op:hover { background: var(--color-background-tertiary); }
+  .src-viewer-op.picked-op {
+    background: var(--amber-fill);
+    color: var(--amber-text);
+    border-color: var(--amber-mid);
   }
   .rp-empty {
     flex: 1;
@@ -2209,7 +2367,7 @@
         </div>
       </div>
 
-      <aside class="right-panel">
+      <aside class="right-panel" id="right-panel" data-mode="provenance">
         <div class="rp-empty" id="rp-empty">
           <div class="rp-empty-inner">
             <div class="rp-empty-glyph">⊨</div>
@@ -2222,6 +2380,13 @@
             <button class="rphead-close" id="rp-close">×</button>
           </div>
           <div class="rpbody" id="rp-body"></div>
+        </div>
+        <div class="rp-drawer" id="rp-drawer">
+          <div class="rphead">
+            <span class="rphead-title" id="drawer-title">Anchor evidence</span>
+            <button class="rphead-close" id="drawer-close">×</button>
+          </div>
+          <div class="drawer-body" id="drawer-body"></div>
         </div>
       </aside>
     </section>
@@ -2262,40 +2427,6 @@
   <button class="ct-btn" id="cite-btn">＋ Anchor evidence</button>
 </div>
 
-<div id="cite-modal" class="cite-modal" hidden>
-  <div class="cite-modal-backdrop" id="cite-backdrop"></div>
-  <div class="cite-modal-body">
-    <div class="cite-modal-head">
-      <div>
-        <div class="cite-modal-title">Cite source</div>
-        <div class="cite-modal-sub">Link a claim in your draft to a source span.</div>
-      </div>
-      <button class="rphead-close" id="cite-modal-close">×</button>
-    </div>
-    <div class="cite-selected-claim">
-      Claim: <span class="sel" id="cite-sel-text"></span>
-    </div>
-    <div class="cite-modal-grid">
-      <div class="cite-source-picker">
-        <div class="cite-picker-label">Sources</div>
-        <div id="cite-source-list"></div>
-      </div>
-      <div class="cite-snippet-picker">
-        <div class="cite-picker-head">
-          <div class="cite-picker-label">Find a matching span</div>
-          <input id="cite-search" class="cite-search" type="text" placeholder="Search within source…">
-        </div>
-        <div id="cite-snippet-list" class="cite-snippet-list"></div>
-      </div>
-    </div>
-    <div class="cite-modal-actions">
-      <span id="cite-pick-note" class="cite-pick-note">Pick a source and a matching span.</span>
-      <button class="btn-sm" id="cite-cancel">Cancel</button>
-      <button class="btn-sm btn-sm-primary" id="cite-confirm" disabled>Cite this span</button>
-    </div>
-  </div>
-</div>
-
 <!-- ===== SOURCE VIEWER MODAL ===== -->
 <div id="src-viewer" class="cite-modal" hidden>
   <div class="cite-modal-backdrop" id="src-viewer-backdrop"></div>
@@ -2316,7 +2447,22 @@
       <span class="src-viewer-tuple-spacer"></span>
       <button class="src-viewer-tuple-btn" id="src-viewer-tuple-copy" disabled>Copy JSON</button>
     </div>
-    <div class="src-viewer-hint">Tip: to cite, select text in your article (Write mode) and click <strong>＋ Cite source</strong>.</div>
+    <div class="src-viewer-hint">Tip: to cite, select text in your article (Write mode) and click <strong>＋ Anchor evidence</strong>.</div>
+    <div class="src-viewer-picker" id="src-viewer-picker" hidden>
+      <span class="src-viewer-picker-label" id="src-viewer-picker-label">Selection mode — pick your evidence</span>
+      <div class="src-viewer-ops" id="src-viewer-ops" hidden>
+        <span class="src-viewer-picker-ops-label">Aggregate</span>
+        <button class="src-viewer-op" data-op="SUM">SUM</button>
+        <button class="src-viewer-op" data-op="AVG">AVG</button>
+        <button class="src-viewer-op" data-op="COUNT">COUNT</button>
+        <button class="src-viewer-op" data-op="MIN">MIN</button>
+        <button class="src-viewer-op" data-op="MAX">MAX</button>
+        <button class="src-viewer-op" data-op="DIFF">DIFF</button>
+        <button class="src-viewer-op" data-op="RATIO">RATIO</button>
+      </div>
+      <span class="src-viewer-tuple-spacer"></span>
+      <button class="src-viewer-tuple-btn" id="src-viewer-use">Use selection</button>
+    </div>
   </div>
 </div>
 
@@ -4176,18 +4322,43 @@ function wireUploads() {
 }
 
 /* ======================================================================
-   CITATIONS
+   ANCHOR DRAWER
    ----------------------------------------------------------------------
-   Select text in the editor → a floating "Cite source" button appears.
-   Click → modal with:
-     - source picker (user-uploaded sources available for cite)
-     - snippet search against the source's raw text
-     - pick a sentence → emit a CITE event → claim is wrapped in the
-       article as a grounded span with working provenance inspector
+   Anchoring an evidence span lives in the right panel as a drawer, not
+   a modal. Select text in the editor → click "+ Anchor evidence" → the
+   right panel switches from provenance-inspector to sourcing mode, with
+   three substates:
+     source-picker  — list citeable sources; auto-advance if only one
+     target-picker  — open the source viewer with selection mode on;
+                      user picks a quote span or one+ cells
+     confirm        — show claim + resolved target + computed kind +
+                      the Anchor button
+   Kind falls out of target shape:
+     single cell       → cell
+     text selection    → quote
+     2+ cells + op     → derived
+     (explicit escape hatch) → absence  [handled in phase 5]
+   The drawer is the only citing surface — the old cite modal is gone.
 ====================================================================== */
 
 let pendingSelection = null;
-let citeState = { sourceId: null, snippet: null };
+
+// Module-level sticky state: if the user anchored from source X last time,
+// source-picker auto-skips to X's target-picker on the next open.
+let lastCitedSourceId = null;
+
+// Drawer state machine. `substate` walks source-picker → target-picker →
+// confirm; `target` is the picked evidence span. Cleared on dismiss.
+let drawerState = {
+  active: false,
+  substate: 'source-picker',
+  sourceId: null,
+  claimText: '',
+  range: null,
+  target: null,       // { kind: 'quote'|'cell'|'derived', ...payload }
+  selectedCells: [],  // running cell selection in the source viewer
+  derivedOp: null
+};
 
 function showToast(text) {
   const el = $('#toast');
@@ -4231,6 +4402,9 @@ function wireSelectionToolbar() {
     // only show in Write mode (the editable article)
     const writeActive = $('#mode-write').classList.contains('active');
     if (!writeActive) { $('#cite-toolbar').hidden = true; return; }
+    // Don't shadow the drawer with a toolbar — while sourcing, the
+    // toolbar is mode-inappropriate.
+    if (drawerState.active) { $('#cite-toolbar').hidden = true; return; }
     positionCiteToolbar();
   });
   window.addEventListener('scroll', positionCiteToolbar, true);
@@ -4245,7 +4419,7 @@ function wireSelectionToolbar() {
     if (!info) return;
     pendingSelection = info;
     $('#cite-toolbar').hidden = true;
-    openCiteModal(info.text);
+    openAnchorDrawer(info.text);
   });
 }
 
@@ -4303,129 +4477,6 @@ function locatorLabel(source, snippet, text) {
   return `line ${line}`;
 }
 
-function renderCiteSourceList() {
-  const wrap = $('#cite-source-list');
-  const sources = citeableSources();
-  if (!sources.length) {
-    wrap.innerHTML = `<div class="cite-empty">No sources you can cite from yet.<br><br>Close this dialog and drop a .txt, .csv, or .md file onto the Sources panel to start.</div>`;
-    return;
-  }
-  wrap.innerHTML = sources.map(s => `
-    <div class="cite-src-item${citeState.sourceId === s.id ? ' selected' : ''}" data-cite-src="${s.id}">
-      <div>${escapeHtml(s.name)}</div>
-      <div class="cite-src-item-meta">${s.kind.toUpperCase()} · ${escapeHtml(s.meta || '')}</div>
-    </div>
-  `).join('');
-
-  $$('#cite-source-list .cite-src-item').forEach(el => {
-    el.addEventListener('click', async () => {
-      citeState.sourceId = el.dataset.citeSrc;
-      citeState.snippet = null;
-      renderCiteSourceList();
-      await renderCiteSnippets();
-      updateCiteActions();
-    });
-  });
-}
-
-function highlightMatch(text, match) {
-  if (!match) return escapeHtml(text);
-  const a = text.slice(0, match.at);
-  const b = text.slice(match.at, match.at + match.len);
-  const c = text.slice(match.at + match.len);
-  return `${escapeHtml(a)}<mark>${escapeHtml(b)}</mark>${escapeHtml(c)}`;
-}
-
-async function renderCiteSnippets() {
-  const list = $('#cite-snippet-list');
-  if (!citeState.sourceId) {
-    list.innerHTML = `<div class="cite-empty">Select a source on the left.</div>`;
-    return;
-  }
-  const source = USER_SOURCES[citeState.sourceId];
-  if (!source) { list.innerHTML = `<div class="cite-empty">Source unavailable.</div>`; return; }
-  const text = await ensureSourceText(source.id);
-  const q = $('#cite-search').value;
-  const snippets = buildSnippets(text, q);
-  if (!snippets.length) {
-    list.innerHTML = `<div class="cite-empty">No matches in this source${q ? ` for "${escapeHtml(q)}"` : ''}.</div>`;
-    return;
-  }
-  list.innerHTML = snippets.map((s, i) => {
-    const isSelected = citeState.snippet && citeState.snippet.start === s.start;
-    const loc = locatorLabel(source, s, text);
-    return `
-      <div class="cite-snippet${isSelected ? ' selected' : ''}" data-snippet-idx="${i}">
-        <div class="cite-snippet-loc">${escapeHtml(loc)}</div>
-        <div class="cite-snippet-text">${highlightMatch(s.text, s.match)}</div>
-      </div>
-    `;
-  }).join('');
-
-  $$('.cite-snippet', list).forEach(el => {
-    el.addEventListener('click', () => {
-      const idx = +el.dataset.snippetIdx;
-      citeState.snippet = { ...snippets[idx], sourceText: text };
-      $$('.cite-snippet', list).forEach(x => x.classList.remove('selected'));
-      el.classList.add('selected');
-      updateCiteActions();
-    });
-  });
-}
-
-function updateCiteActions() {
-  const ready = !!(citeState.sourceId && citeState.snippet);
-  $('#cite-confirm').disabled = !ready;
-  $('#cite-pick-note').textContent = ready
-    ? 'Ready — this claim will link to the selected span.'
-    : citeState.sourceId
-      ? 'Pick a matching span from the source.'
-      : 'Pick a source to search.';
-}
-
-function openCiteModal(selectedText) {
-  citeState = { sourceId: null, snippet: null };
-  $('#cite-sel-text').textContent = selectedText;
-  $('#cite-search').value = selectedText;
-  const modal = $('#cite-modal');
-  modal.hidden = false;
-  renderCiteSourceList();
-
-  // auto-select the only source if there's just one
-  const sources = citeableSources();
-  if (sources.length === 1) {
-    citeState.sourceId = sources[0].id;
-    renderCiteSourceList();
-  }
-  renderCiteSnippets();
-  updateCiteActions();
-
-  setTimeout(() => $('#cite-search').focus(), 0);
-}
-
-function closeCiteModal() {
-  $('#cite-modal').hidden = true;
-  pendingSelection = null;
-  citeState = { sourceId: null, snippet: null };
-}
-
-function wireCiteModal() {
-  $('#cite-modal-close').addEventListener('click', closeCiteModal);
-  $('#cite-cancel').addEventListener('click', closeCiteModal);
-  $('#cite-backdrop').addEventListener('click', closeCiteModal);
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !$('#cite-modal').hidden) closeCiteModal();
-  });
-
-  let searchT = null;
-  $('#cite-search').addEventListener('input', () => {
-    clearTimeout(searchT);
-    searchT = setTimeout(renderCiteSnippets, 120);
-  });
-
-  $('#cite-confirm').addEventListener('click', confirmCitation);
-}
-
 function contextBefore(text, start) {
   const left = text.slice(Math.max(0, start - 120), start);
   const nl = left.lastIndexOf('\n');
@@ -4437,76 +4488,395 @@ function contextAfter(text, end) {
   return nl >= 0 ? right.slice(0, nl) : right;
 }
 
-async function confirmCitation() {
-  if (!pendingSelection || !citeState.sourceId || !citeState.snippet) return;
-  const source = USER_SOURCES[citeState.sourceId];
-  const snippet = citeState.snippet;
-  const text = snippet.sourceText || await ensureSourceText(source.id);
+/* ---- Drawer state machine ---- */
+
+function openAnchorDrawer(claimText) {
+  drawerState = {
+    active: true,
+    substate: 'source-picker',
+    sourceId: null,
+    claimText: claimText,
+    range: pendingSelection ? pendingSelection.range : null,
+    target: null,
+    selectedCells: [],
+    derivedOp: null
+  };
+  // Sticky: reuse last source if still available.
+  const available = citeableSources();
+  if (lastCitedSourceId && available.find(s => s.id === lastCitedSourceId)) {
+    drawerState.sourceId = lastCitedSourceId;
+    drawerState.substate = 'target-picker';
+  } else if (available.length === 1) {
+    drawerState.sourceId = available[0].id;
+    drawerState.substate = 'target-picker';
+  }
+  setRightPanelMode('sourcing');
+  renderDrawer();
+  if (drawerState.substate === 'target-picker') {
+    openSourceViewerForPicking(drawerState.sourceId);
+  }
+}
+
+function closeAnchorDrawer() {
+  drawerState = {
+    active: false,
+    substate: 'source-picker',
+    sourceId: null,
+    claimText: '',
+    range: null,
+    target: null,
+    selectedCells: [],
+    derivedOp: null
+  };
+  pendingSelection = null;
+  setRightPanelMode('provenance');
+  hideSourceViewer();
+}
+
+function setRightPanelMode(mode) {
+  const panel = $('#right-panel');
+  if (!panel) return;
+  panel.dataset.mode = mode;
+}
+
+function renderDrawer() {
+  const body = $('#drawer-body');
+  if (!body) return;
+  const head = $('#drawer-title');
+  head.textContent = drawerState.substate === 'source-picker'
+    ? 'Pick a source'
+    : drawerState.substate === 'target-picker'
+      ? 'Pick the evidence'
+      : 'Confirm anchor';
+
+  const claimLine = `
+    <div class="drawer-claim">
+      <div class="drawer-label">Claim</div>
+      <div class="drawer-claim-text">"${escapeHtml(drawerState.claimText)}"</div>
+    </div>
+  `;
+
+  if (drawerState.substate === 'source-picker') {
+    const sources = citeableSources();
+    const list = sources.length
+      ? sources.map(s => `
+          <div class="drawer-src-item" data-src="${s.id}">
+            <div class="drawer-src-name">${escapeHtml(s.name)}</div>
+            <div class="drawer-src-meta">${s.kind.toUpperCase()} · ${escapeHtml(s.meta || '')}</div>
+          </div>
+        `).join('')
+      : `<div class="drawer-empty">No sources to cite from yet. Drop a .txt, .csv, or .md file onto the Sources panel.</div>`;
+    body.innerHTML = `
+      ${claimLine}
+      <div class="drawer-section">
+        <div class="drawer-label">Sources</div>
+        ${list}
+      </div>
+      <div class="drawer-actions">
+        <button class="btn-sm" id="drawer-absence">Mark as absence</button>
+        <button class="btn-sm" id="drawer-cancel">Cancel</button>
+      </div>
+    `;
+    $$('.drawer-src-item', body).forEach(el => {
+      el.addEventListener('click', () => pickSource(el.dataset.src));
+    });
+    return;
+  }
+
+  if (drawerState.substate === 'target-picker') {
+    const src = drawerState.sourceId ? (USER_SOURCES[drawerState.sourceId] || SOURCES.find(s => s.id === drawerState.sourceId)) : null;
+    body.innerHTML = `
+      ${claimLine}
+      <div class="drawer-section">
+        <div class="drawer-label">Source</div>
+        <div class="drawer-source-chip">
+          <span>${escapeHtml(src ? src.name : '—')}</span>
+          <button class="drawer-source-change" id="drawer-change-src">change ×</button>
+        </div>
+        <div class="drawer-hint">
+          Select text in the source viewer to anchor a quote, or click
+          cells to build a derived claim. Your selection becomes the
+          target automatically.
+        </div>
+      </div>
+      <div class="drawer-actions">
+        <button class="btn-sm" id="drawer-absence">Mark as absence</button>
+        <button class="btn-sm" id="drawer-cancel">Cancel</button>
+      </div>
+    `;
+    $('#drawer-change-src').addEventListener('click', () => {
+      drawerState.sourceId = null;
+      drawerState.substate = 'source-picker';
+      lastCitedSourceId = null;
+      hideSourceViewer();
+      renderDrawer();
+    });
+    wireDrawerFooter(body);
+    return;
+  }
+
+  if (drawerState.substate === 'confirm') {
+    const t = drawerState.target;
+    const targetLine = t
+      ? (t.kind === 'quote'
+          ? `<div class="drawer-target-view">"${escapeHtml(t.text)}"</div><div class="drawer-target-meta">${escapeHtml(t.src)} · ${escapeHtml(t.spanLabel)}</div>`
+          : t.kind === 'cell'
+            ? `<div class="drawer-target-view">row ${t.row} · ${escapeHtml(t.col)} = <b>${escapeHtml(t.value)}</b></div><div class="drawer-target-meta">${escapeHtml(t.src)}</div>`
+            : t.kind === 'derived'
+              ? `<div class="drawer-target-view">${escapeHtml(t.op)}(${t.inputs.length} cells) = <b>${escapeHtml(t.result)}</b></div><div class="drawer-target-meta">${escapeHtml(t.src)}</div>`
+              : `<div class="drawer-target-view">—</div>`)
+      : `<div class="drawer-target-view">—</div>`;
+    body.innerHTML = `
+      ${claimLine}
+      <div class="drawer-section">
+        <div class="drawer-label">Target · ${t ? escapeHtml(t.kind) : '—'}</div>
+        ${targetLine}
+      </div>
+      <div class="drawer-actions">
+        <button class="btn-sm" id="drawer-back">Back</button>
+        <button class="btn-sm" id="drawer-cancel">Cancel</button>
+        <button class="btn-sm btn-sm-primary" id="drawer-anchor">Anchor</button>
+      </div>
+    `;
+    $('#drawer-back').addEventListener('click', () => {
+      drawerState.substate = 'target-picker';
+      renderDrawer();
+      openSourceViewerForPicking(drawerState.sourceId);
+    });
+    $('#drawer-anchor').addEventListener('click', confirmAnchor);
+    wireDrawerFooter(body);
+    return;
+  }
+}
+
+function wireDrawerFooter(body) {
+  const absBtn = $('#drawer-absence', body);
+  if (absBtn) absBtn.addEventListener('click', () => {
+    showToast('Absence authoring coming in phase 5');
+  });
+  const cancelBtn = $('#drawer-cancel', body);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeAnchorDrawer);
+}
+
+function pickSource(sourceId) {
+  drawerState.sourceId = sourceId;
+  drawerState.substate = 'target-picker';
+  renderDrawer();
+  openSourceViewerForPicking(sourceId);
+}
+
+/* Open the source viewer in selection mode. Clearing selectedCells on
+   entry — each new pick starts a fresh aggregation. Empty search default
+   per task 15: paraphrase cites shouldn't require verbatim matches. */
+function openSourceViewerForPicking(sourceId) {
+  drawerState.selectedCells = [];
+  drawerState.derivedOp = null;
+  showSourceViewer(sourceId, { selecting: true });
+}
+
+/* Commit a text-range selection in the source viewer as the drawer target. */
+function captureViewerTextSelection() {
+  if (!drawerState.active || drawerState.substate !== 'target-picker') return;
+  const textEl = $('#src-viewer-text');
+  if (!textEl || textEl.hidden) return;
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+  const range = sel.getRangeAt(0);
+  if (!textEl.contains(range.startContainer) || !textEl.contains(range.endContainer)) return;
+  const text = sel.toString();
+  if (!text.trim()) return;
+  // Compute character offsets into the raw text by measuring from the
+  // start of textEl. textContent is our ground truth for raw.
+  const full = textEl.textContent;
+  const preRange = range.cloneRange();
+  preRange.selectNodeContents(textEl);
+  preRange.setEnd(range.startContainer, range.startOffset);
+  const start = preRange.toString().length;
+  const end = start + text.length;
+  const src = USER_SOURCES[drawerState.sourceId] || SOURCES.find(s => s.id === drawerState.sourceId);
+  if (!src) return;
+  const before = contextBefore(full, start);
+  const after  = contextAfter(full, end);
+  const spanLabel = locatorLabel(src, { start, end }, full);
+  drawerState.target = {
+    kind: 'quote',
+    src: src.name,
+    sourceId: src.id,
+    start, end,
+    text,
+    before,
+    after,
+    spanLabel,
+    highlight: text
+  };
+  drawerState.substate = 'confirm';
+  renderDrawer();
+}
+
+/* Commit a cell selection (single → cell; multiple → derived with the
+   chosen op). */
+function captureViewerCellSelection() {
+  if (!drawerState.active || drawerState.substate !== 'target-picker') return;
+  const src = USER_SOURCES[drawerState.sourceId] || SOURCES.find(s => s.id === drawerState.sourceId);
+  if (!src) return;
+  const cells = drawerState.selectedCells.slice();
+  if (cells.length === 1) {
+    const c = cells[0];
+    drawerState.target = {
+      kind: 'cell',
+      src: src.name,
+      sourceId: src.id,
+      row: c.row,
+      col: c.col,
+      value: c.value
+    };
+    drawerState.substate = 'confirm';
+    renderDrawer();
+    return;
+  }
+  if (cells.length >= 2 && drawerState.derivedOp) {
+    drawerState.target = {
+      kind: 'derived',
+      src: src.name,
+      sourceId: src.id,
+      op: drawerState.derivedOp,
+      inputs: cells.map(c => ({ kind: 'cell', src: src.name, row: c.row, col: c.col, value: c.value })),
+      result: computeDerivedResult(drawerState.derivedOp, cells)
+    };
+    drawerState.substate = 'confirm';
+    renderDrawer();
+  }
+}
+
+/* Compute the displayed result for a derived op over selected cells.
+   Non-numeric ops (COUNT) don't need numeric parse. */
+function computeDerivedResult(op, cells) {
+  const toNum = v => {
+    const n = parseFloat(String(v).replace(/[^0-9.\-]/g, ''));
+    return Number.isFinite(n) ? n : 0;
+  };
+  const nums = cells.map(c => toNum(c.value));
+  const fmt = n => (Math.abs(n) >= 1000 ? n.toLocaleString() : String(n));
+  switch (op) {
+    case 'SUM':   return fmt(nums.reduce((a,b) => a+b, 0));
+    case 'AVG':   return fmt(nums.reduce((a,b) => a+b, 0) / nums.length);
+    case 'COUNT': return String(cells.length);
+    case 'MIN':   return fmt(Math.min(...nums));
+    case 'MAX':   return fmt(Math.max(...nums));
+    case 'DIFF':  return fmt(nums[0] - nums[1]);
+    case 'RATIO': return nums[1] === 0 ? '—' : (nums[0] / nums[1]).toFixed(2);
+    default: return '';
+  }
+}
+
+/* Finalize the anchor. Emits a CITE event with the claim and its
+   computed provenance. Wraps the editor selection range with a
+   grounded span. Sticky: remembers this source for the next anchor. */
+async function confirmAnchor() {
+  const t = drawerState.target;
+  if (!t) return;
   const claimId = 'u_' + ulid().slice(-8);
-  const spanLabel = locatorLabel(source, snippet, text);
+  let prov;
+  const trace = [];
+  if (t.kind === 'quote') {
+    prov = {
+      kind: 'quote',
+      src: t.src,
+      page: null,
+      before: t.before,
+      highlight: t.highlight,
+      after: t.after,
+      spanLabel: t.spanLabel
+    };
+    trace.push(
+      { op: 'SIG', txt: `citation pattern matched in <strong>${escapeHtml(t.src)}</strong>` },
+      { op: 'INS', txt: `anchor minted for <strong>${escapeHtml(drawerState.claimText.slice(0,40))}</strong>` },
+      { op: 'DEF', txt: `claim bound to source span at ${escapeHtml(t.spanLabel)}` }
+    );
+  } else if (t.kind === 'cell') {
+    prov = {
+      kind: 'cell',
+      src: t.src,
+      row: t.row,
+      col: t.col,
+      value: t.value,
+      headers: [t.col],
+      rows: [[t.row, t.value]]
+    };
+    trace.push(
+      { op: 'SIG', txt: `cell value hit on row ${t.row}` },
+      { op: 'INS', txt: `anchor minted for <strong>${escapeHtml(t.col)}:${t.row}</strong>` }
+    );
+  } else if (t.kind === 'derived') {
+    prov = {
+      kind: 'derived',
+      expr: `${t.op}(${t.inputs.length} cells)`,
+      op: t.op,
+      result: t.result,
+      inputs: t.inputs
+    };
+    trace.push(
+      { op: 'SIG', txt: `${t.inputs.length} cells aggregated via ${t.op}` },
+      { op: 'DEF', txt: `computed: ${escapeHtml(t.result)}` }
+    );
+  } else {
+    return;
+  }
   const claim = {
     type: 'grounded',
-    text: pendingSelection.text,
+    text: drawerState.claimText,
     conf: 0.92,
     status: 'pending',
-    prov: {
-      kind: 'quote',
-      src: source.name,
-      page: null,
-      before: contextBefore(text, snippet.start),
-      highlight: snippet.text,
-      after: contextAfter(text, snippet.end),
-      spanLabel
-    },
-    trace: [
-      { op: 'SIG', txt: `citation pattern matched in <strong>${escapeHtml(source.name)}</strong>` },
-      { op: 'INS', txt: `anchor minted for <strong>${escapeHtml(pendingSelection.text.slice(0,40))}</strong>` },
-      { op: 'DEF', txt: `claim bound to source span at ${escapeHtml(spanLabel)}` }
-    ]
+    prov,
+    trace
   };
-
   await appendEventAndRefold({
     op: 'CITE',
     site: `claim:${claimId}`,
     resolution: 'Figure',
-    payload: { claim_id: claimId, claim, source_id: source.id },
+    payload: { claim_id: claimId, claim, source_id: drawerState.sourceId },
     author: 'human'
   });
 
-  // wrap the selection range with a grounded span
+  // Wrap the editor selection range with a grounded span.
+  const range = drawerState.range;
+  const claimText = drawerState.claimText;
   try {
-    const range = pendingSelection.range;
+    if (!range) throw new Error('no range');
     const span = document.createElement('span');
     span.className = 'g';
     span.dataset.id = claimId;
     range.surroundContents(span);
     span.addEventListener('click', () => showClaim(claimId));
   } catch (e) {
-    // range may have been invalidated (e.g. content edited). Fallback: re-attach by text search.
-    console.warn('[cite] surroundContents failed, falling back to text search', e);
+    // range may have been invalidated — fall back to text search
     const body = $('#article-body');
-    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
-    let node;
-    while ((node = walker.nextNode())) {
-      const idx = node.nodeValue.indexOf(pendingSelection.text);
-      if (idx !== -1) {
-        const r = document.createRange();
-        r.setStart(node, idx);
-        r.setEnd(node, idx + pendingSelection.text.length);
-        const span = document.createElement('span');
-        span.className = 'g';
-        span.dataset.id = claimId;
-        try { r.surroundContents(span); span.addEventListener('click', () => showClaim(claimId)); } catch {}
-        break;
+    if (body) {
+      const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode())) {
+        const idx = node.nodeValue.indexOf(claimText);
+        if (idx !== -1) {
+          const r = document.createRange();
+          r.setStart(node, idx);
+          r.setEnd(node, idx + claimText.length);
+          const span = document.createElement('span');
+          span.className = 'g';
+          span.dataset.id = claimId;
+          try { r.surroundContents(span); span.addEventListener('click', () => showClaim(claimId)); } catch {}
+          break;
+        }
       }
     }
   }
 
+  lastCitedSourceId = drawerState.sourceId;
   await saveArticleNow();
   renderCounts();
-  closeCiteModal();
-  showToast('cited');
-  showClaim(claimId);
+  const newId = claimId;
+  closeAnchorDrawer();
+  showToast('anchored');
+  showClaim(newId);
 }
 
 /* ======================================================================
@@ -5781,15 +6151,18 @@ function resolveSourceIdByName(name) {
   return seed ? seed.id : null;
 }
 
-/* showSourceViewer(id, { scrollTo })
-     scrollTo = { kind: 'quote', highlight }     → find & pulse a text span
-     scrollTo = { kind: 'cell',  row, col }      → scroll row into view, pulse target cell
-   Called both from the Sources panel (no scrollTo) and from a provenance
-   chip (with scrollTo derived from prov shape). */
+/* showSourceViewer(id, { scrollTo, selecting })
+     scrollTo  = { kind: 'quote', highlight }     → find & pulse a text span
+     scrollTo  = { kind: 'cell',  row, col }      → scroll row into view, pulse target cell
+     selecting = true                             → render in selection mode: text
+                                                    selection + cell clicks feed the drawer
+   Called from the Sources panel (plain), from a provenance chip (scrollTo),
+   and from the anchor drawer's target-picker (selecting). */
 async function showSourceViewer(id, opts = {}) {
   const src = USER_SOURCES[id] || SOURCES.find(s => s.id === id);
   if (!src) return;
   const scrollTo = opts.scrollTo || null;
+  const selecting = !!opts.selecting;
   const modal = $('#src-viewer');
   const body = modal.querySelector('.src-viewer-body');
   $('#src-viewer-title').textContent = src.name;
@@ -5843,6 +6216,10 @@ async function showSourceViewer(id, opts = {}) {
     // Scroll/highlight a specific span on request — lets a provenance chip
     // open the source *at* its cited target, not just at the top.
     if (scrollTo) applySourceViewerScrollTo(scrollTo, { body });
+
+    // Selection mode — wire cell/text picking to the anchor drawer.
+    body.classList.toggle('is-selecting', selecting);
+    togglePickerBar(selecting, src);
   } catch (err) {
     console.warn('[src-viewer] failed to load', err);
     textEl.hidden = false;
@@ -5956,6 +6333,13 @@ function wireCellTuple() {
       const td = e.target.closest('td');
       if (!td || td.classList.contains('rowno')) return;
       if (!wrap.contains(td)) return;
+      // In drawer selection mode the click feeds drawerState.selectedCells
+      // instead of the tuple readout — different affordance, same input.
+      const body = $('#src-viewer').querySelector('.src-viewer-body');
+      if (body && body.classList.contains('is-selecting')) {
+        handleDrawerCellClick(td, e.shiftKey);
+        return;
+      }
       selectCellTuple(td);
     });
   }
@@ -5974,12 +6358,141 @@ function wireCellTuple() {
     });
   }
 }
-function hideSourceViewer() { $('#src-viewer').hidden = true; }
+/* Show/hide the picker bar at the bottom of the source viewer. Active
+   only when the anchor drawer is in target-picker substate. */
+function togglePickerBar(selecting, src) {
+  const bar = $('#src-viewer-picker');
+  const hint = $('.src-viewer-hint');
+  const tupleBar = $('#src-viewer-tuple');
+  const ops = $('#src-viewer-ops');
+  if (!bar) return;
+  bar.hidden = !selecting;
+  if (hint) hint.hidden = selecting;
+  if (selecting) {
+    // In selection mode the tuple bar is superfluous — we use the picker bar.
+    if (tupleBar) tupleBar.hidden = true;
+    renderPickerBarState();
+  } else if (ops) {
+    ops.hidden = true;
+  }
+}
+
+/* Update the picker bar label + op visibility based on current selection. */
+function renderPickerBarState() {
+  const label = $('#src-viewer-picker-label');
+  const ops = $('#src-viewer-ops');
+  const btn = $('#src-viewer-use');
+  const n = drawerState.selectedCells.length;
+  if (!label) return;
+  if (n === 0) {
+    label.textContent = 'Select text or click a cell to anchor';
+    if (ops) ops.hidden = true;
+    if (btn) btn.hidden = true;
+  } else if (n === 1) {
+    const c = drawerState.selectedCells[0];
+    label.textContent = `1 cell · row ${c.row} · ${c.col} = ${c.value}`;
+    if (ops) ops.hidden = true;
+    if (btn) { btn.hidden = false; btn.textContent = 'Use this cell'; }
+  } else {
+    label.textContent = `${n} cells selected — pick an op`;
+    if (ops) ops.hidden = false;
+    if (btn) {
+      btn.hidden = !drawerState.derivedOp;
+      btn.textContent = drawerState.derivedOp ? `Use ${drawerState.derivedOp}` : 'Pick an op';
+    }
+  }
+}
+
+/* In selection mode, a TD click adds/toggles a cell in the drawer's
+   selectedCells list. Shift-click appends; plain click starts a fresh
+   single-cell selection. */
+function handleDrawerCellClick(td, shift) {
+  const row = Number(td.dataset.row);
+  const colIdx = Number(td.dataset.colIdx);
+  if (!Number.isFinite(row) || !Number.isFinite(colIdx)) return;
+  const wrap = $('#src-viewer-table-wrap');
+  if (!wrap) return;
+  const th = wrap.querySelector(`thead th[data-col-idx="${colIdx}"]`);
+  const col = th ? th.textContent : '';
+  const value = td.textContent;
+  const entry = { row, col, colIdx, value };
+  if (shift) {
+    // Toggle: if this cell is already in the list, remove it
+    const at = drawerState.selectedCells.findIndex(c => c.row === row && c.colIdx === colIdx);
+    if (at >= 0) {
+      drawerState.selectedCells.splice(at, 1);
+      td.classList.remove('picked');
+    } else {
+      drawerState.selectedCells.push(entry);
+      td.classList.add('picked');
+    }
+  } else {
+    // Fresh selection — clear the prior picks
+    wrap.querySelectorAll('td.picked').forEach(c => c.classList.remove('picked'));
+    drawerState.selectedCells = [entry];
+    td.classList.add('picked');
+    drawerState.derivedOp = null;
+  }
+  renderPickerBarState();
+}
+
+function hideSourceViewer() {
+  const bar = $('#src-viewer-picker');
+  if (bar) bar.hidden = true;
+  const hint = $('.src-viewer-hint');
+  if (hint) hint.hidden = false;
+  const ops = $('#src-viewer-ops');
+  if (ops) ops.hidden = true;
+  const body = $('#src-viewer').querySelector('.src-viewer-body');
+  if (body) body.classList.remove('is-selecting');
+  $('#src-viewer').hidden = true;
+}
 function wireSourceViewer() {
   $('#src-viewer-close').addEventListener('click', hideSourceViewer);
   $('#src-viewer-backdrop').addEventListener('click', hideSourceViewer);
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !$('#src-viewer').hidden) hideSourceViewer();
+  });
+
+  // Text-selection capture — when the drawer is picking, any mouseup with
+  // a non-collapsed selection inside #src-viewer-text is the target.
+  const textEl = $('#src-viewer-text');
+  if (textEl) {
+    textEl.addEventListener('mouseup', () => {
+      const body = $('#src-viewer').querySelector('.src-viewer-body');
+      if (!body || !body.classList.contains('is-selecting')) return;
+      // Only commit on release; tiny delay to let the selection finalize.
+      setTimeout(captureViewerTextSelection, 0);
+    });
+  }
+
+  // Picker op palette — pick an aggregation for multi-cell selections.
+  const ops = $('#src-viewer-ops');
+  if (ops) {
+    ops.addEventListener('click', e => {
+      const b = e.target.closest('.src-viewer-op');
+      if (!b) return;
+      ops.querySelectorAll('.src-viewer-op').forEach(x => x.classList.remove('picked-op'));
+      b.classList.add('picked-op');
+      drawerState.derivedOp = b.dataset.op;
+      renderPickerBarState();
+    });
+  }
+
+  // "Use selection" — commit whatever cell/op state the drawer has.
+  const useBtn = $('#src-viewer-use');
+  if (useBtn) {
+    useBtn.addEventListener('click', () => captureViewerCellSelection());
+  }
+}
+
+function wireAnchorDrawer() {
+  const closeBtn = $('#drawer-close');
+  if (closeBtn) closeBtn.addEventListener('click', closeAnchorDrawer);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && drawerState.active) {
+      closeAnchorDrawer();
+    }
   });
 }
 
@@ -6576,8 +7089,8 @@ async function init() {
   wireEditor();
   wireUploads();
   wireSelectionToolbar();
-  wireCiteModal();
   wireSourceViewer();
+  wireAnchorDrawer();
   wireCellTuple();
   wireWorkspace();
   updateWorkspaceIndicator();
