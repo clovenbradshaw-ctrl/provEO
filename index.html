@@ -128,6 +128,22 @@
     align-items: center;
     gap: 6px;
   }
+
+  /* Pulse the thing we scrolled to in the source viewer — used by
+     .source-chip → showSourceViewer({scrollTo}). */
+  .pulse-target { animation: pulse-target 1.4s ease-out 1; }
+  @keyframes pulse-target {
+    0%   { box-shadow: 0 0 0 0 var(--amber-mid); background-color: var(--amber-fill); }
+    60%  { box-shadow: 0 0 0 10px rgba(199, 141, 44, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(199, 141, 44, 0); }
+  }
+  .src-viewer-hit {
+    background: var(--amber-fill);
+    color: var(--amber-text);
+    padding: 1px 2px;
+    border-radius: 2px;
+    box-shadow: inset 0 -2px 0 var(--amber-mid);
+  }
   .srcbadge .statdot {
     width: 6px;
     height: 6px;
@@ -606,6 +622,39 @@
     overflow-y: auto;
     padding: 14px 16px;
   }
+  /* Drill-down breadcrumb — appears at the top of the provenance panel
+     when the user descends into a nested derivation. Segments before the
+     last are clickable; last is the current view. */
+  .prov-breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 0.5px dashed var(--color-border-tertiary);
+  }
+  .prov-breadcrumb .pb-seg {
+    padding: 2px 6px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+  }
+  .prov-breadcrumb .pb-seg[data-pb-idx]:hover {
+    background: var(--color-background-secondary);
+    color: var(--color-text-primary);
+  }
+  .prov-breadcrumb .pb-current {
+    color: var(--color-text-primary);
+    font-weight: 600;
+    cursor: default;
+  }
+  .prov-breadcrumb .pb-sep { color: var(--color-text-tertiary); }
+  .prov-breadcrumb .pb-val { color: var(--color-text-primary); font-weight: 600; }
+
   .prov-section { margin-bottom: 15px; }
   .prov-label {
     font-size: 9.5px;
@@ -2093,7 +2142,6 @@
     <div class="topright">
       <span id="boot-status" style="font-family: var(--font-mono); font-size: 10.5px; color: var(--color-text-secondary); margin-right: 4px;">booting…</span>
       <div class="srcbadge"><div class="statdot statdot-green"></div>3 indexed</div>
-      <div class="srcbadge"><div class="statdot statdot-amber"></div>1 indexing</div>
       <button class="ws-btn" id="ws-btn" title="Workspace / Matrix">
         <span class="ws-dot" id="ws-dot"></span>
         <span id="ws-label">Local workspace</span>
@@ -2211,7 +2259,7 @@
 <input type="file" id="file-input" multiple accept=".txt,.csv,.md,.tsv,.json,.log,.xml,.html,.htm" style="display:none">
 
 <div id="cite-toolbar" class="cite-toolbar" hidden>
-  <button class="ct-btn" id="cite-btn">＋ Cite source</button>
+  <button class="ct-btn" id="cite-btn">＋ Anchor evidence</button>
 </div>
 
 <div id="cite-modal" class="cite-modal" hidden>
@@ -2822,10 +2870,6 @@ function renderSources() {
   const pending = list.filter(s => !s.indexed).length;
   const badges = $$('.srcbadge');
   if (badges[0]) badges[0].innerHTML = `<div class="statdot statdot-green"></div>${indexed} indexed`;
-  if (badges[1]) {
-    if (pending > 0) { badges[1].style.display = ''; badges[1].innerHTML = `<div class="statdot statdot-amber"></div>${pending} indexing`; }
-    else { badges[1].style.display = 'none'; }
-  }
 
   // click to open source viewer (skipped on the × delete button via stopPropagation below)
   $$('[data-open-src]').forEach(el => {
@@ -2917,10 +2961,52 @@ function renderCounts() {
     `<span class="c-g">${g} grounded</span> · <span class="c-c">${c} conflict</span> · <span class="c-a">${a} absent</span>`;
 }
 
-/* ---- Claim detail panel ---- */
+/* ---- Claim detail panel ----
+   The panel walks a provenance tree for the selected claim. provPath is a
+   list of input indices that drill into nested derived provs; [] = root.
+   Breadcrumb at the top lets the user step back out. Leaves (quote/cell)
+   resolve to a source chip that opens the source at the cited target. */
+let provPath = [];
+
+function provAtPath(claim, path) {
+  let prov = claim.prov;
+  const trail = [{ label: shortClaimLabel(claim), result: null, prov }];
+  for (let i = 0; i < path.length; i++) {
+    if (!prov || !prov.inputs || !prov.inputs[path[i]]) break;
+    prov = prov.inputs[path[i]];
+    trail.push({ label: shortProvLabel(prov), result: null, prov });
+  }
+  return { prov, trail };
+}
+
+function shortClaimLabel(claim) {
+  // For the root breadcrumb: prefer the claim's rendered text
+  return claim.text;
+}
+function shortProvLabel(p) {
+  if (!p) return '';
+  if (p.kind === 'derived') return `${p.op}(${(p.inputs || []).length})`;
+  if (p.kind === 'cell')    return `row ${p.row}`;
+  if (p.kind === 'quote') {
+    const t = (p.highlight || '').trim();
+    return t.length > 22 ? `"${t.slice(0,20)}…"` : `"${t}"`;
+  }
+  if (p.kind === 'conflict') return 'conflict';
+  if (p.kind === 'absence')  return 'absence';
+  return p.kind || '';
+}
+function shortProvValue(p) {
+  if (!p) return '';
+  if (p.kind === 'derived') return p.result || '';
+  if (p.kind === 'cell')    return p.value || '';
+  if (p.kind === 'quote')   return '';
+  return '';
+}
+
 function showClaim(id, opts = {}) {
   const claim = CLAIMS[id];
   if (!claim) return;
+  if (selectedClaimId !== id) provPath = [];
   selectedClaimId = id;
 
   $$('.g, .conflict, .absent', $('#article-body')).forEach(el => el.classList.remove('active'));
@@ -2943,33 +3029,55 @@ function showClaim(id, opts = {}) {
     claim.conf >= 0.97 ? 'var(--teal-mid)' :
     claim.conf >= 0.85 ? 'var(--amber-mid)' : 'var(--red-mid)';
 
-  // Claim statement (always shown)
-  let body = `
-    <div class="prov-section">
-      <div class="prov-label">Claim</div>
-      <div class="prov-code">"${escapeHtml(claim.text)}"</div>
-    </div>
-  `;
+  const { prov: viewProv, trail } = provAtPath(claim, provPath);
 
-  // Provenance — dispatch on kind
-  body += renderProvenance(claim.prov, { topLevel: true });
+  // Breadcrumb — only shown when we've drilled into a derivation.
+  let body = '';
+  if (provPath.length > 0) {
+    const segs = trail.map((t, i) => {
+      const isLast = i === trail.length - 1;
+      const val = shortProvValue(t.prov);
+      const label = escapeHtml(t.label) + (val ? ` · <span class="pb-val">${escapeHtml(val)}</span>` : '');
+      return isLast
+        ? `<span class="pb-seg pb-current">${label}</span>`
+        : `<span class="pb-seg" data-pb-idx="${i}">${label}</span>`;
+    }).join('<span class="pb-sep">›</span>');
+    body += `<div class="prov-breadcrumb">${segs}</div>`;
+  }
 
-  // Confidence
-  body += `
-    <div class="prov-section">
-      <div class="prov-label">Confidence</div>
-      <div class="conf-bar-wrap">
-        <div class="conf-bar" style="width: ${Math.round(claim.conf * 100)}%; background: ${confColor};"></div>
+  // Claim statement — show claim text only at the root; below it we title
+  // the current view by the nested derivation's expression.
+  if (provPath.length === 0) {
+    body += `
+      <div class="prov-section">
+        <div class="prov-label">Claim</div>
+        <div class="prov-code">"${escapeHtml(claim.text)}"</div>
       </div>
-      <div class="conf-label">${claim.conf.toFixed(2)} · ${
-        claim.conf >= 0.97 ? 'mechanical' :
-        claim.conf >= 0.85 ? 'probabilistic' : 'weak'
-      }</div>
-    </div>
-  `;
+    `;
+  }
 
-  // Inspect fold events — collapsed affordance, the old traversal lives here
-  if (claim.trace && claim.trace.length) {
+  // Provenance at current depth
+  body += renderProvenance(viewProv, { topLevel: true });
+
+  // Confidence (always anchored to the claim, not the nested node)
+  if (provPath.length === 0) {
+    body += `
+      <div class="prov-section">
+        <div class="prov-label">Confidence</div>
+        <div class="conf-bar-wrap">
+          <div class="conf-bar" style="width: ${Math.round(claim.conf * 100)}%; background: ${confColor};"></div>
+        </div>
+        <div class="conf-label">${claim.conf.toFixed(2)} · ${
+          claim.conf >= 0.97 ? 'mechanical' :
+          claim.conf >= 0.85 ? 'probabilistic' : 'weak'
+        }</div>
+      </div>
+    `;
+  }
+
+  // Inspect fold events — only surface when there's something notable: a
+  // non-trivial trace, or a non-grounded claim type whose derivation matters.
+  if (provPath.length === 0 && claim.trace && (claim.trace.length > 2 || claim.type !== 'grounded')) {
     body += `
       <div class="inspect-fold" data-toggle="fold">
         <span id="fold-caret">▸</span> inspect fold events (${claim.trace.length})
@@ -2992,13 +3100,15 @@ function showClaim(id, opts = {}) {
     `;
   }
 
-  body += `
-    <div class="divider"></div>
-    <div class="prov-actions">
-      <button class="btn-sm">Correct</button>
-      <button class="btn-sm btn-sm-danger">Release</button>
-    </div>
-  `;
+  if (provPath.length === 0) {
+    body += `
+      <div class="divider"></div>
+      <div class="prov-actions">
+        <button class="btn-sm">Correct</button>
+        <button class="btn-sm btn-sm-danger">Release</button>
+      </div>
+    `;
+  }
 
   $('#rp-body').innerHTML = body;
 
@@ -3013,16 +3123,62 @@ function showClaim(id, opts = {}) {
     });
   }
 
-  // wire up input-item drill-down (for derived prov)
-  $$('.input-item', $('#rp-body')).forEach(item => {
-    item.addEventListener('click', () => {
-      // Drill into nested derivation — in a real app this would navigate
-      // to a sub-panel; here we flash it to show the intent
-      item.style.transition = 'background 0.2s';
-      item.style.background = 'var(--amber-fill)';
-      setTimeout(() => item.style.background = '', 400);
+  // wire up breadcrumb: clicking a segment pops back to that depth
+  $$('.pb-seg[data-pb-idx]', $('#rp-body')).forEach(seg => {
+    seg.addEventListener('click', () => {
+      const depth = Number(seg.dataset.pbIdx);
+      provPath = provPath.slice(0, depth);
+      showClaim(id);
     });
   });
+
+  // wire up input-item drill-down: derived inputs push, leaves open source
+  $$('.input-item', $('#rp-body')).forEach(item => {
+    item.addEventListener('click', () => {
+      const idx = Number(item.dataset.inputIdx);
+      if (!Number.isFinite(idx)) return;
+      const input = (viewProv.inputs || [])[idx];
+      if (!input) return;
+      if (input.kind === 'derived') {
+        provPath = [...provPath, idx];
+        showClaim(id);
+        return;
+      }
+      // Leaf — open the source at the cited target
+      openSourceFromProv(input);
+    });
+  });
+
+  // wire up source-chip → open source viewer at cited span
+  $$('.source-chip[data-src-name]', $('#rp-body')).forEach(chip => {
+    chip.addEventListener('click', () => {
+      const name = chip.dataset.srcName;
+      const sid = resolveSourceIdByName(name);
+      if (!sid) { showToast('Source not in library'); return; }
+      const scrollTo = chip.dataset.scrollKind === 'cell'
+        ? { kind: 'cell', row: Number(chip.dataset.row), col: chip.dataset.col }
+        : chip.dataset.scrollKind === 'quote'
+          ? { kind: 'quote', highlight: chip.dataset.hl }
+          : null;
+      showSourceViewer(sid, { scrollTo });
+    });
+  });
+}
+
+/* Open the source viewer for a leaf prov node (cell/quote), targeting the
+   cited span. Used by both the source-chip on the current view and by
+   input-item leaves in a derived drill-down. */
+function openSourceFromProv(p) {
+  if (!p) return;
+  const sid = resolveSourceIdByName(p.src);
+  if (!sid) { showToast('Source not in library'); return; }
+  if (p.kind === 'cell') {
+    showSourceViewer(sid, { scrollTo: { kind: 'cell', row: p.row, col: p.col } });
+  } else if (p.kind === 'quote') {
+    showSourceViewer(sid, { scrollTo: { kind: 'quote', highlight: p.highlight } });
+  } else {
+    showSourceViewer(sid);
+  }
 }
 
 /* Render a provenance object. Returns HTML string. */
@@ -3044,7 +3200,7 @@ function renderQuoteProv(p, topLevel) {
   return `
     <div class="prov-section">
       <div class="prov-label">Source quote</div>
-      <div class="source-chip">
+      <div class="source-chip" data-src-name="${escapeHtml(p.src)}" data-scroll-kind="quote" data-hl="${escapeHtml(p.highlight || '')}">
         <span class="source-chip-name">${escapeHtml(p.src)}</span>
         <span class="source-chip-loc">${p.page ? 'p.' + p.page : p.spanLabel}</span>
         <span class="source-chip-open">↗</span>
@@ -3081,7 +3237,7 @@ function renderCellProv(p, topLevel) {
   return `
     <div class="prov-section">
       <div class="prov-label">Source cell</div>
-      <div class="source-chip">
+      <div class="source-chip" data-src-name="${escapeHtml(p.src)}" data-scroll-kind="cell" data-row="${escapeHtml(String(p.row))}" data-col="${escapeHtml(p.col)}">
         <span class="source-chip-name">${escapeHtml(p.src)}</span>
         <span class="source-chip-loc">row ${p.row} · ${escapeHtml(p.col)}</span>
         <span class="source-chip-open">↗</span>
@@ -3210,6 +3366,7 @@ function renderAbsenceProv(p, topLevel) {
 
 function closeClaim() {
   selectedClaimId = null;
+  provPath = [];
   $$('.g, .conflict, .absent', $('#article-body')).forEach(el => el.classList.remove('active'));
   $('#rp-empty').style.display = 'flex';
   $('#rp-content').classList.remove('visible');
@@ -5478,9 +5635,27 @@ function renderCsvTable(text, kind) {
   return { html, rowCount: body.length, colCount, headers: header };
 }
 
-async function showSourceViewer(id) {
+/* Look up a source id from a name. Tries user-uploaded sources first (they
+   have raw text), then falls back to the seeded demo catalog. Returns null
+   if no source matches — callers should treat that as "can't open". */
+function resolveSourceIdByName(name) {
+  if (!name) return null;
+  for (const s of Object.values(USER_SOURCES)) {
+    if (s.name === name) return s.id;
+  }
+  const seed = SOURCES.find(s => s.name === name);
+  return seed ? seed.id : null;
+}
+
+/* showSourceViewer(id, { scrollTo })
+     scrollTo = { kind: 'quote', highlight }     → find & pulse a text span
+     scrollTo = { kind: 'cell',  row, col }      → scroll row into view, pulse target cell
+   Called both from the Sources panel (no scrollTo) and from a provenance
+   chip (with scrollTo derived from prov shape). */
+async function showSourceViewer(id, opts = {}) {
   const src = USER_SOURCES[id] || SOURCES.find(s => s.id === id);
   if (!src) return;
+  const scrollTo = opts.scrollTo || null;
   const modal = $('#src-viewer');
   const body = modal.querySelector('.src-viewer-body');
   $('#src-viewer-title').textContent = src.name;
@@ -5530,6 +5705,10 @@ async function showSourceViewer(id) {
     } else {
       textEl.textContent = '(This is a built-in sample source — no raw text is stored. Upload your own file to view its contents.)';
     }
+
+    // Scroll/highlight a specific span on request — lets a provenance chip
+    // open the source *at* its cited target, not just at the top.
+    if (scrollTo) applySourceViewerScrollTo(scrollTo, { body });
   } catch (err) {
     console.warn('[src-viewer] failed to load', err);
     textEl.hidden = false;
@@ -5537,6 +5716,44 @@ async function showSourceViewer(id) {
     tableFooter.hidden = true;
     body.classList.remove('is-table');
     textEl.textContent = '(failed to load source text)';
+  }
+}
+
+/* Post-render scroll/highlight inside the source viewer. */
+function applySourceViewerScrollTo(scrollTo, { body }) {
+  if (scrollTo.kind === 'cell' && body.classList.contains('is-table')) {
+    const wrap = $('#src-viewer-table-wrap');
+    if (!wrap) return;
+    // Target <td> by row attribute; col name → data-col-idx via headers
+    const headers = Array.from(wrap.querySelectorAll('thead th[data-col-idx]'));
+    const col = headers.find(h => h.textContent === scrollTo.col);
+    if (!col) return;
+    const colIdx = col.dataset.colIdx;
+    const td = wrap.querySelector(`tbody td[data-row="${scrollTo.row}"][data-col-idx="${colIdx}"]`);
+    if (!td) return;
+    td.scrollIntoView({ block: 'center', inline: 'center', behavior: 'auto' });
+    td.classList.add('pulse-target');
+    setTimeout(() => td.classList.remove('pulse-target'), 1500);
+    return;
+  }
+  if (scrollTo.kind === 'quote') {
+    const textEl = $('#src-viewer-text');
+    if (!textEl || textEl.hidden) return;
+    const raw = textEl.textContent;
+    const needle = (scrollTo.highlight || '').trim();
+    if (!needle) return;
+    const idx = raw.indexOf(needle);
+    if (idx === -1) return;
+    const before = raw.slice(0, idx);
+    const match  = raw.slice(idx, idx + needle.length);
+    const after  = raw.slice(idx + needle.length);
+    textEl.innerHTML = `${escapeHtml(before)}<mark class="src-viewer-hit">${escapeHtml(match)}</mark>${escapeHtml(after)}`;
+    const hit = textEl.querySelector('.src-viewer-hit');
+    if (hit) {
+      hit.scrollIntoView({ block: 'center', behavior: 'auto' });
+      hit.classList.add('pulse-target');
+      setTimeout(() => hit && hit.classList.remove('pulse-target'), 1500);
+    }
   }
 }
 
