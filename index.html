@@ -4333,12 +4333,74 @@ self.addEventListener('message', (ev) => {
   const { type, events } = ev.data;
   if (type !== 'fold') return;
 
+  // Three projected views per the EO split:
+  //   G (Given-Log)  — observations: what was read, where
+  //   M (Meant-Graph)— interpretations: claims with π links into G
+  //   S (lattice)    — positional context (workspace, article, paragraph)
+  // CLAIMS is the render-ready projection of M (M + π resolved).
+  const G = {};
+  const M = {};
+  const S = {};
   const claims = {};
   const sources = {};
 
   for (const raw of events) {
     let evt;
     try { evt = JSON.parse(raw); } catch { continue; }
+
+    // OBS — a G-entry. An observation: someone read this content at this
+    // location at this time. The atomic unit of provenance.
+    if (evt.op === 'OBS' && evt.site && evt.site.startsWith('observation:')) {
+      const obsId = evt.site.slice('observation:'.length);
+      G[obsId] = {
+        id: obsId,
+        ts: evt.ts,
+        agent: evt.payload && evt.payload.agent,
+        mode: (evt.payload && evt.payload.mode) || 'direct_read',
+        source_id: evt.payload && evt.payload.source_id,
+        location: evt.payload && evt.payload.location,
+        content: evt.payload && evt.payload.content,
+        context: (evt.payload && evt.payload.context) || null
+      };
+      continue;
+    }
+
+    // CLAIM — an M-entry. An interpretation made in an article, linked
+    // back to observations by π (pi). Projects into CLAIMS for render.
+    if (evt.op === 'CLAIM' && evt.site && evt.site.startsWith('claim:')) {
+      const claimId = evt.site.slice('claim:'.length);
+      const p = evt.payload || {};
+      M[claimId] = {
+        id: claimId,
+        ts: evt.ts,
+        type: p.type || 'grounded',
+        text: p.text,
+        pi: p.pi || [],
+        position: p.position || null,
+        window: p.window || null,
+        conf: p.conf != null ? p.conf : 0.9,
+        prov_content: p.prov_content,
+        trace: p.trace || []
+      };
+      // Record S-lattice coordinate
+      if (p.position) {
+        const key = (p.position.workspace || 'local') + '/' + (p.position.article_id || 'draft') + '/' + (p.position.paragraph_id || '0');
+        (S[key] = S[key] || []).push(claimId);
+      }
+      // Render-ready projection
+      claims[claimId] = {
+        type: M[claimId].type,
+        text: M[claimId].text,
+        conf: M[claimId].conf,
+        status: 'pending',
+        prov: p.prov_content,
+        trace: M[claimId].trace,
+        pi: M[claimId].pi,
+        window: M[claimId].window,
+        position: M[claimId].position
+      };
+      continue;
+    }
 
     // SEED — initial claim state (carries the full pre-authored shape).
     if (evt.op === 'SEED' && evt.payload && evt.payload.claim_id) {
@@ -4349,7 +4411,8 @@ self.addEventListener('message', (ev) => {
       continue;
     }
 
-    // CITE — user-authored citation, same shape as SEED
+    // CITE — legacy user-authored citation. New code emits OBS+CLAIM;
+    // this handler stays for forward-compat with existing log entries.
     if (evt.op === 'CITE' && evt.payload && evt.payload.claim_id) {
       claims[evt.payload.claim_id] = {
         ...evt.payload.claim,
@@ -4463,7 +4526,7 @@ self.addEventListener('message', (ev) => {
     }
   }
 
-  self.postMessage({ type: 'state', claims, sources });
+  self.postMessage({ type: 'state', claims, sources, G, M, S });
 });
 `;
 
@@ -4476,7 +4539,9 @@ function getFoldWorker() {
   return foldWorker;
 }
 
-/* Kicks off a fold; resolves with the new claim+source state. */
+/* Kicks off a fold; resolves with the three EO views plus the
+   render-ready claim projection. G = observations (Given-Log),
+   M = interpretations (Meant-Graph), S = positional lattice. */
 async function fold() {
   const events = await storage.readAll();
   const worker = getFoldWorker();
@@ -4484,7 +4549,13 @@ async function fold() {
     const onMsg = (ev) => {
       if (ev.data && ev.data.type === 'state') {
         worker.removeEventListener('message', onMsg);
-        resolve({ claims: ev.data.claims, sources: ev.data.sources || {} });
+        resolve({
+          claims: ev.data.claims,
+          sources: ev.data.sources || {},
+          G: ev.data.G || {},
+          M: ev.data.M || {},
+          S: ev.data.S || {}
+        });
       }
     };
     worker.addEventListener('message', onMsg);
@@ -4493,12 +4564,21 @@ async function fold() {
   });
 }
 
+// Three-view cache: kept in memory for downstream readers (π walkers,
+// lattice queries). The fold populates these after every refold.
+let G_VIEW = {};
+let M_VIEW = {};
+let S_VIEW = {};
+
 /* Convenience: append an event then refold and install into CLAIMS + USER_SOURCES */
 async function appendEventAndRefold(e) {
   await appendEvent(e);
   const state = await fold();
   CLAIMS = state.claims;
   USER_SOURCES = state.sources;
+  G_VIEW = state.G;
+  M_VIEW = state.M;
+  S_VIEW = state.S;
 }
 
 /* ---------- Seed on first run ---------- */
@@ -4835,6 +4915,22 @@ function showToast(text) {
   el.classList.add('visible');
   clearTimeout(showToast._t);
   showToast._t = setTimeout(() => el.classList.remove('visible'), 2200);
+}
+
+/* Compute a cheap S-lattice coordinate for the current selection — the
+   paragraph index within #article-body. Anchors live at paragraphs. */
+function currentParagraphId() {
+  const body = $('#article-body');
+  if (!body) return '0';
+  const sel = window.getSelection();
+  let node = sel && sel.rangeCount ? sel.getRangeAt(0).startContainer : null;
+  if (!node) return '0';
+  // climb to the direct child of article-body
+  while (node && node.parentNode && node.parentNode !== body) node = node.parentNode;
+  if (!node) return '0';
+  const paragraphs = Array.from(body.children);
+  const idx = paragraphs.indexOf(node);
+  return idx >= 0 ? String(idx) : '0';
 }
 
 function getArticleSelectionRange() {
@@ -5269,29 +5365,57 @@ async function confirmAbsence() {
   const a = drawerState.absence;
   if (!a || !a.expected.trim()) { showToast('Describe what was expected'); return; }
   const claimId = 'u_' + ulid().slice(-8);
-  const claim = {
-    type: 'absent',
-    text: drawerState.claimText,
-    conf: 0.85,
-    status: 'pending',
-    prov: {
-      kind: 'absence',
-      absence_state: a.kind,
-      expected: a.expected,
-      scanned: a.scanned.map(s => ({ src: s.src, note: s.note || '' })),
-      window: a.window || '—'
-    },
-    trace: [
-      { op: 'NUL', txt: `absence probed (${a.kind}) — ${escapeHtml(a.expected.slice(0, 60))}` },
-      { op: 'SIG', txt: `${a.scanned.length} source${a.scanned.length === 1 ? '' : 's'} scanned` },
-      { op: 'EVA', txt: 'absence recorded' }
-    ]
+  const position = {
+    workspace: (typeof matrix !== 'undefined' && matrix.activeRoomId) || 'local',
+    article_id: 'draft',
+    paragraph_id: currentParagraphId()
   };
+  // Emit one OBS per scanned source — each absence probe is an
+  // observation (mode: 'inferred' — the reader looked and did not find).
+  const piIds = [];
+  for (const s of a.scanned) {
+    const obsId = 'o_' + ulid().slice(-10);
+    piIds.push(obsId);
+    await appendEvent({
+      op: 'OBS',
+      site: `observation:${obsId}`,
+      resolution: 'Figure',
+      payload: {
+        agent: 'human',
+        mode: 'inferred',
+        source_id: s.sourceId || null,
+        location: null,
+        content: s.note || '(scanned, not found)',
+        context: position
+      },
+      author: 'human'
+    });
+  }
+  const prov = {
+    kind: 'absence',
+    absence_state: a.kind,
+    expected: a.expected,
+    scanned: a.scanned.map(s => ({ src: s.src, note: s.note || '' })),
+    window: a.window || '—'
+  };
+  const trace = [
+    { op: 'NUL',   txt: `absence probed (${a.kind}) — ${escapeHtml(a.expected.slice(0, 60))}` },
+    { op: 'OBS',   txt: `${a.scanned.length} source${a.scanned.length === 1 ? '' : 's'} scanned` },
+    { op: 'CLAIM', txt: 'absence recorded' }
+  ];
   await appendEventAndRefold({
-    op: 'CITE',
+    op: 'CLAIM',
     site: `claim:${claimId}`,
     resolution: 'Figure',
-    payload: { claim_id: claimId, claim, source_id: null },
+    payload: {
+      type: 'absent',
+      text: drawerState.claimText,
+      pi: piIds,
+      position,
+      prov_content: prov,
+      conf: 0.85,
+      trace
+    },
     author: 'human'
   });
   // Wrap the claim span with an 'absent' class
@@ -5482,16 +5606,46 @@ function computeDerivedResult(op, cells) {
   }
 }
 
-/* Finalize the anchor. Emits a CITE event with the claim and its
-   computed provenance. Wraps the editor selection range with a
-   grounded span. Sticky: remembers this source for the next anchor. */
+/* Finalize the anchor. Emits OBS events (one per observed location) and
+   a CLAIM event that π-references the obs ids. Derived claims also
+   carry a window — source version hash and row range — so that
+   re-uploaded sources don't break old claims; they become historical,
+   superseded by fresh observations.
+
+   Wraps the editor selection range with a grounded span. Sticky:
+   remembers this source for the next anchor. */
 async function confirmAnchor() {
   const t = drawerState.target;
   if (!t) return;
   const claimId = 'u_' + ulid().slice(-8);
+  const position = {
+    workspace: (typeof matrix !== 'undefined' && matrix.activeRoomId) || 'local',
+    article_id: 'draft',
+    paragraph_id: currentParagraphId()
+  };
   let prov;
   const trace = [];
+  const obsEvents = [];   // events we'll emit before the CLAIM
+  const piIds = [];
+  const sourceId = t.sourceId || drawerState.sourceId;
+
   if (t.kind === 'quote') {
+    const obsId = 'o_' + ulid().slice(-10);
+    piIds.push(obsId);
+    obsEvents.push({
+      op: 'OBS',
+      site: `observation:${obsId}`,
+      resolution: 'Figure',
+      payload: {
+        agent: 'human',
+        mode: 'direct_read',
+        source_id: sourceId,
+        location: { start: t.start, end: t.end },
+        content: t.text,
+        context: position
+      },
+      author: 'human'
+    });
     prov = {
       kind: 'quote',
       src: t.src,
@@ -5502,11 +5656,26 @@ async function confirmAnchor() {
       spanLabel: t.spanLabel
     };
     trace.push(
-      { op: 'SIG', txt: `citation pattern matched in <strong>${escapeHtml(t.src)}</strong>` },
-      { op: 'INS', txt: `anchor minted for <strong>${escapeHtml(drawerState.claimText.slice(0,40))}</strong>` },
-      { op: 'DEF', txt: `claim bound to source span at ${escapeHtml(t.spanLabel)}` }
+      { op: 'OBS', txt: `read span [${t.start}:${t.end}] in <strong>${escapeHtml(t.src)}</strong>` },
+      { op: 'CLAIM', txt: `grounded claim bound at ${escapeHtml(t.spanLabel)}` }
     );
   } else if (t.kind === 'cell') {
+    const obsId = 'o_' + ulid().slice(-10);
+    piIds.push(obsId);
+    obsEvents.push({
+      op: 'OBS',
+      site: `observation:${obsId}`,
+      resolution: 'Figure',
+      payload: {
+        agent: 'human',
+        mode: 'direct_read',
+        source_id: sourceId,
+        location: { row: t.row, col: t.col },
+        content: t.value,
+        context: position
+      },
+      author: 'human'
+    });
     prov = {
       kind: 'cell',
       src: t.src,
@@ -5517,20 +5686,47 @@ async function confirmAnchor() {
       rows: [[t.row, t.value]]
     };
     trace.push(
-      { op: 'SIG', txt: `cell value hit on row ${t.row}` },
-      { op: 'INS', txt: `anchor minted for <strong>${escapeHtml(t.col)}:${t.row}</strong>` }
+      { op: 'OBS', txt: `read cell row ${t.row} · ${escapeHtml(t.col)} = ${escapeHtml(t.value)}` },
+      { op: 'CLAIM', txt: `grounded claim bound to cell` }
     );
   } else if (t.kind === 'derived') {
+    // One OBS per input cell; the CLAIM's pi references them all.
+    for (const inp of t.inputs) {
+      const obsId = 'o_' + ulid().slice(-10);
+      piIds.push(obsId);
+      obsEvents.push({
+        op: 'OBS',
+        site: `observation:${obsId}`,
+        resolution: 'Figure',
+        payload: {
+          agent: 'human',
+          mode: 'direct_read',
+          source_id: sourceId,
+          location: { row: inp.row, col: inp.col },
+          content: inp.value,
+          context: position
+        },
+        author: 'human'
+      });
+    }
+    const rows = t.inputs.map(i => i.row);
     prov = {
       kind: 'derived',
       expr: `${t.op}(${t.inputs.length} cells)`,
       op: t.op,
       result: t.result,
-      inputs: t.inputs
+      inputs: t.inputs,
+      // Window required for derived — re-uploaded sources produce fresh
+      // obs, making old derived claims historical rather than broken.
+      window: {
+        source_version_hash: (USER_SOURCES[sourceId] && USER_SOURCES[sourceId].sha256) || null,
+        row_range: rows.length ? [Math.min(...rows), Math.max(...rows)] : null,
+        observed_at: new Date().toISOString()
+      }
     };
     trace.push(
-      { op: 'SIG', txt: `${t.inputs.length} cells aggregated via ${t.op}` },
-      { op: 'DEF', txt: `computed: ${escapeHtml(t.result)}` }
+      { op: 'OBS', txt: `${t.inputs.length} cells observed for aggregation` },
+      { op: 'CLAIM', txt: `${t.op} = ${escapeHtml(t.result)} (window: rows ${rows.join(', ')})` }
     );
   } else {
     return;
@@ -5560,19 +5756,24 @@ async function confirmAnchor() {
     return;
   }
 
-  const claim = {
-    type: 'grounded',
-    text: drawerState.claimText,
-    conf: 0.92,
-    status: 'pending',
-    prov,
-    trace
-  };
+  // Append OBS events first — they're G-entries that the CLAIM's π
+  // will reference. Then the CLAIM itself. Only the final event
+  // triggers a refold, so the log stays coherent.
+  for (const obs of obsEvents) await appendEvent(obs);
   await appendEventAndRefold({
-    op: 'CITE',
+    op: 'CLAIM',
     site: `claim:${claimId}`,
     resolution: 'Figure',
-    payload: { claim_id: claimId, claim, source_id: drawerState.sourceId },
+    payload: {
+      type: 'grounded',
+      text: drawerState.claimText,
+      pi: piIds,
+      position,
+      window: prov.window || null,
+      prov_content: prov,
+      conf: 0.92,
+      trace
+    },
     author: 'human'
   });
 
