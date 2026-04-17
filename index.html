@@ -2289,6 +2289,53 @@
     font-size: 12px;
   }
   .ws-toggle input { margin: 0; }
+  .ws-invite-row {
+    display: flex;
+    gap: 6px;
+    align-items: stretch;
+  }
+  .ws-invite-row .ws-input { flex: 1; }
+  .ws-invite-link-row {
+    display: flex;
+    gap: 6px;
+    align-items: stretch;
+    margin-top: 8px;
+  }
+  .ws-invite-link-row .ws-input {
+    flex: 1;
+    font-size: 11px;
+    color: var(--color-text-secondary);
+  }
+  .ws-invite-help {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border: 0.5px dashed var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    background: var(--color-background-secondary);
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--color-text-secondary);
+  }
+  .ws-invite-help ol {
+    margin: 6px 0 0;
+    padding-left: 18px;
+  }
+  .ws-invite-help li { margin-bottom: 3px; }
+  .ws-invite-help code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: var(--color-background-primary);
+    padding: 1px 4px;
+    border-radius: 3px;
+    border: 0.5px solid var(--color-border-tertiary);
+  }
+  .ws-invite-pending {
+    margin-top: 8px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+  .ws-invite-pending .pending-mxid { color: var(--color-text-primary); }
+  .ws-invite-pending .pending-state { color: var(--color-text-secondary); margin-left: 6px; }
 
   /* ---------- SOURCE VIEWER MODAL ---------- */
   .src-viewer-body {
@@ -3330,6 +3377,34 @@
           <div id="ws-members" class="ws-member-list"></div>
         </div>
         <div class="ws-form-row">
+          <label>Invite a collaborator</label>
+          <div class="ws-section-sub" style="margin:0 0 6px">
+            Invite by Matrix ID (e.g. <code style="font-family:var(--font-mono)">@bob:hyphae.social</code>). They'll see the invite in their Matrix client and can accept to join this workspace room.
+          </div>
+          <div class="ws-invite-row">
+            <input id="ws-invite-mxid" class="ws-input" type="text" placeholder="@bob:hyphae.social" autocomplete="off">
+            <button class="btn-sm btn-sm-primary" id="ws-invite-send">Send invite</button>
+          </div>
+          <div id="ws-invite-err" class="ws-err" hidden></div>
+          <div id="ws-invite-pending" class="ws-invite-pending" hidden></div>
+
+          <div class="ws-section-sub" style="margin:14px 0 6px">
+            Or share an invite link. Anyone with the link can sign in (or sign up at hyphae.social) and join this workspace.
+          </div>
+          <div class="ws-invite-link-row">
+            <input id="ws-invite-link" class="ws-input" type="text" readonly>
+            <button class="btn-sm" id="ws-invite-copy">Copy link</button>
+          </div>
+          <div class="ws-invite-help">
+            <strong>For collaborators without a Matrix account:</strong>
+            <ol>
+              <li>Open the invite link.</li>
+              <li>Sign up for a free Matrix account at <a href="https://hyphae.social" target="_blank" rel="noopener noreferrer">hyphae.social</a>.</li>
+              <li>Return to the link and sign in — the workspace will join automatically.</li>
+            </ol>
+          </div>
+        </div>
+        <div class="ws-form-row">
           <label>Encryption</label>
           <div class="ws-section-sub" id="ws-e2ee-status" style="margin:0 0 8px">Establishing key…</div>
           <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap">
@@ -3351,6 +3426,61 @@
           <input type="checkbox" id="toggle-sample-in"> Show built-in sample article &amp; sources
         </label>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== INVITE LANDING MODAL ===== -->
+<div id="invite-modal" class="cite-modal" hidden>
+  <div class="cite-modal-backdrop" id="invite-backdrop"></div>
+  <div class="ws-modal-body">
+    <div class="cite-modal-head">
+      <div>
+        <div class="cite-modal-title">You've been invited to a workspace</div>
+        <div class="cite-modal-sub" id="invite-room-line">Workspace: <span id="invite-room-name" style="font-family:var(--font-serif)"></span></div>
+      </div>
+      <button class="rphead-close" id="invite-close">×</button>
+    </div>
+    <div class="ws-section">
+      <div class="ws-section-title">Already have a Matrix account?</div>
+      <div class="ws-section-sub">Sign in below — we'll join the workspace room for you automatically.</div>
+      <div class="ws-form-row">
+        <label for="invite-mx-user">Username or Matrix ID</label>
+        <input id="invite-mx-user" class="ws-input" type="text" placeholder="@alice:hyphae.social or alice">
+      </div>
+      <div class="ws-form-row">
+        <label for="invite-mx-pass">Password</label>
+        <input id="invite-mx-pass" class="ws-input" type="password" placeholder="••••••••">
+      </div>
+      <div class="ws-form-row" id="invite-mx-hs-row">
+        <label for="invite-mx-hs">Homeserver</label>
+        <input id="invite-mx-hs" class="ws-input" type="text" placeholder="https://hyphae.social" value="https://hyphae.social">
+      </div>
+      <div class="ws-btn-row">
+        <button class="btn-sm btn-sm-primary" id="invite-mx-login">Sign in &amp; join</button>
+        <span id="invite-mx-status" class="cite-pick-note"></span>
+      </div>
+      <div id="invite-mx-err" class="ws-err" hidden></div>
+    </div>
+    <div class="ws-section">
+      <div class="ws-section-title">No Matrix account yet?</div>
+      <div class="ws-section-sub">A Matrix account is a federated identity — one account can join workspaces on any Matrix server. Hyphae runs the recommended server for PROVeo collaborators.</div>
+      <div class="ws-invite-help" style="margin-top:0">
+        <strong>Sign up in three steps:</strong>
+        <ol>
+          <li>Open <a href="https://hyphae.social/register" target="_blank" rel="noopener noreferrer">hyphae.social/register</a> and create an account.</li>
+          <li>Verify your email if prompted.</li>
+          <li>Come back here, sign in with your new <code>@you:hyphae.social</code> credentials, and you'll join the workspace.</li>
+        </ol>
+      </div>
+      <div class="ws-btn-row" style="margin-top:10px">
+        <a class="btn-sm btn-sm-primary" href="https://hyphae.social/register" target="_blank" rel="noopener noreferrer" style="text-decoration:none">Create an account on hyphae.social</a>
+        <span class="cite-pick-note">Opens in a new tab.</span>
+      </div>
+    </div>
+    <div class="cite-modal-actions">
+      <span class="cite-pick-note" id="invite-room-id-note" style="font-family:var(--font-mono)"></span>
+      <button class="btn-sm" id="invite-decline">Maybe later</button>
     </div>
   </div>
 </div>
@@ -10082,10 +10212,277 @@ function renderWorkspaceModal() {
       $('#ws-members').innerHTML = matrix.members.map(m =>
         `<span class="ws-member-chip" title="${escapeHtml(m.userId)}">${escapeHtml(m.displayName)}</span>`
       ).join('') || '<span class="cite-empty">No members loaded yet.</span>';
+      // Invite link + pending invites
+      const linkEl = $('#ws-invite-link');
+      if (linkEl) linkEl.value = buildInviteLink(matrix.activeRoomId);
+      renderPendingInvites();
     } else {
       sec.hidden = true;
     }
   }
+}
+
+/* ---------- INVITES ----------
+   Two paths to bring a collaborator into a workspace:
+   1. Direct Matrix invite — calls `client.invite(roomId, mxid)`. Recipient
+      sees the invite in their own Matrix client (Element, etc) and can
+      accept to join.
+   2. Shareable invite link — encodes the room ID + a `via` server hint in
+      the URL hash. Recipients open the link, sign in (or sign up at
+      hyphae.social), and the page auto-joins them to the room. */
+
+function buildInviteLink(roomId) {
+  if (!roomId) return '';
+  const room = matrix.client?.getRoom(roomId);
+  const name = room?.name || '';
+  // `via` server hint helps the receiving homeserver locate the room.
+  // Prefer the room ID's domain part; fall back to the inviter's homeserver.
+  const ridDomain = roomId.includes(':') ? roomId.split(':').slice(1).join(':') : '';
+  const myDomain = matrix.userId && matrix.userId.includes(':')
+    ? matrix.userId.split(':').slice(1).join(':')
+    : '';
+  const via = ridDomain || myDomain || 'hyphae.social';
+  const params = new URLSearchParams();
+  params.set('invite', roomId);
+  params.set('via', via);
+  if (name) params.set('name', name);
+  // Use the hash so invite metadata never hits the server logs.
+  return `${location.origin}${location.pathname}#${params.toString()}`;
+}
+
+function renderPendingInvites() {
+  const wrap = $('#ws-invite-pending');
+  if (!wrap) return;
+  const room = matrix.client?.getRoom(matrix.activeRoomId);
+  const invited = room?.getMembersWithMembership?.('invite') || [];
+  if (!invited.length) {
+    wrap.hidden = true;
+    wrap.innerHTML = '';
+    return;
+  }
+  wrap.hidden = false;
+  wrap.innerHTML = '<strong style="font-family:var(--font-sans); font-size:10.5px; letter-spacing:0.05em; text-transform:uppercase; color:var(--color-text-secondary)">Pending invites</strong><br>'
+    + invited.map(m =>
+        `<span class="pending-mxid">${escapeHtml(m.userId)}</span><span class="pending-state">· awaiting accept</span>`
+      ).join('<br>');
+}
+
+function normalizeInviteMxid(raw) {
+  const v = (raw || '').trim();
+  if (!v) return null;
+  // Already a full Matrix ID
+  if (/^@[^\s:@/]+:[^\s:/]+\.[^\s:/]+$/.test(v)) return v;
+  // local:domain (no leading @)
+  if (/^[^\s:@/]+:[^\s:/]+\.[^\s:/]+$/.test(v)) return '@' + v;
+  // Bare local part — attach the inviter's homeserver domain
+  if (/^@?[^\s:@/]+$/.test(v)) {
+    const local = v.replace(/^@/, '');
+    const myDomain = matrix.userId && matrix.userId.includes(':')
+      ? matrix.userId.split(':').slice(1).join(':')
+      : null;
+    if (myDomain) return `@${local}:${myDomain}`;
+  }
+  return null;
+}
+
+async function inviteUserToWorkspace() {
+  const errEl = $('#ws-invite-err');
+  const input = $('#ws-invite-mxid');
+  const btn = $('#ws-invite-send');
+  errEl.hidden = true;
+  if (!matrix.client || !matrix.activeRoomId) {
+    errEl.hidden = false;
+    errEl.textContent = 'Pick a workspace room first.';
+    return;
+  }
+  const mxid = normalizeInviteMxid(input.value);
+  if (!mxid) {
+    errEl.hidden = false;
+    errEl.textContent = 'Enter a Matrix ID like @alice:hyphae.social.';
+    return;
+  }
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Inviting…';
+  try {
+    await matrix.client.invite(matrix.activeRoomId, mxid);
+    input.value = '';
+    showToast(`invited ${mxid}`);
+    // Re-render so the pending list reflects the new invite.
+    setTimeout(renderWorkspaceModal, 250);
+  } catch (e) {
+    console.warn('[invite] failed', e);
+    errEl.hidden = false;
+    errEl.textContent = (e && (e.errcode ? `${e.errcode}: ` : '') + (e.message || 'invite failed')) || 'invite failed';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+}
+
+async function copyInviteLink() {
+  const link = $('#ws-invite-link')?.value || '';
+  if (!link) return;
+  try {
+    await navigator.clipboard.writeText(link);
+    showToast('invite link copied');
+  } catch {
+    // Fallback: select the field so the user can copy manually
+    const el = $('#ws-invite-link');
+    el.select();
+    try { document.execCommand('copy'); showToast('invite link copied'); }
+    catch { showToast('press ⌘/Ctrl+C to copy'); }
+  }
+}
+
+/* ---------- INVITE LANDING ----------
+   When the page is opened with `#invite=<roomId>&via=<server>` in the URL,
+   show a modal explaining the invite. If the visitor already has a Matrix
+   account they sign in; otherwise they're walked through making one at
+   hyphae.social, then return to sign in. */
+
+let pendingInviteFromUrl = null;
+
+function parseInviteHash() {
+  const hash = (location.hash || '').replace(/^#/, '');
+  if (!hash) return null;
+  const params = new URLSearchParams(hash);
+  const roomId = params.get('invite');
+  if (!roomId) return null;
+  return {
+    roomId,
+    via: params.get('via') || '',
+    name: params.get('name') || ''
+  };
+}
+
+function clearInviteHash() {
+  try {
+    const url = new URL(location.href);
+    url.hash = '';
+    history.replaceState(null, '', url.toString());
+  } catch {}
+}
+
+function openInviteLandingModal(invite) {
+  pendingInviteFromUrl = invite;
+  $('#invite-modal').hidden = false;
+  $('#invite-room-name').textContent = invite.name || invite.roomId;
+  $('#invite-room-id-note').textContent = invite.roomId;
+  // Pre-fill homeserver from `via` if we have one
+  const hsField = $('#invite-mx-hs');
+  if (hsField && invite.via) hsField.value = `https://${invite.via}`;
+  // Hide HS row when the user types a fully-qualified Matrix ID
+  const hsRow = $('#invite-mx-hs-row');
+  const userField = $('#invite-mx-user');
+  const syncHs = () => {
+    if (hsRow) hsRow.hidden = !!extractServerFromUser(userField.value);
+  };
+  userField.addEventListener('input', syncHs);
+  syncHs();
+}
+
+function closeInviteLandingModal() {
+  $('#invite-modal').hidden = true;
+}
+
+async function acceptPendingInvite() {
+  if (!pendingInviteFromUrl || !matrix.client) return;
+  const { roomId, via } = pendingInviteFromUrl;
+  try {
+    const opts = {};
+    if (via) opts.viaServers = [via];
+    await matrix.client.joinRoom(roomId, opts);
+    refreshRooms();
+    await selectWorkspaceRoom(roomId).catch(() => {});
+    showToast('joined workspace');
+  } catch (e) {
+    console.warn('[invite] join failed', e);
+    showToast('could not join — check the room with the inviter');
+  } finally {
+    pendingInviteFromUrl = null;
+    clearInviteHash();
+    closeInviteLandingModal();
+  }
+}
+
+async function tryInviteLogin() {
+  const user = $('#invite-mx-user').value.trim();
+  const pass = $('#invite-mx-pass').value;
+  const err = $('#invite-mx-err');
+  const status = $('#invite-mx-status');
+  err.hidden = true;
+  if (!user || !pass) {
+    err.hidden = false;
+    err.textContent = 'Username and password are required.';
+    return;
+  }
+  if (!matrixAvailable()) {
+    err.hidden = false;
+    err.textContent = 'Matrix SDK failed to load (check the CDN or your network).';
+    return;
+  }
+  status.textContent = 'signing in…';
+  let hs;
+  try {
+    hs = await resolveHomeserver(user, $('#invite-mx-hs').value);
+  } catch (e) {
+    err.hidden = false;
+    err.textContent = e.message || 'Could not discover the homeserver for this Matrix ID.';
+    status.textContent = '';
+    return;
+  }
+  if (!hs) {
+    err.hidden = false;
+    err.textContent = 'Enter a Matrix ID like @alice:hyphae.social, or provide a homeserver.';
+    status.textContent = '';
+    return;
+  }
+  try {
+    await matrixLoginWithPassword(hs, user, pass);
+    status.textContent = '';
+    $('#invite-mx-pass').value = '';
+    await acceptPendingInvite();
+  } catch (e) {
+    console.warn('[invite] login failed', e);
+    err.hidden = false;
+    err.textContent = (e && (e.errcode ? `${e.errcode}: ` : '') + (e.message || 'login failed')) || 'login failed';
+    status.textContent = '';
+  }
+}
+
+function handleInviteOnBoot() {
+  const invite = parseInviteHash();
+  if (!invite) return;
+  // If the user is already signed in, try to join immediately;
+  // otherwise show the landing modal so they can sign in or sign up.
+  if (matrix.client && matrix.userId) {
+    pendingInviteFromUrl = invite;
+    acceptPendingInvite();
+  } else {
+    openInviteLandingModal(invite);
+  }
+}
+
+function wireInviteLanding() {
+  $('#invite-close')?.addEventListener('click', () => {
+    pendingInviteFromUrl = null;
+    closeInviteLandingModal();
+  });
+  $('#invite-backdrop')?.addEventListener('click', () => {
+    pendingInviteFromUrl = null;
+    closeInviteLandingModal();
+  });
+  $('#invite-decline')?.addEventListener('click', () => {
+    pendingInviteFromUrl = null;
+    clearInviteHash();
+    closeInviteLandingModal();
+  });
+  $('#invite-mx-login')?.addEventListener('click', tryInviteLogin);
+  const submitOnEnter = (e) => { if (e.key === 'Enter') tryInviteLogin(); };
+  $('#invite-mx-user')?.addEventListener('keydown', submitOnEnter);
+  $('#invite-mx-pass')?.addEventListener('keydown', submitOnEnter);
+  $('#invite-mx-hs')?.addEventListener('keydown', submitOnEnter);
 }
 
 // Extract the server domain from a Matrix ID like `@alice:hyphae.social`
@@ -10193,6 +10590,14 @@ function wireWorkspace() {
   });
   $('#toggle-sample').addEventListener('change', e => setSampleData(e.target.checked));
   $('#toggle-sample-in').addEventListener('change', e => setSampleData(e.target.checked));
+
+  // Invite controls
+  $('#ws-invite-send')?.addEventListener('click', inviteUserToWorkspace);
+  $('#ws-invite-mxid')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') inviteUserToWorkspace();
+  });
+  $('#ws-invite-copy')?.addEventListener('click', copyInviteLink);
+  $('#ws-invite-link')?.addEventListener('focus', (e) => e.target.select());
 
   // E2EE controls
   const passEl = $('#ws-e2ee-pass');
@@ -11012,9 +11417,12 @@ async function init() {
   wireCellTuple();
   wireClipboard();
   wireWorkspace();
+  wireInviteLanding();
   updateWorkspaceIndicator();
   // Try to resume a stored Matrix session in the background — don't block boot.
-  bootMatrixIfPossible().catch(err => console.warn('[matrix] boot error', err));
+  bootMatrixIfPossible()
+    .catch(err => console.warn('[matrix] boot error', err))
+    .finally(() => handleInviteOnBoot());
 
   $$('.mtab').forEach(b => {
     b.addEventListener('click', () => switchMode(b.dataset.mode));
