@@ -1049,6 +1049,12 @@
   /* Source viewer — selection-mode cues */
   .src-viewer-body.is-selecting #src-viewer-text { cursor: text; }
   .src-viewer-body.is-selecting .src-viewer-table-wrap td:not(.rowno) { cursor: crosshair; }
+  /* Block native text selection across cells — otherwise the browser's
+     drag-selection competes with our range-painting and eats mousemove. */
+  .src-viewer-body.is-selecting .src-viewer-table-wrap {
+    user-select: none;
+    -webkit-user-select: none;
+  }
   .src-viewer-body.is-selecting .src-viewer-table-wrap td.picked {
     background: var(--amber-fill);
     color: var(--amber-text);
@@ -11216,6 +11222,9 @@ function wireDrawerCellDrag(wrap) {
     if (!inSelectingMode()) return;
     const hit = cellFromEvent(e);
     if (!hit) return;
+    // Prevent the browser from starting a text selection — if one starts
+    // here, mousemove selects text across cells and swallows our drag.
+    e.preventDefault();
     drag = {
       startRow: hit.row, startCol: hit.colIdx,
       currentRow: hit.row, currentCol: hit.colIdx,
