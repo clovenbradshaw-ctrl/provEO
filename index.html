@@ -668,6 +668,70 @@
     padding-top: 10px;
     border-top: 0.5px solid var(--color-border-tertiary);
   }
+
+  /* Absence form */
+  .drawer-input {
+    width: 100%;
+    padding: 7px 9px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    background: var(--color-background-primary);
+    color: var(--color-text-primary);
+    box-sizing: border-box;
+  }
+  .drawer-input:focus { outline: none; border-color: var(--color-text-primary); }
+  .drawer-textarea { resize: vertical; min-height: 50px; font-family: var(--font-sans); }
+  .drawer-radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .drawer-radio {
+    display: grid;
+    grid-template-columns: 16px 1fr;
+    grid-template-rows: auto auto;
+    gap: 0 8px;
+    align-items: start;
+    padding: 8px 10px;
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    cursor: pointer;
+    transition: border-color 0.12s, background 0.12s;
+  }
+  .drawer-radio:hover { border-color: var(--color-text-primary); }
+  .drawer-radio input { grid-row: 1 / 3; margin-top: 3px; }
+  .drawer-radio-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+  }
+  .drawer-radio-note {
+    font-size: 10.5px;
+    color: var(--color-text-secondary);
+  }
+  .drawer-scan-row {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 4px;
+  }
+  .drawer-scan-row .drawer-scan-src { flex: 1; max-width: 180px; }
+  .drawer-scan-row .drawer-scan-note { flex: 2; }
+  .drawer-scan-del {
+    width: 24px;
+    background: transparent;
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: 3px;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+  }
+  .drawer-scan-del:hover { color: var(--red-text); }
+  .drawer-empty-inline {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    padding: 4px 2px;
+  }
   .btn-sm-primary {
     background: var(--color-text-primary);
     color: var(--color-background-primary);
@@ -3760,8 +3824,14 @@ async function dispatchVerb(claimId, action) {
   if (!claim) return;
   const mapping = verbEvent(action);
   if (!mapping) {
-    // Drawer-invoking verb — phase 3 hooks this up for real.
-    showToast(`${action === 'reanchor' ? 'Re-anchor' : 'Fill'}: anchor drawer not yet wired`);
+    // Drawer-invoking verbs. reanchor and fill both hand off to the
+    // anchor drawer with the claim's text pre-filled; on Anchor,
+    // confirmAnchor emits a REC against the existing claimId (instead
+    // of a fresh CITE).
+    pendingSelection = { range: null, text: claim.text };
+    openAnchorDrawer(claim.text);
+    drawerState.reanchorTargetId = claimId;
+    drawerState.reanchorType = action === 'fill' ? 'grounded' : claim.type;
     return;
   }
   // Capture the ids of prior EVA events on this claim so supersession is
@@ -4697,7 +4767,10 @@ function closeAnchorDrawer() {
     range: null,
     target: null,
     selectedCells: [],
-    derivedOp: null
+    derivedOp: null,
+    absence: null,
+    reanchorTargetId: null,
+    reanchorType: null
   };
   pendingSelection = null;
   setRightPanelMode('provenance');
@@ -4786,6 +4859,74 @@ function renderDrawer() {
     return;
   }
 
+  if (drawerState.substate === 'absence-form') {
+    const a = drawerState.absence;
+    const sources = citeableSources().concat(SOURCES);
+    // Dedupe by id (seed SOURCES may overlap names)
+    const seen = new Set();
+    const uniqueSources = sources.filter(s => seen.has(s.id) ? false : (seen.add(s.id), true));
+    const scanRows = a.scanned.map((s, i) => `
+      <div class="drawer-scan-row" data-idx="${i}">
+        <select class="drawer-input drawer-scan-src" data-idx="${i}">
+          ${uniqueSources.map(src => `
+            <option value="${src.id}"${src.id === s.sourceId ? ' selected' : ''}>${escapeHtml(src.name)}</option>
+          `).join('')}
+        </select>
+        <input class="drawer-input drawer-scan-note" data-idx="${i}"
+               type="text" placeholder="note (e.g. 'no reply')" value="${escapeHtml(s.note || '')}">
+        <button class="drawer-scan-del" data-idx="${i}">×</button>
+      </div>
+    `).join('');
+    head.textContent = 'Mark as absence';
+    body.innerHTML = `
+      ${claimLine}
+      <div class="drawer-section">
+        <div class="drawer-label">Absence kind</div>
+        <div class="drawer-radio-group">
+          <label class="drawer-radio" title="The value was there and has been removed.">
+            <input type="radio" name="abs-kind" value="cleared" ${a.kind === 'cleared' ? 'checked' : ''}>
+            <span class="drawer-radio-title">Cleared</span>
+            <span class="drawer-radio-note">Value was there, now removed.</span>
+          </label>
+          <label class="drawer-radio" title="Can't determine whether it was set.">
+            <input type="radio" name="abs-kind" value="unknown" ${a.kind === 'unknown' ? 'checked' : ''}>
+            <span class="drawer-radio-title">Unknown</span>
+            <span class="drawer-radio-note">Can't determine either way.</span>
+          </label>
+          <label class="drawer-radio" title="Was never set in the scanned window.">
+            <input type="radio" name="abs-kind" value="never_set" ${a.kind === 'never_set' ? 'checked' : ''}>
+            <span class="drawer-radio-title">Never set</span>
+            <span class="drawer-radio-note">Not present across the window.</span>
+          </label>
+        </div>
+      </div>
+      <div class="drawer-section">
+        <div class="drawer-label">What was expected</div>
+        <textarea class="drawer-input drawer-textarea" id="abs-expected" rows="3"
+                  placeholder="Describe what should have been there.">${escapeHtml(a.expected || '')}</textarea>
+      </div>
+      <div class="drawer-section">
+        <div class="drawer-label">Sources scanned</div>
+        <div id="abs-scan-list">${scanRows || '<div class="drawer-empty-inline">Add sources you checked.</div>'}</div>
+        <button class="btn-sm" id="abs-scan-add" style="margin-top: 6px;">+ add source</button>
+      </div>
+      <div class="drawer-section">
+        <div class="drawer-label">Window</div>
+        <input class="drawer-input" id="abs-window" type="text"
+               placeholder="e.g. Feb 18 – Mar 4, 2026" value="${escapeHtml(a.window || '')}">
+      </div>
+      <div class="drawer-actions">
+        <button class="btn-sm" id="abs-back">Back</button>
+        <button class="btn-sm" id="drawer-cancel">Cancel</button>
+        <button class="btn-sm btn-sm-primary" id="abs-confirm">Anchor absence</button>
+      </div>
+    `;
+    wireAbsenceForm(uniqueSources);
+    const cancelBtn = $('#drawer-cancel', body);
+    if (cancelBtn) cancelBtn.addEventListener('click', closeAnchorDrawer);
+    return;
+  }
+
   if (drawerState.substate === 'confirm') {
     const t = drawerState.target;
     const targetLine = t
@@ -4823,10 +4964,145 @@ function renderDrawer() {
 function wireDrawerFooter(body) {
   const absBtn = $('#drawer-absence', body);
   if (absBtn) absBtn.addEventListener('click', () => {
-    showToast('Absence authoring coming in phase 5');
+    drawerState.substate = 'absence-form';
+    drawerState.absence = drawerState.absence || {
+      kind: 'unknown',
+      expected: drawerState.claimText || '',
+      scanned: [],
+      window: ''
+    };
+    hideSourceViewer();
+    renderDrawer();
   });
   const cancelBtn = $('#drawer-cancel', body);
   if (cancelBtn) cancelBtn.addEventListener('click', closeAnchorDrawer);
+}
+
+/* Wire handlers for the absence form. Mutates drawerState.absence
+   in place; on Anchor, emits a CITE with type='absent'. */
+function wireAbsenceForm(uniqueSources) {
+  const a = drawerState.absence;
+
+  $$('input[name="abs-kind"]').forEach(r => {
+    r.addEventListener('change', () => { a.kind = r.value; });
+  });
+  const expEl = $('#abs-expected');
+  if (expEl) expEl.addEventListener('input', () => { a.expected = expEl.value; });
+  const winEl = $('#abs-window');
+  if (winEl) winEl.addEventListener('input', () => { a.window = winEl.value; });
+
+  const rebindList = () => {
+    $$('.drawer-scan-src').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const i = Number(sel.dataset.idx);
+        a.scanned[i].sourceId = sel.value;
+        const src = uniqueSources.find(s => s.id === sel.value);
+        a.scanned[i].src = src ? src.name : sel.value;
+      });
+    });
+    $$('.drawer-scan-note').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const i = Number(inp.dataset.idx);
+        a.scanned[i].note = inp.value;
+      });
+    });
+    $$('.drawer-scan-del').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const i = Number(btn.dataset.idx);
+        a.scanned.splice(i, 1);
+        renderDrawer();
+      });
+    });
+  };
+  rebindList();
+
+  const addBtn = $('#abs-scan-add');
+  if (addBtn) addBtn.addEventListener('click', () => {
+    const first = uniqueSources[0];
+    if (!first) { showToast('Add a source to the library first'); return; }
+    a.scanned.push({ sourceId: first.id, src: first.name, note: '' });
+    renderDrawer();
+  });
+
+  const back = $('#abs-back');
+  if (back) back.addEventListener('click', () => {
+    drawerState.substate = drawerState.sourceId ? 'target-picker' : 'source-picker';
+    renderDrawer();
+    if (drawerState.substate === 'target-picker') openSourceViewerForPicking(drawerState.sourceId);
+  });
+
+  const confirm = $('#abs-confirm');
+  if (confirm) confirm.addEventListener('click', confirmAbsence);
+}
+
+/* Emit a CITE event carrying an absent claim. The prov shape retains
+   backward compatibility with renderAbsenceProv (expected, scanned,
+   window) and adds absence_state carrying the kind. */
+async function confirmAbsence() {
+  const a = drawerState.absence;
+  if (!a || !a.expected.trim()) { showToast('Describe what was expected'); return; }
+  const claimId = 'u_' + ulid().slice(-8);
+  const claim = {
+    type: 'absent',
+    text: drawerState.claimText,
+    conf: 0.85,
+    status: 'pending',
+    prov: {
+      kind: 'absence',
+      absence_state: a.kind,
+      expected: a.expected,
+      scanned: a.scanned.map(s => ({ src: s.src, note: s.note || '' })),
+      window: a.window || '—'
+    },
+    trace: [
+      { op: 'NUL', txt: `absence probed (${a.kind}) — ${escapeHtml(a.expected.slice(0, 60))}` },
+      { op: 'SIG', txt: `${a.scanned.length} source${a.scanned.length === 1 ? '' : 's'} scanned` },
+      { op: 'EVA', txt: 'absence recorded' }
+    ]
+  };
+  await appendEventAndRefold({
+    op: 'CITE',
+    site: `claim:${claimId}`,
+    resolution: 'Figure',
+    payload: { claim_id: claimId, claim, source_id: null },
+    author: 'human'
+  });
+  // Wrap the claim span with an 'absent' class
+  const range = drawerState.range;
+  const claimText = drawerState.claimText;
+  try {
+    if (!range) throw new Error('no range');
+    const span = document.createElement('span');
+    span.className = 'absent';
+    span.dataset.id = claimId;
+    range.surroundContents(span);
+    span.addEventListener('click', () => showClaim(claimId));
+  } catch (e) {
+    const bodyEl = $('#article-body');
+    if (bodyEl) {
+      const walker = document.createTreeWalker(bodyEl, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode())) {
+        const idx = node.nodeValue.indexOf(claimText);
+        if (idx !== -1) {
+          const r = document.createRange();
+          r.setStart(node, idx);
+          r.setEnd(node, idx + claimText.length);
+          const span = document.createElement('span');
+          span.className = 'absent';
+          span.dataset.id = claimId;
+          try { r.surroundContents(span); span.addEventListener('click', () => showClaim(claimId)); } catch {}
+          break;
+        }
+      }
+    }
+  }
+  await saveArticleNow();
+  renderCounts();
+  const newId = claimId;
+  closeAnchorDrawer();
+  showToast('absence recorded');
+  showClaim(newId);
 }
 
 function pickSource(sourceId) {
@@ -4993,6 +5269,31 @@ async function confirmAnchor() {
   } else {
     return;
   }
+  // Re-anchor path: emit REC against the existing claim rather than
+  // creating a new one. Fold applies replacement prov + type.
+  if (drawerState.reanchorTargetId) {
+    const targetId = drawerState.reanchorTargetId;
+    const newType = drawerState.reanchorType || 'grounded';
+    await appendEventAndRefold({
+      op: 'REC',
+      site: `claim:${targetId}`,
+      resolution: 'Figure',
+      payload: {
+        action: 'reanchor',
+        new_status: 'pending',
+        type: newType,
+        prov
+      },
+      author: 'human'
+    });
+    lastCitedSourceId = drawerState.sourceId;
+    closeAnchorDrawer();
+    showToast('re-anchored');
+    showClaim(targetId);
+    renderCounts();
+    return;
+  }
+
   const claim = {
     type: 'grounded',
     text: drawerState.claimText,
