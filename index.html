@@ -2911,6 +2911,9 @@ function articleHtml({interactive = true} = {}) {
       if (!r.c) return escapeHtml(r.t);
       const claim = CLAIMS[r.c];
       if (!claim) return escapeHtml(r.t);
+      // Retracted claims unwrap to plain text — the claim event log is
+      // preserved but the article no longer carries the annotation.
+      if (claim.status === 'retracted') return escapeHtml(r.t);
       const cls = claim.type === 'grounded' ? 'g' : claim.type === 'conflict' ? 'conflict' : 'absent';
       const attrs = interactive
         ? `class="${cls}" data-id="${r.c}"`
@@ -3103,14 +3106,25 @@ function showClaim(id, opts = {}) {
   if (provPath.length === 0) {
     body += `
       <div class="divider"></div>
-      <div class="prov-actions">
-        <button class="btn-sm">Correct</button>
-        <button class="btn-sm btn-sm-danger">Release</button>
-      </div>
+      <div class="prov-actions">${verbHtml(claim, id)}</div>
     `;
   }
 
   $('#rp-body').innerHTML = body;
+
+  // wire verb buttons in the provenance panel — same dispatch as the
+  // review queue, just with a different render context.
+  $$('.prov-actions .qa', $('#rp-body')).forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      await dispatchVerb(btn.dataset.id, btn.dataset.action);
+      renderCounts();
+      // If retracted, close the panel; otherwise re-render the panel.
+      const updated = CLAIMS[id];
+      if (!updated || updated.status === 'retracted') closeClaim();
+      else showClaim(id);
+    });
+  });
 
   // wire up the fold-events toggle
   const foldToggle = $('[data-toggle="fold"]', $('#rp-body'));
@@ -3406,6 +3420,125 @@ function provLocator(claim) {
   }
 }
 
+/* ---- Typed review verbs ----
+   Each claim type has its own verb set. Verbs emit log events (EVA for
+   evaluations, REC for reframes) with a new_status payload; the fold
+   reads the log and resolves the claim's current reading. Nothing
+   overwrites the original claim — every review action is a new event.
+   retract/dissolve set status='retracted' and unwrap the span in the
+   article. reanchor/fill will (once the Anchor drawer lands in phase 3)
+   emit a REC with a replacement prov. */
+const VERBS = {
+  grounded: [
+    { label: 'Confirm',      action: 'confirm',     class: 'qa-confirm' },
+    { label: 'Re-anchor',    action: 'reanchor' },
+    { label: 'Retract',      action: 'retract',     class: 'qa-release' }
+  ],
+  conflict: [
+    { label: 'Resolve → A',  action: 'resolve_a',   class: 'qa-confirm' },
+    { label: 'Resolve → B',  action: 'resolve_b',   class: 'qa-confirm' },
+    { label: 'Hold both',    action: 'hold' },
+    { label: 'Dissolve',     action: 'dissolve',    class: 'qa-release' }
+  ],
+  absent: [
+    { label: 'Confirm NUL',   action: 'confirm_nul', class: 'qa-confirm' },
+    { label: 'Fill',          action: 'fill' },
+    { label: 'Stop watching', action: 'stop',        class: 'qa-release' }
+  ]
+};
+
+/* Map a verb action to (op, new_status). Drawer-invoking verbs (reanchor,
+   fill) return null — they defer the event emission to the drawer's
+   confirm step. */
+function verbEvent(action) {
+  switch (action) {
+    case 'confirm':     return { op: 'EVA', new_status: 'confirmed' };
+    case 'confirm_nul': return { op: 'EVA', new_status: 'confirmed_nul' };
+    case 'resolve_a':   return { op: 'EVA', new_status: 'resolved_a' };
+    case 'resolve_b':   return { op: 'EVA', new_status: 'resolved_b' };
+    case 'hold':        return { op: 'EVA', new_status: 'held' };
+    case 'stop':        return { op: 'EVA', new_status: 'stopped' };
+    case 'retract':     return { op: 'REC', new_status: 'retracted' };
+    case 'dissolve':    return { op: 'REC', new_status: 'retracted' };
+    case 'reanchor':    return null;
+    case 'fill':        return null;
+    default:            return null;
+  }
+}
+
+function verbHtml(claim, id) {
+  const verbs = VERBS[claim.type] || [];
+  return verbs.map(v => {
+    const cls = v.class ? ` ${v.class}` : '';
+    return `<button class="qa${cls}" data-action="${v.action}" data-id="${id}">${escapeHtml(v.label)}</button>`;
+  }).join('');
+}
+
+/* Apply a verb. Emits a supersession event (EVA or REC) and refolds.
+   For retract, also unwraps the claim span in the article. For drawer
+   verbs (reanchor/fill) surfaces a placeholder until phase 3 lands. */
+async function dispatchVerb(claimId, action) {
+  const claim = CLAIMS[claimId];
+  if (!claim) return;
+  const mapping = verbEvent(action);
+  if (!mapping) {
+    // Drawer-invoking verb — phase 3 hooks this up for real.
+    showToast(`${action === 'reanchor' ? 'Re-anchor' : 'Fill'}: anchor drawer not yet wired`);
+    return;
+  }
+  // Capture the ids of prior EVA events on this claim so supersession is
+  // explicit in the log. Retroactively overriding an evaluation is the
+  // expected path — flag the prior ones so downstream readers can trace
+  // the chain of interpretations.
+  const priorEvaIds = await priorEvaEventIds(claimId);
+  await appendEventAndRefold({
+    op: mapping.op,
+    site: `claim:${claimId}`,
+    resolution: 'Figure',
+    payload: {
+      action,
+      new_status: mapping.new_status,
+      supersedes: priorEvaIds
+    },
+    author: 'human'
+  });
+  if (mapping.new_status === 'retracted') {
+    unwrapClaimSpan(claimId);
+    await saveArticleNow();
+  }
+}
+
+/* Scan the log for prior EVA events targeting this claim — the ids
+   become the supersedes list on the newly emitted event. */
+async function priorEvaEventIds(claimId) {
+  try {
+    const events = await storage.readAll();
+    const site = `claim:${claimId}`;
+    const ids = [];
+    for (const raw of events) {
+      let e;
+      try { e = JSON.parse(raw); } catch { continue; }
+      if (e.op === 'EVA' && e.site === site) ids.push(e.id);
+    }
+    return ids;
+  } catch {
+    return [];
+  }
+}
+
+/* Unwrap a retracted claim's span back into a plain text node, so the
+   visible article no longer carries the annotation. The claim event log
+   is preserved — retraction is a supersession, not a delete. */
+function unwrapClaimSpan(claimId) {
+  const bodies = [$('#article-body'), $('#review-article')].filter(Boolean);
+  for (const root of bodies) {
+    root.querySelectorAll(`[data-id="${claimId}"]`).forEach(span => {
+      const textNode = document.createTextNode(span.textContent);
+      span.replaceWith(textNode);
+    });
+  }
+}
+
 function renderReview() {
   $('#review-article').innerHTML = `
     <div class="article-meta">
@@ -3443,11 +3576,7 @@ function renderReview() {
         </div>
         <div class="qcard-text">"${escapeHtml(c.text)}" · ${escapeHtml(summary)}</div>
         <div class="qcard-source">${escapeHtml(locator)}</div>
-        <div class="qcard-actions">
-          <button class="qa qa-confirm" data-action="confirm" data-id="${id}">Confirm</button>
-          <button class="qa" data-action="correct" data-id="${id}">Correct</button>
-          <button class="qa qa-release" data-action="release" data-id="${id}">Release</button>
-        </div>
+        <div class="qcard-actions">${verbHtml(c, id)}</div>
       </div>
     `;
   }).join('') || `<div class="qempty">queue clear<br><span style="opacity:0.7">all claims resolved</span></div>`;
@@ -3455,23 +3584,7 @@ function renderReview() {
   $$('.qa', $('#qlist')).forEach(btn => {
     btn.addEventListener('click', async e => {
       e.stopPropagation();
-      const id = btn.dataset.id;
-      const action = btn.dataset.action;
-      // Mutations become log events; the fold recomputes CLAIMS.
-      // Confirm/release = EVA (evaluation); correct = REC (reframe).
-      const op = action === 'correct' ? 'REC' : 'EVA';
-      await appendEventAndRefold({
-        op,
-        site: `claim:${id}`,
-        resolution: 'Figure',
-        payload: {
-          action,
-          new_status: action === 'confirm' ? 'confirmed'
-                    : action === 'release' ? 'released'
-                    : 'corrected'
-        },
-        author: 'human'
-      });
+      await dispatchVerb(btn.dataset.id, btn.dataset.action);
       renderReview();
       renderCounts();
     });
@@ -3827,21 +3940,42 @@ self.addEventListener('message', (ev) => {
       continue;
     }
 
-    // EVA on a claim: confirm or release
+    // EVA on a claim: an evaluation. Later EVA events supersede earlier
+    // ones; the latest reading wins. The fold stores a σ-chain so readers
+    // can walk supersessions back.
     if (evt.op === 'EVA' && evt.site && evt.site.startsWith('claim:')) {
       const id = evt.site.slice('claim:'.length);
       if (!claims[id]) continue;
       const s = evt.payload && evt.payload.new_status;
       if (s) claims[id].status = s;
+      (claims[id].sigma = claims[id].sigma || []).push({
+        op: 'EVA',
+        event_id: evt.id,
+        action: evt.payload && evt.payload.action,
+        new_status: s,
+        supersedes: (evt.payload && evt.payload.supersedes) || [],
+        ts: evt.ts
+      });
       continue;
     }
 
-    // REC on a claim: reclassification / correction
+    // REC on a claim: a reframe — retract, dissolve, reanchor, fill.
+    // Payloads may carry a replacement prov (reanchor/fill).
     if (evt.op === 'REC' && evt.site && evt.site.startsWith('claim:')) {
       const id = evt.site.slice('claim:'.length);
       if (!claims[id]) continue;
       const s = evt.payload && evt.payload.new_status;
       if (s) claims[id].status = s;
+      if (evt.payload && evt.payload.prov) claims[id].prov = evt.payload.prov;
+      if (evt.payload && evt.payload.type) claims[id].type = evt.payload.type;
+      (claims[id].sigma = claims[id].sigma || []).push({
+        op: 'REC',
+        event_id: evt.id,
+        action: evt.payload && evt.payload.action,
+        new_status: s,
+        supersedes: (evt.payload && evt.payload.supersedes) || [],
+        ts: evt.ts
+      });
       continue;
     }
   }
