@@ -763,6 +763,7 @@
   }
   .rphead-title.type-grounded { color: var(--amber-text); }
   .rphead-title.type-conflict { color: var(--red-text); }
+  .rphead-title.type-concur { color: var(--teal-text); }
   .rphead-title.type-absent { color: var(--blue-text); }
   .rphead-close {
     font-size: 18px;
@@ -1152,6 +1153,36 @@
     border: 0.5px solid #F7C1C1;
     border-radius: var(--border-radius-md);
     overflow: hidden;
+  }
+  .conflict-stack.concur { border-color: #9FE1CB; }
+  .conflict-side.concur {
+    background: var(--teal-fill);
+    border-bottom: 0.5px solid #9FE1CB;
+  }
+  .conflict-side.concur:last-child { border-bottom: none; }
+  .conflict-side.concur .conflict-side-label { color: var(--teal-text); }
+
+  /* Link mode — while picking the second claim for a LINK, the article
+     highlights eligible claim spans and swaps cursor. */
+  .link-mode .g:not(.link-source),
+  .link-mode .conflict:not(.link-source) {
+    cursor: crosshair;
+    outline: 2px dashed var(--amber-mid);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+  .link-mode.link-concur .g:not(.link-source),
+  .link-mode.link-concur .conflict:not(.link-source) {
+    outline-color: var(--teal-mid);
+  }
+  .link-mode .link-source {
+    background: var(--amber-fill);
+    box-shadow: inset 0 0 0 2px var(--amber-mid);
+    border-radius: 3px;
+  }
+  .link-mode.link-concur .link-source {
+    background: var(--teal-fill);
+    box-shadow: inset 0 0 0 2px var(--teal-mid);
   }
   .conflict-side {
     padding: 10px 12px;
@@ -3060,7 +3091,10 @@ function articleHtml({interactive = true} = {}) {
       // Retracted claims unwrap to plain text — the claim event log is
       // preserved but the article no longer carries the annotation.
       if (claim.status === 'retracted') return escapeHtml(r.t);
-      const cls = claim.type === 'grounded' ? 'g' : claim.type === 'conflict' ? 'conflict' : 'absent';
+      const cls = claim.type === 'grounded' ? 'g'
+                : claim.type === 'conflict' ? 'conflict'
+                : claim.type === 'concur'   ? 'concur'
+                : 'absent';
       const attrs = interactive
         ? `class="${cls}" data-id="${r.c}"`
         : `class="${cls}"`;
@@ -3117,6 +3151,49 @@ function renderCounts() {
    resolve to a source chip that opens the source at the cited target. */
 let provPath = [];
 
+/* Link mode — active while the user is picking a second claim for a
+   Contrast/Concur relation. Click on another grounded claim emits a
+   LINK event. Escape exits without creating a link. */
+let linkMode = { active: false, kind: null, fromId: null };
+
+function enterLinkMode(fromId, kind) {
+  linkMode = { active: true, kind, fromId };
+  document.body.classList.add('link-mode');
+  document.body.classList.toggle('link-concur', kind === 'concur');
+  // Mark the source claim so it doesn't look like a target
+  $$('.g, .conflict, .absent').forEach(el => el.classList.remove('link-source'));
+  $$(`[data-id="${fromId}"]`).forEach(el => el.classList.add('link-source'));
+  showToast(kind === 'concur'
+    ? 'Click another claim to concur. Esc to cancel.'
+    : 'Click another claim to contrast. Esc to cancel.');
+}
+
+function exitLinkMode() {
+  linkMode = { active: false, kind: null, fromId: null };
+  document.body.classList.remove('link-mode', 'link-concur');
+  $$('.g, .conflict, .absent').forEach(el => el.classList.remove('link-source'));
+}
+
+/* Handler called by showClaim when link mode is active — the click on a
+   claim span becomes the LINK target instead of opening the panel. */
+async function completeLink(targetId) {
+  const { fromId, kind } = linkMode;
+  if (!fromId || targetId === fromId) { exitLinkMode(); return; }
+  const newId = 'link_' + ulid().slice(-8);
+  await appendEventAndRefold({
+    op: 'LINK',
+    site: `claim:${newId}`,
+    resolution: 'Figure',
+    payload: { kind, claim_a: fromId, claim_b: targetId, reason: null },
+    author: 'human'
+  });
+  exitLinkMode();
+  renderCounts();
+  if ($('#mode-review').classList.contains('active')) renderReview();
+  showToast(kind === 'concur' ? 'concur recorded' : 'conflict recorded');
+  showClaim(newId);
+}
+
 function provAtPath(claim, path) {
   let prov = claim.prov;
   const trail = [{ label: shortClaimLabel(claim), result: null, prov }];
@@ -3153,6 +3230,10 @@ function shortProvValue(p) {
 }
 
 function showClaim(id, opts = {}) {
+  // If we're in link mode, a click on a claim span becomes the LINK
+  // target instead of opening the panel — claim/claim selection drives
+  // the second-hop pick.
+  if (linkMode.active) { completeLink(id); return; }
   const claim = CLAIMS[id];
   if (!claim) return;
   if (selectedClaimId !== id) provPath = [];
@@ -3168,6 +3249,7 @@ function showClaim(id, opts = {}) {
   const typeLabels = {
     grounded: 'Grounded',
     conflict: 'Conflict',
+    concur:   'Concur',
     absent:   'Absent · NUL event'
   };
   const typeLabel = $('#rp-type-label');
@@ -3250,9 +3332,15 @@ function showClaim(id, opts = {}) {
   }
 
   if (provPath.length === 0) {
+    // Grounded claims also offer relationship verbs: Contrast with…, Concur
+    // with…. Both enter link mode; clicking another claim emits a LINK.
+    const relVerbs = claim.type === 'grounded' ? `
+      <button class="qa" data-linkmode="conflict" data-id="${id}">Contrast with…</button>
+      <button class="qa" data-linkmode="concur"   data-id="${id}">Concur with…</button>
+    ` : '';
     body += `
       <div class="divider"></div>
-      <div class="prov-actions">${verbHtml(claim, id)}</div>
+      <div class="prov-actions">${verbHtml(claim, id)}${relVerbs}</div>
     `;
   }
 
@@ -3263,6 +3351,12 @@ function showClaim(id, opts = {}) {
   $$('.prov-actions .qa', $('#rp-body')).forEach(btn => {
     btn.addEventListener('click', async e => {
       e.stopPropagation();
+      // Link mode buttons take a different path — they seed link mode
+      // and let the user click a second claim in the article.
+      if (btn.dataset.linkmode) {
+        enterLinkMode(id, btn.dataset.linkmode);
+        return;
+      }
       await dispatchVerb(btn.dataset.id, btn.dataset.action);
       renderCounts();
       // If retracted, close the panel; otherwise re-render the panel.
@@ -3349,7 +3443,13 @@ function renderProvenance(prov, { topLevel = false } = {}) {
     case 'quote':      return renderQuoteProv(prov, topLevel);
     case 'cell':       return renderCellProv(prov, topLevel);
     case 'derived':    return renderDerivedProv(prov, topLevel);
-    case 'conflict':   return renderConflictProv(prov, topLevel);
+    case 'conflict':
+      // A LINK-built conflict has claim_a/claim_b digests; the pre-seeded
+      // conflict shape has reported/source. Dispatch on which one's set.
+      return (prov.claim_a && prov.claim_b)
+        ? renderLinkProv(prov, 'conflict')
+        : renderConflictProv(prov, topLevel);
+    case 'concur':     return renderLinkProv(prov, 'concur');
     case 'absence':    return renderAbsenceProv(prov, topLevel);
     default: return `<div class="prov-section"><div class="prov-code">${escapeHtml(JSON.stringify(prov))}</div></div>`;
   }
@@ -3502,6 +3602,29 @@ function renderConflictProv(p, topLevel) {
   `;
 }
 
+/* Render a conflict/concur built by a LINK event. Two claim digests,
+   symmetric layout — conflict in red, concur in teal. */
+function renderLinkProv(p, kind) {
+  const sideHtml = (digest, label) => `
+    <div class="conflict-side ${kind === 'concur' ? 'concur' : 'reported'}">
+      <div class="conflict-side-label">${label}</div>
+      <div class="conflict-side-value">${escapeHtml(digest.value || digest.text)}</div>
+      <div class="conflict-side-loc">${escapeHtml(digest.loc || digest.src)}</div>
+    </div>
+  `;
+  const header = kind === 'concur' ? 'Two claims agree' : 'Two claims disagree';
+  return `
+    <div class="prov-section">
+      <div class="prov-label">${header}</div>
+      <div class="conflict-stack ${kind}">
+        ${sideHtml(p.claim_a, 'Claim A')}
+        ${sideHtml(p.claim_b, 'Claim B')}
+      </div>
+      ${p.reason ? `<div class="conflict-side-loc" style="margin-top: 8px;">${escapeHtml(p.reason)}</div>` : ''}
+    </div>
+  `;
+}
+
 function renderAbsenceProv(p, topLevel) {
   return `
     <div class="prov-section">
@@ -3542,7 +3665,8 @@ function provSummary(claim) {
     case 'quote':    return 'direct quote';
     case 'cell':     return `cell value · ${p.col}`;
     case 'derived':  return p.op + '(' + (p.inputs || []).length + ' inputs)';
-    case 'conflict': return 'two sources disagree';
+    case 'conflict': return 'two claims disagree';
+    case 'concur':   return 'two claims agree';
     case 'absence':  return 'expected pattern not found';
     default: return '';
   }
@@ -3557,10 +3681,13 @@ function provLocator(claim) {
     case 'cell':     return `${p.src} · row ${p.row} · ${p.col}`;
     case 'derived':  return `derived · ${(p.inputs || []).length} inputs`;
     case 'conflict': {
+      if (p.claim_a && p.claim_b) return `${p.claim_a.loc || p.claim_a.src} ⟷ ${p.claim_b.loc || p.claim_b.src}`;
       const r = p.reported.kind === 'quote' ? `${p.reported.src}:p.${p.reported.page}` : `${p.reported.src}:row ${p.reported.row}`;
       const s = p.source.kind === 'cell' ? `${p.source.src}:row ${p.source.row}` : `${p.source.src}:p.${p.source.page}`;
       return `${r} ⟷ ${s}`;
     }
+    case 'concur':
+      return p.claim_a && p.claim_b ? `${p.claim_a.loc || p.claim_a.src} ≡ ${p.claim_b.loc || p.claim_b.src}` : '';
     case 'absence':  return `scanned ${p.scanned.length} sources · window ${p.window}`;
     default: return '';
   }
@@ -3585,6 +3712,11 @@ const VERBS = {
     { label: 'Resolve → B',  action: 'resolve_b',   class: 'qa-confirm' },
     { label: 'Hold both',    action: 'hold' },
     { label: 'Dissolve',     action: 'dissolve',    class: 'qa-release' }
+  ],
+  concur: [
+    { label: 'Confirm concur', action: 'confirm',   class: 'qa-confirm' },
+    { label: 'Hold both',      action: 'hold' },
+    { label: 'Dissolve',       action: 'dissolve',  class: 'qa-release' }
   ],
   absent: [
     { label: 'Confirm NUL',   action: 'confirm_nul', class: 'qa-confirm' },
@@ -3707,8 +3839,8 @@ function renderReview() {
 
   $('#qlist').innerHTML = queue.map(([id, c]) => {
     if (c.status !== 'pending') return '';
-    const tagMap = {grounded: 'prov-tag-amber', conflict: 'prov-tag-red', absent: 'prov-tag-blue'};
-    const label = {grounded: 'grounded', conflict: 'conflict', absent: 'absent'}[c.type];
+    const tagMap = {grounded: 'prov-tag-amber', conflict: 'prov-tag-red', concur: 'prov-tag-teal', absent: 'prov-tag-blue'};
+    const label = {grounded: 'grounded', conflict: 'conflict', concur: 'concur', absent: 'absent'}[c.type];
     const selected = selectedReviewId === id ? ' selected' : '';
 
     // Derive a short summary line and source locator from the provenance shape
@@ -4102,6 +4234,45 @@ self.addEventListener('message', (ev) => {
         supersedes: (evt.payload && evt.payload.supersedes) || [],
         ts: evt.ts
       });
+      continue;
+    }
+
+    // LINK — build a relational claim (conflict or concur) from two prior
+    // claims. The new claim references both; resolution stays open until
+    // the user acts on it with the typed verbs.
+    if (evt.op === 'LINK' && evt.site && evt.site.startsWith('claim:')) {
+      const newId = evt.site.slice('claim:'.length);
+      const aId = evt.payload && evt.payload.claim_a;
+      const bId = evt.payload && evt.payload.claim_b;
+      const a = claims[aId];
+      const b = claims[bId];
+      if (!a || !b) continue;
+      const kind = (evt.payload && evt.payload.kind) === 'concur' ? 'concur' : 'conflict';
+      const digest = (id, c) => {
+        const p = c.prov || {};
+        let loc = '';
+        let value = '';
+        if (p.kind === 'quote')    { loc = p.page ? (p.src + ' · p.' + p.page) : p.src; value = p.highlight || ''; }
+        else if (p.kind === 'cell'){ loc = p.src + ' · row ' + p.row + ' · ' + p.col; value = p.value || ''; }
+        else if (p.kind === 'derived') { loc = (p.src || 'derived'); value = p.result || ''; }
+        return { id, text: c.text, kind: p.kind || '', src: p.src || '', loc, value };
+      };
+      claims[newId] = {
+        type: kind,
+        text: a.text,
+        conf: Math.min(a.conf || 1, b.conf || 1),
+        status: 'pending',
+        prov: {
+          kind,
+          claim_a: digest(aId, a),
+          claim_b: digest(bId, b),
+          reason: (evt.payload && evt.payload.reason) || null
+        },
+        trace: [
+          { op: 'CON', txt: 'two claims linked by a reviewer' },
+          { op: 'EVA', txt: kind + ' relation registered — pending resolution' }
+        ]
+      };
       continue;
     }
 
@@ -6490,9 +6661,9 @@ function wireAnchorDrawer() {
   const closeBtn = $('#drawer-close');
   if (closeBtn) closeBtn.addEventListener('click', closeAnchorDrawer);
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && drawerState.active) {
-      closeAnchorDrawer();
-    }
+    if (e.key !== 'Escape') return;
+    if (linkMode.active) { exitLinkMode(); return; }
+    if (drawerState.active) { closeAnchorDrawer(); return; }
   });
 }
 
