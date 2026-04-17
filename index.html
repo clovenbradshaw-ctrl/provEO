@@ -6035,7 +6035,21 @@ async function emitDefLink({ obsId, annotation, ruleSetVersion }) {
   const alternatives = ranked.slice(1, 4).map(r => ({ entity_id: r.entity_id, confidence: r.confidence }));
   const entityId   = primary ? primary.entity_id : null;
   const confidence = primary ? primary.confidence : 0;
-  const band       = confidenceBand(confidence);
+  // Per-entity display threshold (Stage 3e/3f). When unset, the global
+  // bands in confidenceBand apply. When set, it overrides the low
+  // cutoff for this entity — a tuned-up entity needs higher confidence
+  // to index, a trusted entity can be shown at lower confidence.
+  const entity = primary && ENTITIES[primary.entity_id];
+  const displayThreshold = entity && typeof entity.display_threshold === 'number'
+    ? entity.display_threshold
+    : null;
+  const band = bandWithThreshold(confidence, displayThreshold);
+  // Stage 4 link-back: if the matching alias was added by a specific
+  // REC, tag the DEF-link so counter-REC can aggregate rejects on
+  // DEFs produced under that rule.
+  const aliasSource = entity && entity.alias_source && primary
+    ? (entity.alias_source[primary.alias] || null)
+    : null;
   const rationale  = primary
     ? `Surface matches alias "${primary.alias}" of ${primary.entity_id}`
     : 'No alias in the resolution table matches this surface';
@@ -6045,13 +6059,27 @@ async function emitDefLink({ obsId, annotation, ruleSetVersion }) {
     pi: [obsId],
     mention_id: mentionId,
     entity_id: entityId,
+    alias_matched: primary ? primary.alias : null,
+    applied_rec: aliasSource,
     confidence,
     band,
+    display_threshold: displayThreshold,
     alternatives,
     rule_set_version: ruleSetVersion,
     agent: `model:${annotation.model}@${annotation.model_version}`,
     rationale
   });
+}
+
+// Band selector with an optional per-entity display threshold. The
+// amber band still covers the default 0.85–0.95 window; a lowered
+// threshold pulls the review→amber boundary down below 0.85; a raised
+// threshold pushes amber→indexed up above 0.95.
+function bandWithThreshold(c, threshold) {
+  if (typeof threshold !== 'number') return confidenceBand(c);
+  if (c >= Math.max(threshold + 0.10, 0.95)) return DEF_BAND_INDEXED;
+  if (c >= threshold) return DEF_BAND_AMBER;
+  return DEF_BAND_REVIEW;
 }
 
 // Stage 1d. DEF-coref: group mentions in the same source by entity_id.
@@ -6256,9 +6284,17 @@ async function emitSystemEva({ targetEvent, targetSite, verdict, detected, relat
    evidence are dropped at projection time (Rule 4: no skipped ⊨EVA).
 ====================================================================== */
 
-const REC_ALIAS_ADD_TRIGGER_COUNT  = 3;
-const REC_ALIAS_ADD_TRIGGER_WEIGHT = 2.0;
-const REC_PROTOTYPE_MAX            = 10;
+const REC_ALIAS_ADD_TRIGGER_COUNT     = 3;
+const REC_ALIAS_ADD_TRIGGER_WEIGHT    = 2.0;
+const REC_ALIAS_REMOVE_TRIGGER_COUNT  = 5;
+const REC_ALIAS_REMOVE_TRIGGER_WEIGHT = 3.0;
+const REC_ENTITY_SPLIT_TRIGGER_COUNT  = 3;
+const REC_ENTITY_SPLIT_TRIGGER_WEIGHT = 2.0;
+const REC_TYPE_RULE_TRIGGER_COUNT     = 4;
+const REC_TYPE_RULE_TRIGGER_WEIGHT    = 3.0;
+const STAGE4_COUNTER_TRIGGER_COUNT    = 3;
+const STAGE4_COUNTER_TRIGGER_WEIGHT   = 2.0;
+const REC_PROTOTYPE_MAX               = 10;
 
 async function emitRecEvent(site, payload, { author = 'system' } = {}) {
   return appendEvent({
@@ -6287,7 +6323,13 @@ async function runRewriteEngine() {
   let fired = 0;
 
   fired += await fireAliasAddTriggers(state);
+  fired += await fireAliasRemoveTriggers(state);
+  fired += await fireEntitySplitTriggers(state);
+  fired += await fireThresholdLowerTriggers(state);
+  fired += await fireThresholdRaiseTriggers(state);
+  fired += await fireTypeRuleTriggers(state);
   fired += await firePrototypeUpdateTriggers(state);
+  fired += await fireCounterRecTriggers(state);
 
   if (fired > 0) {
     // A single refold rehydrates every cache — including the new
@@ -6327,13 +6369,419 @@ async function fireAliasAddTriggers(state) {
     await saveEntitiesTable();
     const prev = currentRuleSetVersion();
     const next = bumpRuleSetVersion();
-    await emitRecEvent(`ruleset:${next}`, {
+    const rec = await emitRecEvent(`ruleset:${next}`, {
       rewrite_type: 'alias_add',
       previous_version: prev,
       target: { entity_id },
       change: { add_alias: surface },
       triggered_by: confirmEvents.map(e => e.event_id),
       evidence_weight,
+      agent: 'system:rewrite_engine'
+    });
+    // Stage 4 link-back: remember which REC introduced this alias so
+    // subsequent DEF-links that match via it carry applied_rec, and so
+    // counter-REC can revert cleanly.
+    if (!entity.alias_source) entity.alias_source = {};
+    entity.alias_source[surface] = rec && rec.id;
+    await saveEntitiesTable();
+    fired++;
+  }
+  return fired;
+}
+
+// 3b — REC-alias-remove. Trigger: ≥5 rejects of model DEF-links that
+// resolved via a particular alias, total weight ≥3.0. Effect: remove
+// the alias from the canonical entity; future links won't propose it.
+async function fireAliasRemoveTriggers(state) {
+  const byKey = new Map(); // key = entity_id + '|' + alias
+  for (const eventId of Object.keys(state.evaPressure)) {
+    const p = state.evaPressure[eventId];
+    if (!p || !p.target || p.target.subtype !== 'link') continue;
+    if (!p.target.entity_id) continue;
+    const alias = p.target.alias_matched;
+    if (!alias) continue;
+    if (p.reject < REC_ALIAS_REMOVE_TRIGGER_WEIGHT) continue;
+    const key = p.target.entity_id + '|' + alias.toLowerCase();
+    if (state.alreadyRewritten.has('alias_remove:' + key)) continue;
+    const rejectEvents = p.events.filter(e => e.verdict === 'reject');
+    const bucket = byKey.get(key) || {
+      entity_id: p.target.entity_id,
+      alias,
+      rejectEvents: [],
+      weight: 0
+    };
+    bucket.rejectEvents.push(...rejectEvents);
+    bucket.weight += p.reject;
+    byKey.set(key, bucket);
+  }
+  let fired = 0;
+  for (const { entity_id, alias, rejectEvents, weight } of byKey.values()) {
+    if (rejectEvents.length < REC_ALIAS_REMOVE_TRIGGER_COUNT) continue;
+    if (weight < REC_ALIAS_REMOVE_TRIGGER_WEIGHT) continue;
+    const entity = ENTITIES[entity_id];
+    if (!entity || !Array.isArray(entity.aliases)) continue;
+    if (!entity.aliases.includes(alias)) continue;
+    entity.aliases = entity.aliases.filter(a => a !== alias);
+    if (entity.alias_source && entity.alias_source[alias]) delete entity.alias_source[alias];
+    await saveEntitiesTable();
+    const prev = currentRuleSetVersion();
+    const next = bumpRuleSetVersion();
+    await emitRecEvent(`ruleset:${next}`, {
+      rewrite_type: 'alias_remove',
+      previous_version: prev,
+      target: { entity_id },
+      change: { remove_alias: alias },
+      triggered_by: rejectEvents.map(e => e.event_id),
+      evidence_weight: weight,
+      agent: 'system:rewrite_engine'
+    });
+    fired++;
+  }
+  return fired;
+}
+
+// 3c — REC-entity-split. Trigger: ≥3 reframes partitioning a canonical
+// entity's mentions across two distinct targets, total weight ≥2.0.
+// Effect: split the canonical entity into two — existing DEF-links are
+// NOT reassigned; they get flagged via pending_review_count on the REC.
+async function fireEntitySplitTriggers(state) {
+  const byEntity = new Map(); // eid -> { reframes_to: Map<target_eid, {events, weight}>, links_seen: [eventId] }
+  for (const eventId of Object.keys(state.evaPressure)) {
+    const p = state.evaPressure[eventId];
+    if (!p || !p.target || p.target.subtype !== 'link') continue;
+    if (!p.target.entity_id) continue;
+    const reframes = p.events.filter(e => e.verdict === 'reframe' && e.reframe_to && e.reframe_to.entity_id);
+    if (!reframes.length) continue;
+    const bucket = byEntity.get(p.target.entity_id) || { reframes_to: new Map(), link_event_ids: new Set(), total_weight: 0, total_count: 0 };
+    for (const r of reframes) {
+      const to = r.reframe_to.entity_id;
+      if (to === p.target.entity_id) continue;
+      const sub = bucket.reframes_to.get(to) || { events: [], weight: 0 };
+      sub.events.push(r);
+      sub.weight += r.weight;
+      bucket.reframes_to.set(to, sub);
+      bucket.total_weight += r.weight;
+      bucket.total_count++;
+      bucket.link_event_ids.add(eventId);
+    }
+    byEntity.set(p.target.entity_id, bucket);
+  }
+  let fired = 0;
+  for (const [entity_id, bucket] of byEntity) {
+    if (state.alreadyRewritten.has('entity_split:' + entity_id)) continue;
+    if (bucket.total_count < REC_ENTITY_SPLIT_TRIGGER_COUNT) continue;
+    if (bucket.total_weight < REC_ENTITY_SPLIT_TRIGGER_WEIGHT) continue;
+    // Spec: reframes must partition across TWO distinct targets.
+    if (bucket.reframes_to.size < 2) continue;
+    // Pick the strongest alternate target as the split destination.
+    const alternates = Array.from(bucket.reframes_to.entries())
+      .map(([to, v]) => ({ to, count: v.events.length, weight: v.weight, events: v.events }))
+      .sort((a, b) => b.weight - a.weight);
+    const primaryAlt = alternates[0];
+    if (!primaryAlt) continue;
+    const triggered = [];
+    for (const alt of alternates) for (const e of alt.events) triggered.push(e.event_id);
+    const pendingReviewCount = bucket.link_event_ids.size;
+    const prev = currentRuleSetVersion();
+    const next = bumpRuleSetVersion();
+    await emitRecEvent(`ruleset:${next}`, {
+      rewrite_type: 'entity_split',
+      previous_version: prev,
+      target: { entity_id },
+      change: {
+        split_into: [entity_id, primaryAlt.to],
+        pending_review_count: pendingReviewCount
+      },
+      triggered_by: triggered,
+      evidence_weight: bucket.total_weight,
+      agent: 'system:rewrite_engine'
+    });
+    fired++;
+  }
+  return fired;
+}
+
+// 3d — REC-entity-merge. Explicit human action only: the spec requires
+// "merge these two entities" + ≥1 confirming reframe. Exposed as a
+// helper (requestEntityMerge) rather than a scanner trigger — the
+// engine's scan role here is just to keep the entry point consistent.
+// The actual merge fires via the helper below.
+async function fireEntityMergeTriggers() { return 0; }
+
+async function requestEntityMerge({ fromEntityId, intoEntityId, reframeEvaEventId, agent }) {
+  if (!fromEntityId || !intoEntityId || fromEntityId === intoEntityId) {
+    throw new Error('requestEntityMerge: need two distinct entity ids');
+  }
+  const from = ENTITIES[fromEntityId];
+  const into = ENTITIES[intoEntityId];
+  if (!from || !into) throw new Error('requestEntityMerge: unknown entity');
+  // Require at least one confirming reframe in either direction (spec).
+  if (!reframeEvaEventId) {
+    throw new Error('requestEntityMerge: reframeEvaEventId is required (spec: ≥1 confirming reframe)');
+  }
+  // Merge aliases and alias_source, and eject the old entity.
+  if (!Array.isArray(into.aliases)) into.aliases = [];
+  for (const a of (from.aliases || [])) {
+    if (!into.aliases.includes(a)) into.aliases.push(a);
+  }
+  if (from.alias_source) {
+    into.alias_source = Object.assign(into.alias_source || {}, from.alias_source);
+  }
+  if (Array.isArray(from.prototypes)) {
+    into.prototypes = (into.prototypes || []).concat(from.prototypes).slice(-REC_PROTOTYPE_MAX);
+  }
+  delete ENTITIES[fromEntityId];
+  await saveEntitiesTable();
+  const prev = currentRuleSetVersion();
+  const next = bumpRuleSetVersion();
+  await emitRecEvent(`ruleset:${next}`, {
+    rewrite_type: 'entity_merge',
+    previous_version: prev,
+    target: { entity_id: intoEntityId },
+    change: { merged_from: fromEntityId, into: intoEntityId },
+    triggered_by: [reframeEvaEventId],
+    evidence_weight: EVA_DIRECT_WEIGHT,
+    agent: agent || 'human:reporter'
+  });
+  installFoldResult(await fold());
+  return 1;
+}
+
+// 3e — REC-threshold-lower. Trigger: last 20 confirms for an entity
+// averaged ≥0.85 confidence with no rejects in that window. Effect:
+// lower the entity's display_threshold to 0.80; previously review-band
+// DEFs surface as amber on the next refold.
+async function fireThresholdLowerTriggers(state) {
+  const windows = collectEntityConfidenceWindow(state.evaPressure, 20);
+  let fired = 0;
+  for (const [entity_id, w] of windows) {
+    if (state.alreadyRewritten.has('threshold_lower:' + entity_id)) continue;
+    if (w.rejects > 0) continue;
+    if (w.confirms < 20) continue;
+    if (w.avgConfidence < 0.85) continue;
+    const entity = ENTITIES[entity_id];
+    if (!entity) continue;
+    const current = typeof entity.display_threshold === 'number' ? entity.display_threshold : 0.85;
+    if (current <= 0.80) continue;
+    entity.display_threshold = 0.80;
+    await saveEntitiesTable();
+    const prev = currentRuleSetVersion();
+    const next = bumpRuleSetVersion();
+    await emitRecEvent(`ruleset:${next}`, {
+      rewrite_type: 'threshold_lower',
+      previous_version: prev,
+      target: { entity_id },
+      change: { display_threshold: 0.80, previous_threshold: current },
+      triggered_by: w.confirmEventIds,
+      evidence_weight: w.confirms,
+      agent: 'system:rewrite_engine'
+    });
+    fired++;
+  }
+  return fired;
+}
+
+// 3f — REC-threshold-raise. Trigger: last 20 rejects averaged ≥0.90
+// confidence. Effect: raise the entity's display_threshold to 0.95 and
+// flag it for ambiguity review.
+async function fireThresholdRaiseTriggers(state) {
+  const windows = collectEntityConfidenceWindow(state.evaPressure, 20);
+  let fired = 0;
+  for (const [entity_id, w] of windows) {
+    if (state.alreadyRewritten.has('threshold_raise:' + entity_id)) continue;
+    if (w.rejects < 20) continue;
+    if (w.avgRejectConfidence < 0.90) continue;
+    const entity = ENTITIES[entity_id];
+    if (!entity) continue;
+    const current = typeof entity.display_threshold === 'number' ? entity.display_threshold : 0.85;
+    if (current >= 0.95) continue;
+    entity.display_threshold = 0.95;
+    entity.ambiguity_review = true;
+    await saveEntitiesTable();
+    const prev = currentRuleSetVersion();
+    const next = bumpRuleSetVersion();
+    await emitRecEvent(`ruleset:${next}`, {
+      rewrite_type: 'threshold_raise',
+      previous_version: prev,
+      target: { entity_id },
+      change: { display_threshold: 0.95, previous_threshold: current, ambiguity_review: true },
+      triggered_by: w.rejectEventIds,
+      evidence_weight: w.rejects,
+      agent: 'system:rewrite_engine'
+    });
+    fired++;
+  }
+  return fired;
+}
+
+// Helper for 3e / 3f. Walks evaPressure, groups EVAs by target
+// entity id, and returns the last-N confirm/reject window per entity.
+function collectEntityConfidenceWindow(evaPressure, N) {
+  const perEntity = new Map();
+  for (const eventId of Object.keys(evaPressure)) {
+    const p = evaPressure[eventId];
+    if (!p || !p.target || p.target.subtype !== 'link') continue;
+    if (!p.target.entity_id) continue;
+    const bucket = perEntity.get(p.target.entity_id) || {
+      confirms: 0, rejects: 0,
+      confirmConfSum: 0, rejectConfSum: 0,
+      confirmEventIds: [], rejectEventIds: [],
+      all: []
+    };
+    const conf = typeof p.target.confidence === 'number' ? p.target.confidence : 0;
+    for (const e of p.events) {
+      if (e.verdict === 'confirm') {
+        bucket.confirms++;
+        bucket.confirmConfSum += conf;
+        bucket.confirmEventIds.push(e.event_id);
+        bucket.all.push({ verdict: 'confirm', ts: e.ts, conf });
+      } else if (e.verdict === 'reject') {
+        bucket.rejects++;
+        bucket.rejectConfSum += conf;
+        bucket.rejectEventIds.push(e.event_id);
+        bucket.all.push({ verdict: 'reject', ts: e.ts, conf });
+      }
+    }
+    perEntity.set(p.target.entity_id, bucket);
+  }
+  // Restrict to last-N per verdict by timestamp.
+  for (const [, bucket] of perEntity) {
+    bucket.all.sort((a, b) => (a.ts < b.ts ? 1 : -1));
+    const confirmsWindow = bucket.all.filter(e => e.verdict === 'confirm').slice(0, N);
+    const rejectsWindow  = bucket.all.filter(e => e.verdict === 'reject').slice(0, N);
+    bucket.confirms = confirmsWindow.length;
+    bucket.rejects  = rejectsWindow.length;
+    bucket.avgConfidence = confirmsWindow.length
+      ? confirmsWindow.reduce((s, e) => s + e.conf, 0) / confirmsWindow.length
+      : 0;
+    bucket.avgRejectConfidence = rejectsWindow.length
+      ? rejectsWindow.reduce((s, e) => s + e.conf, 0) / rejectsWindow.length
+      : 0;
+  }
+  return perEntity;
+}
+
+// 3h — REC-type-rule. Trigger: ≥4 reframes of the same (surface,
+// context) → (type) mapping, weight ≥3.0. Effect: store a
+// context-specific type rule on the entity so future DEF-type calls
+// short-circuit the ambiguous classification.
+async function fireTypeRuleTriggers(state) {
+  const byRule = new Map(); // key = entity_id|surface|context_hint|new_type
+  for (const eventId of Object.keys(state.evaPressure)) {
+    const p = state.evaPressure[eventId];
+    if (!p || !p.target || p.target.subtype !== 'link') continue;
+    const reframes = p.events.filter(e => e.verdict === 'reframe' && e.reframe_to && e.reframe_to.type);
+    if (!reframes.length) continue;
+    const surface = p.target.surface || '';
+    const sourceId = p.target.source_id || '';
+    for (const r of reframes) {
+      const toType = r.reframe_to.type;
+      const toEntity = r.reframe_to.entity_id || p.target.entity_id;
+      const contextHint = r.reframe_to.context_hint || '';
+      const key = [toEntity, surface.toLowerCase(), contextHint.toLowerCase(), toType].join('|');
+      const bucket = byRule.get(key) || {
+        entity_id: toEntity,
+        surface,
+        context_hint: contextHint,
+        type: toType,
+        events: [],
+        weight: 0
+      };
+      bucket.events.push(r);
+      bucket.weight += r.weight;
+      byRule.set(key, bucket);
+    }
+  }
+  let fired = 0;
+  for (const [key, bucket] of byRule) {
+    if (state.alreadyRewritten.has('type_rule:' + key)) continue;
+    if (bucket.events.length < REC_TYPE_RULE_TRIGGER_COUNT) continue;
+    if (bucket.weight < REC_TYPE_RULE_TRIGGER_WEIGHT) continue;
+    const entity = ENTITIES[bucket.entity_id];
+    if (!entity) continue;
+    if (!Array.isArray(entity.type_rules)) entity.type_rules = [];
+    entity.type_rules.push({
+      surface: bucket.surface,
+      context_hint: bucket.context_hint,
+      type: bucket.type,
+      ts: new Date().toISOString()
+    });
+    await saveEntitiesTable();
+    const prev = currentRuleSetVersion();
+    const next = bumpRuleSetVersion();
+    await emitRecEvent(`ruleset:${next}`, {
+      rewrite_type: 'type_rule',
+      previous_version: prev,
+      target: { entity_id: bucket.entity_id },
+      change: {
+        surface: bucket.surface,
+        context_hint: bucket.context_hint,
+        type: bucket.type
+      },
+      triggered_by: bucket.events.map(e => e.event_id),
+      evidence_weight: bucket.weight,
+      agent: 'system:rewrite_engine'
+    });
+    fired++;
+  }
+  return fired;
+}
+
+// Stage 4 — counter-REC. If a REC is followed by ≥3 rejects on DEFs
+// that used the new rule (tagged via applied_rec on DEF-link),
+// combined weight ≥2.0, fire a revert REC. The prior REC is NOT
+// deleted — both events stay in the log (append-only).
+async function fireCounterRecTriggers(state) {
+  const recPayloads = LAST_FOLD_STATE.recEvents || {};
+  const byRec = new Map(); // rec_id -> { rejects: n, weight, events: [ids] }
+  for (const eventId of Object.keys(state.evaPressure)) {
+    const p = state.evaPressure[eventId];
+    if (!p || !p.target || p.target.subtype !== 'link') continue;
+    const recId = p.target.applied_rec;
+    if (!recId) continue;
+    const rejects = p.events.filter(e => e.verdict === 'reject');
+    if (!rejects.length) continue;
+    const bucket = byRec.get(recId) || { rejects: 0, weight: 0, events: [] };
+    bucket.rejects += rejects.length;
+    bucket.weight += rejects.reduce((s, e) => s + e.weight, 0);
+    for (const e of rejects) bucket.events.push(e.event_id);
+    byRec.set(recId, bucket);
+  }
+  let fired = 0;
+  for (const [recId, bucket] of byRec) {
+    if (state.alreadyRewritten.has('counter_rec:' + recId)) continue;
+    if (bucket.rejects < STAGE4_COUNTER_TRIGGER_COUNT) continue;
+    if (bucket.weight < STAGE4_COUNTER_TRIGGER_WEIGHT) continue;
+    const target = recPayloads[recId];
+    if (!target) continue;
+    // Revert the effect. Only alias_add and type_rule are structurally
+    // auto-revertible here; other rewrite types fall back to just
+    // recording the revert event (operator has to unwind manually).
+    if (target.rewrite_type === 'alias_add' && target.target && target.change && target.change.add_alias) {
+      const entity = ENTITIES[target.target.entity_id];
+      if (entity && Array.isArray(entity.aliases)) {
+        entity.aliases = entity.aliases.filter(a => a !== target.change.add_alias);
+        if (entity.alias_source) delete entity.alias_source[target.change.add_alias];
+        await saveEntitiesTable();
+      }
+    } else if (target.rewrite_type === 'type_rule' && target.target && target.change) {
+      const entity = ENTITIES[target.target.entity_id];
+      if (entity && Array.isArray(entity.type_rules)) {
+        entity.type_rules = entity.type_rules.filter(r =>
+          !(r.surface === target.change.surface && r.type === target.change.type)
+        );
+        await saveEntitiesTable();
+      }
+    }
+    const prev = currentRuleSetVersion();
+    const next = bumpRuleSetVersion();
+    await emitRecEvent(`ruleset:${next}`, {
+      rewrite_type: 'revert',
+      previous_version: prev,
+      target: { reverts: recId, rewrite_type: target.rewrite_type, entity_id: target.target && target.target.entity_id },
+      change: { revert_to: target.previous_version || null },
+      triggered_by: bucket.events,
+      evidence_weight: bucket.weight,
       agent: 'system:rewrite_engine'
     });
     fired++;
@@ -6410,7 +6858,9 @@ function installFoldResult(s) {
     recEvents: s.recEvents || {},
     alreadyRewritten: s.alreadyRewritten || new Set(),
     ruleSetVersion: s.ruleSetVersion || currentRuleSetVersion(),
-    pendingConsistencyEvas: s.pendingConsistencyEvas || []
+    pendingConsistencyEvas: s.pendingConsistencyEvas || [],
+    staleCounts: s.staleCounts || { boundary: 0, type: 0, link: 0 },
+    staleSources: Array.isArray(s.staleSources) ? s.staleSources : []
   };
   // Adopt the fold's authoritative rule_set_version so subsequent DEFs
   // (and the next rewrite pass) stamp the correct version.
@@ -6421,9 +6871,12 @@ function installFoldResult(s) {
 // Holds fold-derived state the rewrite engine needs between passes.
 let LAST_FOLD_STATE = {
   evaPressure: {},
+  recEvents: {},
   alreadyRewritten: new Set(),
   ruleSetVersion: INITIAL_RULESET_VERSION,
-  pendingConsistencyEvas: []
+  pendingConsistencyEvas: [],
+  staleCounts: { boundary: 0, type: 0, link: 0 },
+  staleSources: []
 };
 
 // After a refold, drain any system-consistency EVAs the fold detected
@@ -6444,6 +6897,90 @@ async function drainConsistencyEvas() {
   }
   return pending.length;
 }
+
+/* ======================================================================
+   STAGE 6 — Revalidation
+   ----------------------------------------------------------------------
+   When a REC fires, prior DEFs produced under the old ruleset become
+   potentially stale. Revalidation is lazy, not eager:
+
+     - Mark stale. The fold tags every DEF whose rule_set_version is
+       older than the current version. Stale ≠ wrong; they remain in
+       the log and remain resolvable.
+     - Lazy revalidation. Run the model once on the span when a stale
+       DEF is viewed. If the new DEF agrees, both stay (old no longer
+       stale). If they disagree, both stay and the conflict surfaces in
+       the review queue. Wired via revalidateSource below.
+     - Manual batch. revalidateWorkspace() runs over every source that
+       still has stale DEFs — background, resumable, non-blocking.
+     - Frozen audit trail. Old DEFs are never deleted. A reporter can
+       replay any past rule_set_version against the log.
+
+   Mark-stale happens in the fold (see D-view staleness tagging). The
+   helpers below drive the revalidation side.
+====================================================================== */
+
+// Re-run Stage 1 for a single source. Emits fresh OBS + DEF events
+// under the current ruleset; the old DEFs stay in the log for audit.
+async function revalidateSource(sourceId) {
+  const src = USER_SOURCES[sourceId];
+  if (!src) throw new Error('revalidateSource: unknown source ' + sourceId);
+  const text = SOURCE_TEXT[sourceId] != null
+    ? SOURCE_TEXT[sourceId]
+    : (await storage.readSource(sourceId)) || '';
+  if (!text) return { boundary: 0, type: 0, link: 0, coref: 0, alias: 0 };
+  SOURCE_TEXT[sourceId] = text;
+  const annotations = resolveAnnotationsForSource(null, text, src.kind || 'txt');
+  const obsPairs = await emitDerivedObsForAnnotations(annotations, {
+    sourceId,
+    position: { workspace: 'revalidate' }
+  });
+  const counts = await runStage1Defs({ sourceId, obsPairs });
+  installFoldResult(await fold());
+  if (await drainConsistencyEvas() > 0) installFoldResult(await fold());
+  await runRewriteEngine();
+  return counts;
+}
+
+// Batch. Walks every source and revalidates any that still has stale
+// DEFs (i.e. any DEF whose rule_set_version != the current one).
+// Returns per-source counts. The fold's staleCounts view tells us
+// which sources still need attention.
+async function revalidateWorkspace() {
+  const staleSources = (LAST_FOLD_STATE.staleSources || []).slice();
+  const results = {};
+  for (const sourceId of staleSources) {
+    try { results[sourceId] = await revalidateSource(sourceId); }
+    catch (err) { results[sourceId] = { error: err.message || String(err) }; }
+  }
+  return results;
+}
+
+/* ======================================================================
+   STAGE 8 — Failure mode prevention (cross-reference)
+   ----------------------------------------------------------------------
+   Three pathologies in the loop doc, and where each is prevented:
+
+   Suppressed ⊛REC → sclerosis.
+     Prevented by Stage 3's automatic triggers + counter-REC. Accumulated
+     EVA pressure cannot stagnate: alias-add, alias-remove, entity-split,
+     threshold tuning, type-rule, and prototype-update all fire on
+     thresholds; counter-REC unwinds bad rewrites on pushback. Trigger
+     constants above are the knobs.
+
+   Skipped ⊨EVA → ideology.
+     Prevented by the Stage 5 REC gate (see fold worker). RECs without
+     triggered_by EVAs are rejected at projection time. Helpers above
+     that emit REC events always pass the triggered_by event ids they
+     accumulated; any attempt to rewrite rules from internal reasoning
+     alone leaves no trail and is dropped.
+
+   Skipped ⊢DEF → chaos.
+     Prevented by rule-set versioning. Each REC bumps the version; old
+     DEFs are tagged stale (Stage 6) rather than invalidated. New
+     rulesets don't destabilize existing categories — reporters revalidate
+     lazily or in batches and nothing shifts under them silently.
+====================================================================== */
 
 /* ---------- Fold worker — runs on a blob URL ---------- */
 /* The fold here is Phase A: it only handles claim-status mutations.
@@ -6657,7 +7194,11 @@ self.addEventListener('message', (ev) => {
     // EVA on a claim: an evaluation. Later EVA events supersede earlier
     // ones; the latest reading wins. The fold stores a σ-chain so readers
     // can walk supersessions back.
-    if (evt.op === 'EVA' && evt.site && evt.site.startsWith('claim:')) {
+    if (evt.op === 'EVA' && evt.site && evt.site.startsWith('claim:')
+        && !(evt.payload && evt.payload.target_event)) {
+      // Legacy claim-EVA handler: new_status + sigma chain on the
+      // claim itself. Stage 2 DEF-EVAs (which carry target_event)
+      // fall through to the projection block below.
       const id = evt.site.slice('claim:'.length);
       if (!claims[id]) continue;
       const s = evt.payload && evt.payload.new_status;
@@ -6797,6 +7338,8 @@ self.addEventListener('message', (ev) => {
             subtype: tp.subtype,
             entity_id: tp.entity_id || null,
             candidate_canonical_id: tp.candidate_canonical_id || null,
+            alias_matched: tp.alias_matched || null,
+            applied_rec: tp.applied_rec || null,
             surface: tp.surface || null,
             source_id: tp.source_id || null,
             confidence: tp.confidence != null ? tp.confidence : null,
@@ -6833,6 +7376,20 @@ self.addEventListener('message', (ev) => {
       // the same REC on every refold. Key format mirrors runRewriteEngine.
       if (p.rewrite_type === 'alias_add' && p.target && p.change && p.change.add_alias) {
         alreadyRewritten.add('alias_add:' + p.target.entity_id + '|' + p.change.add_alias.toLowerCase());
+      } else if (p.rewrite_type === 'alias_remove' && p.target && p.change && p.change.remove_alias) {
+        alreadyRewritten.add('alias_remove:' + p.target.entity_id + '|' + p.change.remove_alias.toLowerCase());
+      } else if (p.rewrite_type === 'entity_split' && p.target && p.target.entity_id) {
+        alreadyRewritten.add('entity_split:' + p.target.entity_id);
+      } else if (p.rewrite_type === 'threshold_lower' && p.target && p.target.entity_id) {
+        alreadyRewritten.add('threshold_lower:' + p.target.entity_id);
+      } else if (p.rewrite_type === 'threshold_raise' && p.target && p.target.entity_id) {
+        alreadyRewritten.add('threshold_raise:' + p.target.entity_id);
+      } else if (p.rewrite_type === 'type_rule' && p.target && p.target.entity_id && p.change) {
+        const k = [p.target.entity_id, (p.change.surface || '').toLowerCase(),
+                   (p.change.context_hint || '').toLowerCase(), p.change.type || ''].join('|');
+        alreadyRewritten.add('type_rule:' + k);
+      } else if (p.rewrite_type === 'revert' && p.target && p.target.reverts) {
+        alreadyRewritten.add('counter_rec:' + p.target.reverts);
       } else if (p.rewrite_type === 'prototype_update') {
         const firstTrig = trig[0];
         if (firstTrig) alreadyRewritten.add('prototype:' + firstTrig);
@@ -6945,9 +7502,28 @@ self.addEventListener('message', (ev) => {
 
   // Overlay Stage 1 DEF-link metadata onto synthesized mentions so the
   // UI can read confidence band, rationale, rule_set_version, and
-  // alternatives off the mention without re-walking D.
+  // alternatives off the mention without re-walking D. Stage 6 adds
+  // stale tagging: any DEF whose rule_set_version is older than the
+  // current one is flagged — stale is a view-time signal, never a
+  // mutation of the underlying event.
+  const staleSources = new Set();
+  const staleCounts = { boundary: 0, type: 0, link: 0 };
   for (const [obsId, d] of Object.entries(D)) {
-    if (obsId === '__coref' || obsId === '__aliases' || !d || !d.link) continue;
+    if (obsId === '__coref' || obsId === '__aliases' || !d) continue;
+    const markStale = (def, kind) => {
+      if (!def) return;
+      if (def.rule_set_version && def.rule_set_version !== ruleSetVersion) {
+        def.stale = true;
+        staleCounts[kind] = (staleCounts[kind] || 0) + 1;
+      }
+    };
+    markStale(d.boundary, 'boundary');
+    markStale(d.type, 'type');
+    markStale(d.link, 'link');
+    if (d.boundary && d.boundary.stale && d.boundary.source_id) {
+      staleSources.add(d.boundary.source_id);
+    }
+    if (!d.link) continue;
     const l = d.link;
     const mentionId = l.mention_id || ('em_' + obsId);
     const m = mentions[mentionId];
@@ -6957,6 +7533,7 @@ self.addEventListener('message', (ev) => {
     if (l.rule_set_version) m.rule_set_version = l.rule_set_version;
     if (l.rationale) m.def_rationale = l.rationale;
     if (Array.isArray(l.alternatives)) m.def_alternatives = l.alternatives;
+    if (l.stale) m.stale = true;
   }
 
   // ---------- Stage 2c: system consistency pass ----------
@@ -7039,7 +7616,8 @@ self.addEventListener('message', (ev) => {
     claims, sources, G, M, S, mentions, entityIndex,
     D, pendingReview, amberMentions, defCounts,
     evaPressure, recEvents, alreadyRewritten: Array.from(alreadyRewritten),
-    ruleSetVersion, pendingConsistencyEvas
+    ruleSetVersion, pendingConsistencyEvas,
+    staleCounts, staleSources: Array.from(staleSources)
   });
 });
 `;
@@ -7081,7 +7659,9 @@ async function fold() {
           recEvents: ev.data.recEvents || {},
           alreadyRewritten: new Set(Array.isArray(ev.data.alreadyRewritten) ? ev.data.alreadyRewritten : []),
           ruleSetVersion: ev.data.ruleSetVersion || 'rs_v1',
-          pendingConsistencyEvas: ev.data.pendingConsistencyEvas || []
+          pendingConsistencyEvas: ev.data.pendingConsistencyEvas || [],
+          staleCounts: ev.data.staleCounts || { boundary: 0, type: 0, link: 0 },
+          staleSources: Array.isArray(ev.data.staleSources) ? ev.data.staleSources : []
         });
       }
     };
@@ -7156,7 +7736,20 @@ if (typeof window !== 'undefined') {
         rule_set_version: RULE_SET_VERSION,
         rec_events: (LAST_FOLD_STATE.recEvents) || {},
         already_rewritten: Array.from(LAST_FOLD_STATE.alreadyRewritten || []),
-        run_rewrite_engine: runRewriteEngine
+        run_rewrite_engine: runRewriteEngine,
+        request_entity_merge: requestEntityMerge
+      };
+    }
+  });
+  Object.defineProperty(window, 'PROVEO_STAGE6', {
+    configurable: true,
+    get() {
+      return {
+        rule_set_version: RULE_SET_VERSION,
+        stale_counts: LAST_FOLD_STATE.staleCounts || { boundary: 0, type: 0, link: 0 },
+        stale_sources: (LAST_FOLD_STATE.staleSources || []).slice(),
+        revalidate_source: revalidateSource,
+        revalidate_workspace: revalidateWorkspace
       };
     }
   });
