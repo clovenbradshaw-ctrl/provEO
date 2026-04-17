@@ -1190,7 +1190,7 @@
   /* Source viewer — selection-mode cues */
   .src-viewer-body.is-selecting #src-viewer-text { cursor: text; }
   .src-viewer-body.is-selecting .src-viewer-table-wrap td:not(.rowno) { cursor: crosshair; }
-  .src-viewer-body.is-selecting .src-viewer-table-wrap td.picked {
+  .src-viewer-body .src-viewer-table-wrap td.picked {
     background: var(--amber-fill);
     color: var(--amber-text);
     box-shadow: inset 0 0 0 1.5px var(--amber-mid);
@@ -10695,7 +10695,8 @@ function captureViewerCellSelection() {
       sourceId: src.id,
       row: c.row,
       col: c.col,
-      value: c.value
+      value: c.value,
+      neighborhood: cellNeighborhood(c.row)
     };
     drawerState.substate = 'confirm';
     renderDrawer();
@@ -10709,7 +10710,7 @@ function captureViewerCellSelection() {
       src: src.name,
       sourceId: src.id,
       op: drawerState.derivedOp,
-      inputs: cells.map(c => ({ kind: 'cell', src: src.name, row: c.row, col: c.col, value: c.value })),
+      inputs: cells.map(c => ({ kind: 'cell', src: src.name, row: c.row, col: c.col, value: c.value, neighborhood: cellNeighborhood(c.row) })),
       result: computeDerivedResult(drawerState.derivedOp, cells)
     };
     drawerState.substate = 'confirm';
@@ -12644,7 +12645,7 @@ function classifyCell(v) {
 function renderCsvTable(text, kind) {
   const delimiter = kind === 'tsv' ? '\t' : ',';
   const rows = parseDelimited(text, delimiter);
-  if (!rows.length) return { html: '<div style="padding:24px;color:var(--color-text-tertiary)">(empty file)</div>', rowCount: 0, colCount: 0 };
+  if (!rows.length) return { html: '<div style="padding:24px;color:var(--color-text-tertiary)">(empty file)</div>', rowCount: 0, colCount: 0, headers: [], body: [] };
   const header = rows[0];
   const body = rows.slice(1);
   const colCount = header.length;
@@ -12682,7 +12683,7 @@ function renderCsvTable(text, kind) {
   }).join('');
 
   const html = `<table class="src-viewer-table"><thead><tr><th class="rowno">#</th>${headHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`;
-  return { html, rowCount: body.length, colCount, headers: header };
+  return { html, rowCount: body.length, colCount, headers: header, body };
 }
 
 /* Look up a source id from a name. Tries user-uploaded sources first (they
@@ -12754,7 +12755,8 @@ async function showSourceViewer(id, opts = {}) {
   if (pdfWrap._renderToken) pdfWrap._renderToken.cancelled = true;
   revokeSrcViewerMedia();
   mediaEl.hidden = true;
-  if (tupleBar) { tupleBar.hidden = true; tupleBar._tuple = null; tupleBar._headers = null; tupleBar._src = null; }
+  resetSelectionState();
+  if (tupleBar) tupleBar.hidden = true;
   textEl.hidden = false;
   textEl.textContent = 'Loading…';
   modal.hidden = false;
@@ -12834,7 +12836,7 @@ async function showSourceViewer(id, opts = {}) {
       } else if (isTable) {
         const text = await ensureSourceText(id);
         const tableKind = ext === 'tsv' ? 'tsv' : 'csv';
-        const { html, rowCount, colCount, headers } = renderCsvTable(text || '', tableKind);
+        const { html, rowCount, colCount, headers, body: tableBody } = renderCsvTable(text || '', tableKind);
         tableWrap.innerHTML = html;
         tableFooter.innerHTML = `<span>${rowCount.toLocaleString()} rows · ${colCount} columns</span><span>${tableKind.toUpperCase()}</span>`;
         textEl.hidden = true;
@@ -12844,6 +12846,7 @@ async function showSourceViewer(id, opts = {}) {
         if (tupleBar) {
           tupleBar.hidden = false;
           tupleBar._headers = headers;
+          tupleBar._body = tableBody;
           tupleBar._src = src;
           resetCellTuple();
         }
@@ -13117,20 +13120,205 @@ function splitExtractedTextByPage(text, expectedPages) {
   return out;
 }
 
+/* Selection envelope used everywhere downstream:
+     { kind:'cell', source:{id,name,kind}, location:{row,col,colIdx},
+       value, neighborhood:{...rowData}, capturedAt }
+   Selections are always arrays — single-cell is [entry], multi-cell is
+   [entry, ...]. Non-CSV sources will carry kind:'span' or 'pdf-region'
+   with a location shape appropriate to them. */
+
+function rowObjectFor(rowIndex1) {
+  const tupleBar = $('#src-viewer-tuple');
+  if (!tupleBar) return {};
+  const headers = tupleBar._headers || [];
+  const row = (tupleBar._body || [])[rowIndex1 - 1] || [];
+  const obj = {};
+  for (let i = 0; i < headers.length; i++) {
+    obj[headers[i]] = row[i] == null ? '' : row[i];
+  }
+  return obj;
+}
+
+/* Cap neighborhood at ~8KB to keep copy payloads and event details from
+   blowing up on very wide rows. Truncated neighborhoods keep the first 50
+   and last 5 keys so both ends of the row stay readable. */
+const NEIGHBORHOOD_MAX_BYTES = 8192;
+function cellNeighborhood(rowIndex1) {
+  const obj = rowObjectFor(rowIndex1);
+  let size;
+  try { size = JSON.stringify(obj).length; } catch { size = Infinity; }
+  if (size <= NEIGHBORHOOD_MAX_BYTES) return obj;
+  const keys = Object.keys(obj);
+  if (keys.length <= 55) return obj;
+  const keep = new Set([...keys.slice(0, 50), ...keys.slice(-5)]);
+  const trimmed = { _truncated: true };
+  for (const k of keys) if (keep.has(k)) trimmed[k] = obj[k];
+  return trimmed;
+}
+
+function makeCellEntry(row, col, colIdx, value) {
+  const tupleBar = $('#src-viewer-tuple');
+  const src = tupleBar?._src || null;
+  return {
+    kind: 'cell',
+    source: src ? { id: src.id, name: src.name, kind: src.kind } : null,
+    location: { row, col, colIdx },
+    value,
+    neighborhood: cellNeighborhood(row),
+    capturedAt: new Date().toISOString()
+  };
+}
+
+function clearCellHighlights() {
+  const wrap = $('#src-viewer-table-wrap');
+  if (!wrap) return;
+  wrap.querySelectorAll('td.selected, td.same-row, td.same-col, td.selected-row, td.picked').forEach(el => {
+    el.classList.remove('selected', 'same-row', 'same-col', 'selected-row', 'picked');
+  });
+  wrap.querySelectorAll('th.same-col').forEach(el => el.classList.remove('same-col'));
+}
+
+/* Collapse a sorted list of row numbers into a compact human label.
+   e.g. [5,6,7,8,12,15,16] → "rows 5–8, 12, 15–16". */
+function formatRowRanges(rows) {
+  if (!rows.length) return '';
+  if (rows.length === 1) return `row ${rows[0]}`;
+  if (rows.length <= 4) return `rows ${rows.join(',')}`;
+  const parts = [];
+  let start = rows[0], prev = rows[0];
+  for (let i = 1; i <= rows.length; i++) {
+    if (i === rows.length || rows[i] !== prev + 1) {
+      parts.push(start === prev ? `${start}` : `${start}–${prev}`);
+      if (i < rows.length) start = rows[i];
+    }
+    if (i < rows.length) prev = rows[i];
+  }
+  return `rows ${parts.join(', ')}`;
+}
+
 function resetCellTuple() {
   const tupleBar = $('#src-viewer-tuple');
   if (!tupleBar) return;
-  tupleBar.classList.add('is-empty');
-  tupleBar._tuple = null;
-  $('#src-viewer-tuple-readable').textContent = 'Click a cell to pull through its tuple.';
-  const btn = $('#src-viewer-tuple-copy');
-  if (btn) btn.disabled = true;
+  tupleBar._selection = [];
+  renderTupleSelection();
+}
+
+/* Nuke all selection state — tuple-mode array, drawer-mode list, and
+   every visual class in the table. Called at viewer-open and on
+   source-switch so one source's selection can't bleed into another. */
+function resetSelectionState() {
+  const tupleBar = $('#src-viewer-tuple');
+  if (tupleBar) {
+    tupleBar._selection = [];
+    tupleBar._body = null;
+    tupleBar._headers = null;
+    tupleBar._src = null;
+  }
+  drawerState.selectedCells = [];
+  drawerState.derivedOp = null;
+  clearCellHighlights();
+}
+
+/* Paint selection visuals and readout from tupleBar._selection. Single
+   cell uses the existing .selected/.same-row/.same-col triad; multi-cell
+   uses uniform .picked outlines. Kept centralized so visuals and readout
+   never drift out of sync. */
+function renderTupleSelection() {
+  const tupleBar = $('#src-viewer-tuple');
   const wrap = $('#src-viewer-table-wrap');
-  if (!wrap) return;
-  wrap.querySelectorAll('td.selected, td.same-row, td.same-col, td.selected-row').forEach(el => {
-    el.classList.remove('selected', 'same-row', 'same-col', 'selected-row');
-  });
-  wrap.querySelectorAll('th.same-col').forEach(el => el.classList.remove('same-col'));
+  const readable = $('#src-viewer-tuple-readable');
+  const btn = $('#src-viewer-tuple-copy');
+  if (!tupleBar) return;
+  const sel = tupleBar._selection || [];
+  clearCellHighlights();
+
+  if (!sel.length) {
+    tupleBar.classList.add('is-empty');
+    if (readable) readable.textContent = 'Click a cell to pull through its tuple.';
+    if (btn) btn.disabled = true;
+    return;
+  }
+
+  tupleBar.classList.remove('is-empty');
+  if (btn) btn.disabled = false;
+
+  if (sel.length === 1 && wrap) {
+    const e = sel[0];
+    const { row, col, colIdx } = e.location;
+    const td = wrap.querySelector(`td[data-row="${row}"][data-col-idx="${colIdx}"]`);
+    if (td) {
+      td.classList.add('selected');
+      const tr = td.closest('tr');
+      if (tr) {
+        tr.querySelectorAll('td').forEach(c => {
+          if (c === td) return;
+          if (c.classList.contains('rowno')) c.classList.add('selected-row');
+          else c.classList.add('same-row');
+        });
+      }
+      wrap.querySelectorAll(`tbody td[data-col-idx="${colIdx}"]`).forEach(c => {
+        if (c !== td) c.classList.add('same-col');
+      });
+      const th = wrap.querySelector(`thead th[data-col-idx="${colIdx}"]`);
+      if (th) th.classList.add('same-col');
+    }
+    if (readable) {
+      const valTxt = e.value === '' ? '∅' : `"${e.value}"`;
+      const srcName = e.source?.name || '';
+      readable.innerHTML =
+        `${escapeHtml(srcName)} · row <b>${row}</b> · ${escapeHtml(String(col)).toUpperCase()} = <b>${escapeHtml(valTxt)}</b>`;
+    }
+    return;
+  }
+
+  // Multi-cell: uniform .picked outlines, names what's selected.
+  if (wrap) {
+    for (const e of sel) {
+      const td = wrap.querySelector(`td[data-row="${e.location.row}"][data-col-idx="${e.location.colIdx}"]`);
+      if (td) td.classList.add('picked');
+    }
+  }
+  if (readable) {
+    const rows = [...new Set(sel.map(e => e.location.row))].sort((a, b) => a - b);
+    const cols = [...new Set(sel.map(e => String(e.location.col)))];
+    const rowLabel = formatRowRanges(rows);
+    const colHead = cols.slice(0, 3).map(c => escapeHtml(c)).join(' + ');
+    const colLabel = colHead + (cols.length > 3 ? ` (+${cols.length - 3} more)` : '');
+    const srcName = sel[0].source?.name || '';
+    readable.innerHTML =
+      `${escapeHtml(srcName)} · ${escapeHtml(rowLabel)} · ${colLabel} (<b>${sel.length}</b> cells)`;
+  }
+}
+
+function dispatchSelectionEvent() {
+  const tupleBar = $('#src-viewer-tuple');
+  if (!tupleBar) return;
+  const sel = tupleBar._selection || [];
+  document.dispatchEvent(new CustomEvent('proveo:selection', {
+    detail: {
+      source: tupleBar._src ? { id: tupleBar._src.id, name: tupleBar._src.name, kind: tupleBar._src.kind } : null,
+      selection: sel,
+      primary: sel[0] || null
+    }
+  }));
+}
+
+async function copySelectionToClipboard() {
+  const tupleBar = $('#src-viewer-tuple');
+  const sel = (tupleBar && tupleBar._selection) || [];
+  if (!sel.length) return;
+  const payload = {
+    kind: 'cells',
+    source: sel[0].source,
+    cells: sel,
+    capturedAt: new Date().toISOString()
+  };
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+    showToast(sel.length === 1 ? 'tuple copied' : `${sel.length} cells copied`);
+  } catch {
+    showToast('copy failed');
+  }
 }
 
 function selectCellTuple(td) {
@@ -13142,37 +13330,9 @@ function selectCellTuple(td) {
   if (!Number.isFinite(row) || !Number.isFinite(colIdx)) return;
   const colName = tupleBar._headers[colIdx] ?? '';
   const value = td.textContent;
-  const tuple = { src: tupleBar._src.name, row, col: colName, value };
-  tupleBar._tuple = tuple;
-
-  wrap.querySelectorAll('td.selected, td.same-row, td.same-col, td.selected-row').forEach(el => {
-    el.classList.remove('selected', 'same-row', 'same-col', 'selected-row');
-  });
-  wrap.querySelectorAll('th.same-col').forEach(el => el.classList.remove('same-col'));
-
-  td.classList.add('selected');
-  const tr = td.closest('tr');
-  if (tr) {
-    tr.querySelectorAll('td').forEach(c => {
-      if (c === td) return;
-      if (c.classList.contains('rowno')) c.classList.add('selected-row');
-      else c.classList.add('same-row');
-    });
-  }
-  wrap.querySelectorAll(`tbody td[data-col-idx="${colIdx}"]`).forEach(c => {
-    if (c !== td) c.classList.add('same-col');
-  });
-  const th = wrap.querySelector(`thead th[data-col-idx="${colIdx}"]`);
-  if (th) th.classList.add('same-col');
-
-  tupleBar.classList.remove('is-empty');
-  const valTxt = value === '' ? '∅' : `"${value}"`;
-  $('#src-viewer-tuple-readable').innerHTML =
-    `${escapeHtml(tuple.src)} · row <b>${row}</b> · ${escapeHtml(String(colName)).toUpperCase()} = <b>${escapeHtml(valTxt)}</b>`;
-  const btn = $('#src-viewer-tuple-copy');
-  if (btn) btn.disabled = false;
-
-  document.dispatchEvent(new CustomEvent('proveo:cell-tuple', { detail: tuple }));
+  tupleBar._selection = [makeCellEntry(row, colName, colIdx, value)];
+  renderTupleSelection();
+  dispatchSelectionEvent();
 }
 
 function wireCellTuple() {
@@ -13198,17 +13358,7 @@ function wireCellTuple() {
   }
   const btn = $('#src-viewer-tuple-copy');
   if (btn) {
-    btn.addEventListener('click', async () => {
-      const tuple = $('#src-viewer-tuple')._tuple;
-      if (!tuple) return;
-      const json = JSON.stringify({ kind: 'cell', ...tuple });
-      try {
-        await navigator.clipboard.writeText(json);
-        showToast('tuple copied');
-      } catch {
-        showToast('copy failed');
-      }
-    });
+    btn.addEventListener('click', copySelectionToClipboard);
   }
 }
 /* Show/hide the picker bar at the bottom of the source viewer. Active
@@ -13331,36 +13481,56 @@ function wireDrawerCellDrag(wrap) {
       else td.classList.remove('picked');
     });
   };
-  const commitRange = () => {
+  /* Emit { row, col, colIdx, value } for every cell in the active range.
+     Used by both drawer-mode (merged into drawerState.selectedCells via a
+     Map) and tuple-mode (wrapped into canonical entries, replacing
+     tupleBar._selection). */
+  const rangeCells = () => {
     const { minRow, maxRow, minCol, maxCol } = rangeBounds();
-    const existing = new Map();
-    for (const c of drawerState.selectedCells) existing.set(`${c.row}:${c.colIdx}`, c);
+    const out = [];
     for (let r = minRow; r <= maxRow; r++) {
       for (let ci = minCol; ci <= maxCol; ci++) {
         const td = wrap.querySelector(`td[data-row="${r}"][data-col-idx="${ci}"]`);
         if (!td) continue;
         const th = wrap.querySelector(`thead th[data-col-idx="${ci}"]`);
         const col = th ? th.textContent : '';
-        existing.set(`${r}:${ci}`, { row: r, col, colIdx: ci, value: td.textContent });
+        out.push({ row: r, col, colIdx: ci, value: td.textContent });
       }
     }
-    drawerState.selectedCells = Array.from(existing.values());
-    if (drawerState.selectedCells.length < 2) drawerState.derivedOp = null;
-    // Sync .picked to the final selection so preview artifacts don't linger.
-    const selKeys = new Set(drawerState.selectedCells.map(c => `${c.row}:${c.colIdx}`));
-    wrap.querySelectorAll('tbody td').forEach(td => {
-      if (td.classList.contains('rowno')) return;
-      const r = Number(td.dataset.row);
-      const c = Number(td.dataset.colIdx);
-      if (selKeys.has(`${r}:${c}`)) td.classList.add('picked');
-      else td.classList.remove('picked');
-    });
-    renderPickerBarState();
+    return out;
+  };
+  const commitRange = () => {
+    const cells = rangeCells();
+    if (drawerState.substate === 'target-picker') {
+      const existing = new Map();
+      for (const c of drawerState.selectedCells) existing.set(`${c.row}:${c.colIdx}`, c);
+      for (const c of cells) existing.set(`${c.row}:${c.colIdx}`, c);
+      drawerState.selectedCells = Array.from(existing.values());
+      if (drawerState.selectedCells.length < 2) drawerState.derivedOp = null;
+      // Sync .picked to the final selection so preview artifacts don't linger.
+      const selKeys = new Set(drawerState.selectedCells.map(c => `${c.row}:${c.colIdx}`));
+      wrap.querySelectorAll('tbody td').forEach(td => {
+        if (td.classList.contains('rowno')) return;
+        const r = Number(td.dataset.row);
+        const c = Number(td.dataset.colIdx);
+        if (selKeys.has(`${r}:${c}`)) td.classList.add('picked');
+        else td.classList.remove('picked');
+      });
+      renderPickerBarState();
+      return;
+    }
+    // Tuple mode — drag replaces the selection. Shift-additive drags are
+    // Stage 3 territory; a plain drag in the normal viewer is always a
+    // fresh multi-cell pick.
+    const tupleBar = $('#src-viewer-tuple');
+    if (!tupleBar) return;
+    tupleBar._selection = cells.map(c => makeCellEntry(c.row, c.col, c.colIdx, c.value));
+    renderTupleSelection();
+    dispatchSelectionEvent();
   };
 
   wrap.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return;
-    if (!inSelectingMode()) return;
     const hit = cellFromEvent(e);
     if (!hit) return;
     drag = {
@@ -13386,12 +13556,18 @@ function wireDrawerCellDrag(wrap) {
       // the browser do its thing elsewhere.
       e.preventDefault();
       window.getSelection?.().removeAllRanges?.();
-      if (drag.additive) {
-        drag.snapshot = new Set(drawerState.selectedCells.map(c => `${c.row}:${c.colIdx}`));
+      if (inSelectingMode()) {
+        if (drag.additive) {
+          drag.snapshot = new Set(drawerState.selectedCells.map(c => `${c.row}:${c.colIdx}`));
+        } else {
+          wrap.querySelectorAll('td.picked').forEach(c => c.classList.remove('picked'));
+          drawerState.selectedCells = [];
+          drawerState.derivedOp = null;
+        }
       } else {
-        wrap.querySelectorAll('td.picked').forEach(c => c.classList.remove('picked'));
-        drawerState.selectedCells = [];
-        drawerState.derivedOp = null;
+        // Tuple mode — clear all prior highlight classes so the drag
+        // preview isn't painted over a stale single-cell selection.
+        clearCellHighlights();
       }
     }
     if (drag.active) paintPreview();
@@ -14965,10 +15141,11 @@ function clipBuildProvenance(range) {
     }
   }
   const tupleBar = $('#src-viewer-tuple');
-  if (tupleBar && tupleBar._tuple) {
-    p.tuple = tupleBar._tuple;
-    if (tupleBar._tuple.row != null) p.row = tupleBar._tuple.row;
-    if (tupleBar._tuple.col != null) p.col = tupleBar._tuple.col;
+  const primary = tupleBar && tupleBar._selection && tupleBar._selection[0];
+  if (primary) {
+    p.tuple = primary;
+    if (primary.location?.row != null) p.row = primary.location.row;
+    if (primary.location?.col != null) p.col = primary.location.col;
   }
   return p;
 }
