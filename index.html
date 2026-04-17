@@ -228,6 +228,41 @@
     border-color: var(--color-text-primary);
     color: var(--color-text-primary);
   }
+  .sadd-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 8px 10px 10px;
+  }
+  .sadd-stack .sadd { margin: 0; }
+  .sadd-row {
+    display: flex;
+    gap: 6px;
+  }
+  .sadd-row .sarc { flex: 1; min-width: 0; }
+  .sarc {
+    padding: 9px 8px;
+    border: 0.5px dashed var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    text-align: center;
+    font-size: 11.5px;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color 0.12s, color 0.12s, background 0.12s;
+  }
+  .sarc:hover {
+    border-color: var(--teal-mid);
+    color: var(--teal-text);
+    background: var(--teal-fill);
+  }
+  .sarc.is-busy {
+    border-style: solid;
+    border-color: var(--teal-mid);
+    color: var(--teal-text);
+    background: var(--teal-fill);
+    cursor: default;
+  }
 
   /* ---------- CENTER AREA ---------- */
   .mode-panel {
@@ -2170,7 +2205,13 @@
     <aside class="sources">
       <div class="spanel-head">Sources</div>
       <div class="slist" id="slist"></div>
-      <div class="sadd">+ add source</div>
+      <div class="sadd-stack">
+        <div class="sadd" id="sadd-btn">+ add source</div>
+        <div class="sadd-row">
+          <div class="sarc" id="sarc-btn" title="Import files and auto-publish them to Archive.org">↑ file → archive</div>
+          <div class="sarc" id="sarc-url-btn" title="Fetch a web page and auto-publish a snapshot to Archive.org">↗ url → archive</div>
+        </div>
+      </div>
     </aside>
 
     <!-- ===== WRITE MODE ===== -->
@@ -2271,6 +2312,7 @@
 </div>
 
 <input type="file" id="file-input" multiple style="display:none">
+<input type="file" id="file-input-archive" multiple style="display:none">
 
 <div id="cite-toolbar" class="cite-toolbar" hidden>
   <button class="ct-btn" id="cite-btn">＋ Cite source</button>
@@ -2483,6 +2525,66 @@
       <span id="updest-note" class="cite-pick-note"></span>
       <button class="btn-sm" id="updest-cancel">Skip</button>
       <button class="btn-sm btn-sm-primary" id="updest-confirm">Upload</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== AUTO-ARCHIVE CONSENT MODAL (shown once, then remembered) ===== -->
+<div id="arcauto-modal" class="cite-modal" hidden>
+  <div class="cite-modal-backdrop" id="arcauto-backdrop"></div>
+  <div class="ws-modal-body">
+    <div class="cite-modal-head">
+      <div>
+        <div class="cite-modal-title">Auto-archive to Archive.org</div>
+        <div class="cite-modal-sub">Every file you import with the <strong>↑ archive</strong> button will be uploaded directly to Archive.org as a permanent public record. Acknowledge once to enable:</div>
+      </div>
+      <button class="rphead-close" id="arcauto-close">×</button>
+    </div>
+    <div class="ws-section">
+      <div class="ws-form-row">
+        <label>Consent (required)</label>
+        <label class="ws-toggle"><input type="checkbox" id="arc-consent-permanence"> <span>I understand these uploads are <strong>permanent</strong> on Archive.org.</span></label>
+        <label class="ws-toggle"><input type="checkbox" id="arc-consent-privacy"> <span>No <strong>private information</strong> remains in any file I'm publishing.</span></label>
+        <label class="ws-toggle"><input type="checkbox" id="arc-consent-rights"> <span>I have the <strong>rights</strong> to publish the content of these files.</span></label>
+      </div>
+      <div id="arcauto-err" class="ws-err" hidden></div>
+    </div>
+    <div class="cite-modal-actions">
+      <span class="cite-pick-note">You can revoke this later by clearing site data.</span>
+      <button class="btn-sm" id="arcauto-cancel">Cancel</button>
+      <button class="btn-sm btn-sm-primary" id="arcauto-confirm">Enable auto-archive</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== URL ARCHIVE MODAL ===== -->
+<div id="urlarc-modal" class="cite-modal" hidden>
+  <div class="cite-modal-backdrop" id="urlarc-backdrop"></div>
+  <div class="ws-modal-body">
+    <div class="cite-modal-head">
+      <div>
+        <div class="cite-modal-title">Archive a web page</div>
+        <div class="cite-modal-sub">Fetch the page through the PROVeo proxy, save a local copy (images as links), and upload a self-contained snapshot (images inlined) to Archive.org.</div>
+      </div>
+      <button class="rphead-close" id="urlarc-close">×</button>
+    </div>
+    <div class="ws-section">
+      <div class="ws-form-row">
+        <label for="urlarc-url">URL</label>
+        <input id="urlarc-url" class="ws-input" type="url" placeholder="https://example.com/article">
+      </div>
+      <div class="ws-form-row">
+        <label>Options</label>
+        <label class="ws-toggle"><input type="checkbox" id="urlarc-strip" checked> Strip scripts from snapshot</label>
+        <label class="ws-toggle"><input type="checkbox" id="urlarc-banner" checked> Add provenance banner</label>
+      </div>
+      <div id="urlarc-err" class="ws-err" hidden></div>
+      <div id="urlarc-progress" class="cite-pick-note" style="margin-top:6px" hidden></div>
+    </div>
+    <div class="cite-modal-actions">
+      <span class="cite-pick-note">The archive.org copy is permanent.</span>
+      <button class="btn-sm" id="urlarc-cancel">Cancel</button>
+      <button class="btn-sm btn-sm-primary" id="urlarc-confirm">Fetch & archive</button>
     </div>
   </div>
 </div>
@@ -3966,9 +4068,497 @@ async function handleUpload(files) {
   }
 }
 
+/* ----------------------------------------------------------------------
+   Auto-archive: a dedicated import entry point that skips the per-file
+   destination modal and pushes every chosen file straight to Archive.org
+   via the PROVeo webhook. Gated behind a one-time consent modal so we
+   don't silently publish on the user's behalf.
+---------------------------------------------------------------------- */
+const LS_AUTO_ARCHIVE_CONSENT = 'nl.autoArchiveConsent.v1';
+
+function hasAutoArchiveConsent() {
+  try { return localStorage.getItem(LS_AUTO_ARCHIVE_CONSENT) === 'true'; } catch { return false; }
+}
+
+function promptAutoArchiveConsent() {
+  return new Promise((resolve) => {
+    const modal = $('#arcauto-modal');
+    ['arc-consent-permanence','arc-consent-privacy','arc-consent-rights']
+      .forEach(id => { const el = $('#'+id); if (el) el.checked = false; });
+    $('#arcauto-err').hidden = true;
+    modal.hidden = false;
+
+    const cleanup = () => {
+      modal.hidden = true;
+      $('#arcauto-cancel').removeEventListener('click', onCancel);
+      $('#arcauto-close').removeEventListener('click', onCancel);
+      $('#arcauto-backdrop').removeEventListener('click', onCancel);
+      $('#arcauto-confirm').removeEventListener('click', onConfirm);
+      document.removeEventListener('keydown', onEsc);
+    };
+    const onCancel = () => { cleanup(); resolve(false); };
+    const onEsc = (e) => { if (e.key === 'Escape' && !modal.hidden) onCancel(); };
+    const onConfirm = () => {
+      const ok = $('#arc-consent-permanence').checked
+              && $('#arc-consent-privacy').checked
+              && $('#arc-consent-rights').checked;
+      if (!ok) {
+        const err = $('#arcauto-err');
+        err.hidden = false;
+        err.textContent = 'All three acknowledgments are required.';
+        return;
+      }
+      try { localStorage.setItem(LS_AUTO_ARCHIVE_CONSENT, 'true'); } catch {}
+      cleanup();
+      resolve(true);
+    };
+    $('#arcauto-cancel').addEventListener('click', onCancel);
+    $('#arcauto-close').addEventListener('click', onCancel);
+    $('#arcauto-backdrop').addEventListener('click', onCancel);
+    $('#arcauto-confirm').addEventListener('click', onConfirm);
+    document.addEventListener('keydown', onEsc);
+  });
+}
+
+function isHtmlFile(name, mime) {
+  const ext = fileExt(name);
+  return ext === 'html' || ext === 'htm' || /^text\/html/i.test(mime || '');
+}
+
+async function handleAutoArchiveUpload(files) {
+  const list = Array.from(files || []);
+  if (!list.length) return;
+  if (!hasAutoArchiveConsent()) {
+    const ok = await promptAutoArchiveConsent();
+    if (!ok) { showToast('auto-archive cancelled'); return; }
+  }
+
+  const btn = $('#sarc-btn');
+  const prevLabel = btn ? btn.textContent : null;
+  if (btn) { btn.classList.add('is-busy'); }
+
+  let added = 0, failed = 0;
+  for (let i = 0; i < list.length; i++) {
+    const file = list[i];
+    if (btn) btn.textContent = `archiving ${i+1}/${list.length}…`;
+    showToast(`archiving ${i+1}/${list.length}: ${file.name}`);
+    try {
+      const id = 's_' + ulid().slice(-10);
+      const kind = detectKind(file.name, file.type);
+      const textCapable = isTextLike(file.name, file.type);
+      const mime = file.type || '';
+      const isHtml = isHtmlFile(file.name, mime);
+
+      let text = null, lineCount = 0;
+      if (textCapable) {
+        text = await file.text();
+        lineCount = (text.match(/\n/g) || []).length + 1;
+      }
+
+      let meta;
+      if (kind === 'csv' && textCapable) meta = `${Math.max(0, lineCount - 1)} rows · ${humanSize(file.size)}`;
+      else if (textCapable) meta = `${humanSize(file.size)} · ${lineCount} lines`;
+      else meta = `${(fileExt(file.name) || 'file').toUpperCase()} · ${humanSize(file.size)}`;
+
+      // HTML files get the same dual-variant treatment as URL-archived
+      // pages: the archive.org copy has images inlined for self-containment,
+      // the local copy keeps image URLs as links.
+      let archiveFile = file;
+      let localText = text;
+      let archiveMetaExtra = null;
+      if (isHtml && text) {
+        try {
+          const baseUrl = 'about:blank';
+          const { localHtml, archiveHtml, title, timestamp } =
+            await buildArchiveVariants(text, baseUrl, { stripScripts: true, addBanner: false });
+          localText = localHtml;
+          lineCount = (localHtml.match(/\n/g) || []).length + 1;
+          meta = `HTML · ${humanSize(new Blob([localHtml]).size)}`;
+          archiveFile = new File([archiveHtml], file.name, { type: 'text/html' });
+          archiveMetaExtra = {
+            archive_variant: 'images-inlined',
+            local_variant: 'images-linked',
+            captured_at: timestamp,
+            html_title: title
+          };
+        } catch (e) {
+          console.warn('[auto-archive] html variant build failed; falling back to raw', e);
+        }
+      }
+
+      const proveo = await uploadViaProveo(archiveFile, 'public', { title: file.name });
+
+      if (textCapable) {
+        await storage.saveSource(id, localText);
+        SOURCE_TEXT[id] = localText;
+      } else {
+        await storage.saveSourceBlob(id, file);
+      }
+      await appendEventAndRefold({
+        op: 'SRC',
+        site: `source:${id}`,
+        resolution: 'Figure',
+        payload: {
+          id, name: file.name, kind, meta, mime,
+          size: (localText ? new Blob([localText]).size : file.size),
+          lines: lineCount,
+          has_text: textCapable,
+          destination: 'public',
+          archive_url: proveo?.archive?.url || null,
+          archive_identifier: proveo?.archive?.identifier || null,
+          matrix_mxc: proveo?.matrix?.mxc || null,
+          matrix_room_id: proveo?.matrix?.room_id || null,
+          sha256: proveo?.archive?.redacted_sha256 || proveo?.matrix?.original_sha256 || null,
+          ...(archiveMetaExtra || {})
+        },
+        author: 'human'
+      });
+      added++;
+    } catch (err) {
+      console.error('[auto-archive] failed for', file.name, err);
+      showToast(`archive failed: ${file.name} · ${err.message || 'error'}`);
+      failed++;
+    }
+  }
+  if (btn) { btn.classList.remove('is-busy'); btn.textContent = prevLabel || '↑ file → archive'; }
+  renderSources();
+  if (added) {
+    showToast(`archived ${added} to Archive.org${failed ? ' · ' + failed + ' failed' : ''}`);
+  } else if (failed) {
+    showToast(`archive failed for all ${failed} file${failed === 1 ? '' : 's'}`);
+  }
+}
+
+/* ----------------------------------------------------------------------
+   Web-page archiver — fetches a URL through the PROVeo page proxy,
+   rewrites relative URLs, optionally strips scripts, and produces TWO
+   HTML variants:
+     local   — images kept as links (small, faithful to live DOM)
+     archive — images fetched and inlined as data URLs (self-contained
+               snapshot suitable as a permanent Archive.org record)
+   The local variant is stored as a source blob; the archive variant is
+   posted to PROVeo with visibility=public.
+---------------------------------------------------------------------- */
+const PAGE_PROXY_URL = 'https://n8n.intelechia.com/webhook/f175846f-86fa-484a-9247-7d04a8ce2e70';
+
+async function pageProxyFetch(url) {
+  const resp = await fetch(PAGE_PROXY_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url })
+  });
+  if (!resp.ok) throw new Error(`proxy http ${resp.status}`);
+  const text = await resp.text();
+  let body = null, statusCode = null, contentType = null;
+  try {
+    const parsed = JSON.parse(text);
+    const peek = Array.isArray(parsed) ? parsed[0] : parsed;
+    if (peek && typeof peek === 'object') {
+      if (typeof peek.body === 'string') body = peek.body;
+      else if (typeof peek.data === 'string') body = peek.data;
+      else if (typeof peek.contents === 'string') body = peek.contents;
+      if (typeof peek.statusCode === 'number') statusCode = peek.statusCode;
+      else if (typeof peek.status === 'number') statusCode = peek.status;
+      if (peek.headers && typeof peek.headers === 'object') {
+        contentType = peek.headers['content-type'] || peek.headers['Content-Type'] || null;
+      }
+    } else if (typeof parsed === 'string') {
+      body = parsed;
+    }
+  } catch { /* not JSON */ }
+  if (body == null) body = text;
+  return { body, statusCode, contentType };
+}
+
+function pageRewriteUrls(doc, baseUrl) {
+  const attrs = [
+    ['img','src'],['img','srcset'],
+    ['link','href'],['a','href'],
+    ['script','src'],
+    ['source','src'],['source','srcset'],
+    ['video','src'],['video','poster'],
+    ['audio','src'],['iframe','src'],
+    ['form','action']
+  ];
+  for (const [sel, attr] of attrs) {
+    doc.querySelectorAll(sel).forEach(el => {
+      const val = el.getAttribute(attr);
+      if (!val) return;
+      if (/^(data:|blob:|javascript:|mailto:|tel:|#)/i.test(val)) return;
+      if (attr === 'srcset') {
+        const out = val.split(',').map(p => {
+          const t = p.trim();
+          const m = t.match(/^(\S+)(\s+.+)?$/);
+          if (!m) return t;
+          try { return new URL(m[1], baseUrl).href + (m[2] || ''); }
+          catch { return t; }
+        }).join(', ');
+        el.setAttribute(attr, out);
+        return;
+      }
+      try { el.setAttribute(attr, new URL(val, baseUrl).href); } catch {}
+    });
+  }
+  doc.querySelectorAll('[style]').forEach(el => {
+    const s = el.getAttribute('style');
+    if (!s || !/url\(/i.test(s)) return;
+    const out = s.replace(/url\((['"]?)([^'")]+)\1\)/gi, (_, q, u) => {
+      if (/^(data:|blob:|#)/i.test(u)) return `url(${q}${u}${q})`;
+      try { return `url(${q}${new URL(u, baseUrl).href}${q})`; }
+      catch { return `url(${q}${u}${q})`; }
+    });
+    el.setAttribute('style', out);
+  });
+}
+
+function pageStripActive(doc) {
+  doc.querySelectorAll('script').forEach(n => n.remove());
+  doc.querySelectorAll('*').forEach(el => {
+    for (const a of Array.from(el.attributes)) {
+      if (a.name.toLowerCase().startsWith('on')) el.removeAttribute(a.name);
+    }
+  });
+  doc.querySelectorAll('meta[http-equiv="refresh" i]').forEach(n => n.remove());
+}
+
+async function pageInlineImages(doc, progress) {
+  const imgs = Array.from(doc.querySelectorAll('img'));
+  const total = imgs.length;
+  if (!total) return;
+  let done = 0;
+  const queue = imgs.slice();
+  const CONCURRENCY = 4;
+  async function worker() {
+    while (queue.length) {
+      const img = queue.shift();
+      const src = img.getAttribute('src');
+      if (src && !/^data:/i.test(src)) {
+        try {
+          const r = await fetch(src, { mode: 'cors', referrerPolicy: 'no-referrer' });
+          if (r.ok) {
+            const blob = await r.blob();
+            if (blob.size < 5 * 1024 * 1024) {
+              const dataUrl = await new Promise((res, rej) => {
+                const fr = new FileReader();
+                fr.onload = () => res(fr.result);
+                fr.onerror = rej;
+                fr.readAsDataURL(blob);
+              });
+              img.setAttribute('src', dataUrl);
+              img.removeAttribute('srcset');
+            }
+          }
+        } catch {}
+      }
+      done++;
+      if (progress) progress(done, total);
+    }
+  }
+  await Promise.all(Array(Math.min(CONCURRENCY, total)).fill(0).map(worker));
+}
+
+function pageAddBanner(doc, meta) {
+  const b = doc.createElement('div');
+  b.setAttribute('data-archive-banner','true');
+  b.style.cssText = 'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:12px;line-height:1.4;color:#412402;background:#FAEEDA;border-bottom:1px solid #BA7517;padding:8px 14px;position:sticky;top:0;z-index:2147483647';
+  const safeUrl = escapeHtml(meta.url);
+  b.innerHTML = `<strong>Archived snapshot</strong> &middot; <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color:#0C447C">${safeUrl}</a> &middot; captured ${escapeHtml(meta.timestamp)}`;
+  if (doc.body) doc.body.insertBefore(b, doc.body.firstChild);
+}
+
+function pageAttachProvenanceMeta(doc, meta) {
+  if (!doc.head) return;
+  [['x-archive-source', meta.url],
+   ['x-archive-timestamp', meta.timestamp],
+   ['x-archive-proxy', 'PROVeo']].forEach(([n, c]) => {
+    const m = doc.createElement('meta');
+    m.setAttribute('name', n); m.setAttribute('content', c);
+    doc.head.appendChild(m);
+  });
+}
+
+function pageSerialize(doc) {
+  return '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+}
+
+function safeUrlFilename(rawUrl, timestamp) {
+  let host = 'page', path = '';
+  try {
+    const u = new URL(rawUrl);
+    host = u.hostname.replace(/[^a-z0-9.-]/gi, '_');
+    path = u.pathname.replace(/[^a-z0-9]/gi, '_').replace(/^_+|_+$/g, '');
+  } catch {}
+  const ts = (timestamp || new Date().toISOString()).replace(/[:.]/g, '-');
+  return `${host}${path ? '__' + path : ''}__${ts}.html`;
+}
+
+function normalizeUrl(raw) {
+  let u = (raw || '').trim();
+  if (!u) return null;
+  if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+  try { return new URL(u).href; } catch { return null; }
+}
+
+/* Build two HTML variants from a raw HTML body. Returns { localHtml,
+   archiveHtml, title, statusCode, contentType, timestamp }. */
+async function buildArchiveVariants(body, url, { stripScripts = true, addBanner = true } = {}, progress) {
+  const timestamp = new Date().toISOString();
+  const localDoc = new DOMParser().parseFromString(body, 'text/html');
+  if (localDoc.head && !localDoc.querySelector('base')) {
+    const base = localDoc.createElement('base');
+    base.href = url;
+    localDoc.head.insertBefore(base, localDoc.head.firstChild);
+  }
+  pageRewriteUrls(localDoc, url);
+  if (stripScripts) pageStripActive(localDoc);
+  const title = (localDoc.querySelector('title')?.textContent || '(untitled)').trim().slice(0, 200);
+  const meta = { url, title, timestamp };
+  if (addBanner) pageAddBanner(localDoc, meta);
+  pageAttachProvenanceMeta(localDoc, meta);
+
+  // Clone for archive variant BEFORE inlining images. We serialize, then
+  // reparse — DOMParser is cheaper than deep-cloning a Document.
+  const localHtml = pageSerialize(localDoc);
+  const archiveDoc = new DOMParser().parseFromString(localHtml, 'text/html');
+  if (progress) progress('fetching images…');
+  await pageInlineImages(archiveDoc, (done, total) => {
+    if (progress) progress(`inlining images ${done}/${total}…`);
+  });
+  const archiveHtml = pageSerialize(archiveDoc);
+  return { localHtml, archiveHtml, title, timestamp };
+}
+
+async function handleUrlArchive(url, { stripScripts, addBanner } = {}, progress) {
+  if (!hasAutoArchiveConsent()) {
+    const ok = await promptAutoArchiveConsent();
+    if (!ok) { showToast('url-archive cancelled'); return null; }
+  }
+  if (progress) progress('fetching page…');
+  const { body, statusCode, contentType } = await pageProxyFetch(url);
+  if (!body || typeof body !== 'string') throw new Error('empty response from proxy');
+  if (progress) progress('parsing & rewriting URLs…');
+  const { localHtml, archiveHtml, title, timestamp } =
+    await buildArchiveVariants(body, url, { stripScripts, addBanner }, progress);
+
+  const filename = safeUrlFilename(url, timestamp);
+  const archiveFile = new File([archiveHtml], filename, { type: 'text/html' });
+
+  if (progress) progress('uploading to Archive.org…');
+  const proveo = await uploadViaProveo(archiveFile, 'public', {
+    title: title || filename,
+    description: `Snapshot of ${url} captured ${timestamp}`
+  });
+
+  // Save the LOCAL variant (images as links) as the in-app source blob.
+  const id = 's_' + ulid().slice(-10);
+  const localBlob = new Blob([localHtml], { type: 'text/html' });
+  await storage.saveSourceBlob(id, localBlob);
+  const size = localBlob.size;
+  const meta = `HTML · ${humanSize(size)}`;
+
+  await appendEventAndRefold({
+    op: 'SRC',
+    site: `source:${id}`,
+    resolution: 'Figure',
+    payload: {
+      id, name: filename, kind: 'bin', meta, mime: 'text/html',
+      size, lines: 0,
+      has_text: false,
+      destination: 'public',
+      source_url: url,
+      captured_at: timestamp,
+      page_status_code: statusCode || null,
+      page_content_type: contentType || null,
+      archive_variant: 'images-inlined',
+      local_variant: 'images-linked',
+      archive_url: proveo?.archive?.url || null,
+      archive_identifier: proveo?.archive?.identifier || null,
+      matrix_mxc: proveo?.matrix?.mxc || null,
+      matrix_room_id: proveo?.matrix?.room_id || null,
+      sha256: proveo?.archive?.redacted_sha256 || proveo?.matrix?.original_sha256 || null
+    },
+    author: 'human'
+  });
+  renderSources();
+  return { filename, title, proveo };
+}
+
+function openUrlArchiveModal() {
+  const modal = $('#urlarc-modal');
+  $('#urlarc-url').value = '';
+  $('#urlarc-strip').checked = true;
+  $('#urlarc-banner').checked = true;
+  $('#urlarc-err').hidden = true;
+  $('#urlarc-progress').hidden = true;
+  modal.hidden = false;
+  setTimeout(() => $('#urlarc-url').focus(), 0);
+
+  const cleanup = () => {
+    modal.hidden = true;
+    $('#urlarc-cancel').removeEventListener('click', onCancel);
+    $('#urlarc-close').removeEventListener('click', onCancel);
+    $('#urlarc-backdrop').removeEventListener('click', onCancel);
+    $('#urlarc-confirm').removeEventListener('click', onConfirm);
+    $('#urlarc-url').removeEventListener('keydown', onKey);
+    document.removeEventListener('keydown', onEsc);
+  };
+  const onCancel = () => { cleanup(); };
+  const onEsc = (e) => { if (e.key === 'Escape' && !modal.hidden) onCancel(); };
+  const onKey = (e) => { if (e.key === 'Enter') onConfirm(); };
+  const onConfirm = async () => {
+    const url = normalizeUrl($('#urlarc-url').value);
+    if (!url) {
+      const err = $('#urlarc-err');
+      err.hidden = false; err.textContent = 'Enter a valid URL.';
+      return;
+    }
+    const stripScripts = $('#urlarc-strip').checked;
+    const addBanner = $('#urlarc-banner').checked;
+    const btn = $('#urlarc-confirm');
+    const prog = $('#urlarc-progress');
+    btn.disabled = true;
+    prog.hidden = false;
+    prog.textContent = 'starting…';
+    $('#urlarc-err').hidden = true;
+    const urlBtn = $('#sarc-url-btn');
+    const prevUrlLabel = urlBtn ? urlBtn.textContent : null;
+    if (urlBtn) { urlBtn.classList.add('is-busy'); urlBtn.textContent = 'archiving…'; }
+    try {
+      const res = await handleUrlArchive(url, { stripScripts, addBanner }, (msg) => {
+        prog.textContent = msg;
+      });
+      if (res) {
+        cleanup();
+        showToast(`archived · ${res.title || res.filename}`);
+      } else {
+        btn.disabled = false;
+        prog.hidden = true;
+      }
+    } catch (err) {
+      console.error('[url-archive] failed', err);
+      const e = $('#urlarc-err');
+      e.hidden = false;
+      e.textContent = err.message || 'archive failed';
+      btn.disabled = false;
+      prog.hidden = true;
+    } finally {
+      if (urlBtn) {
+        urlBtn.classList.remove('is-busy');
+        urlBtn.textContent = prevUrlLabel || '↗ url → archive';
+      }
+    }
+  };
+  $('#urlarc-cancel').addEventListener('click', onCancel);
+  $('#urlarc-close').addEventListener('click', onCancel);
+  $('#urlarc-backdrop').addEventListener('click', onCancel);
+  $('#urlarc-confirm').addEventListener('click', onConfirm);
+  $('#urlarc-url').addEventListener('keydown', onKey);
+  document.addEventListener('keydown', onEsc);
+}
+
 function wireUploads() {
   const input = $('#file-input');
-  const addBtn = $('.sadd');
+  const addBtn = $('#sadd-btn');
   const panel = $('.sources');
 
   addBtn.addEventListener('click', () => input.click());
@@ -3976,6 +4566,28 @@ function wireUploads() {
     await handleUpload(e.target.files);
     input.value = '';
   });
+
+  const arcBtn = $('#sarc-btn');
+  const arcInput = $('#file-input-archive');
+  if (arcBtn && arcInput) {
+    arcBtn.addEventListener('click', () => {
+      if (arcBtn.classList.contains('is-busy')) return;
+      arcInput.click();
+    });
+    arcInput.addEventListener('change', async (e) => {
+      const files = e.target.files;
+      arcInput.value = '';
+      await handleAutoArchiveUpload(files);
+    });
+  }
+
+  const urlBtn = $('#sarc-url-btn');
+  if (urlBtn) {
+    urlBtn.addEventListener('click', () => {
+      if (urlBtn.classList.contains('is-busy')) return;
+      openUrlArchiveModal();
+    });
+  }
 
   let dragDepth = 0;
   const hasFiles = (e) => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
