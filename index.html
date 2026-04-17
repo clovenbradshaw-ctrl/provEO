@@ -878,6 +878,130 @@
     background: var(--blue-fill);
   }
 
+  /* ---------- WIKIPEDIA-STYLE CITATIONS — badges + footnotes ----------
+     The existing .g/.conflict/.absent spans already track cited prose
+     (position moves with edits via contenteditable's native span handling).
+     This layer adds a numbered superscript badge after each cited span and
+     renders a footnotes section beneath the body. Badges + footnotes are
+     generated every render pass from CITATIONS and stripped before save —
+     the source of truth is (spans in body) + (registry in storage). */
+  .cite-badge {
+    font-size: 0.7em;
+    line-height: 1;
+    vertical-align: super;
+    -webkit-user-select: none;
+    user-select: none;
+    margin-left: 1px;
+  }
+  .cite-badge a {
+    color: var(--blue-text);
+    text-decoration: none;
+    padding: 0 2px;
+    border-radius: 2px;
+    font-variant-numeric: tabular-nums;
+  }
+  .cite-badge a:hover { background: var(--amber-fill); }
+  .g.cite-flash,
+  .conflict.cite-flash,
+  .absent.cite-flash {
+    animation: cite-flash 1.1s ease-out;
+  }
+  @keyframes cite-flash {
+    0%   { background: var(--amber-fill); box-shadow: 0 0 0 3px var(--amber-fill); }
+    100% { background: transparent;       box-shadow: 0 0 0 0 transparent; }
+  }
+  .footnotes {
+    margin: 48px 0 24px;
+    padding-top: 18px;
+    border-top: 0.5px solid var(--color-border-tertiary);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    color: var(--color-text-secondary);
+  }
+  .footnotes[hidden] { display: none; }
+  .footnotes h2 {
+    font-family: var(--font-sans);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-tertiary);
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+  .footnotes-list {
+    list-style: none;
+    counter-reset: fn;
+    padding: 0;
+    margin: 0;
+  }
+  .footnotes-list li {
+    counter-increment: fn;
+    padding: 6px 0 6px 30px;
+    position: relative;
+    line-height: 1.55;
+  }
+  .footnotes-list li::before {
+    content: counter(fn) ".";
+    position: absolute;
+    left: 0;
+    width: 24px;
+    text-align: right;
+    color: var(--color-text-tertiary);
+    font-variant-numeric: tabular-nums;
+  }
+  .fn-back {
+    color: var(--blue-text);
+    text-decoration: none;
+    padding: 0 2px;
+    margin-right: 4px;
+    border-radius: 2px;
+    cursor: pointer;
+  }
+  .fn-back + .fn-back { margin-left: -2px; }
+  .fn-back:hover { background: var(--amber-fill); }
+  .fn-claim {
+    color: var(--color-text-primary);
+    cursor: pointer;
+    padding: 0 1px;
+    border-radius: 2px;
+  }
+  .fn-claim:hover { background: var(--amber-fill); }
+  .fn-sep { margin: 0 6px; color: var(--color-text-tertiary); }
+  .fn-source a {
+    color: var(--blue-text);
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .fn-source a:hover { text-decoration: underline; }
+  .fn-loc {
+    color: var(--color-text-tertiary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    margin-left: 6px;
+  }
+  .fn-meta {
+    margin-left: 8px;
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    font-family: var(--font-mono);
+  }
+  .footnotes-list li.orphaned {
+    padding-left: 38px;
+  }
+  .footnotes-list li.orphaned::after {
+    content: "orphan";
+    margin-left: 8px;
+    font-size: 10px;
+    color: var(--red-mid);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-family: var(--font-mono);
+  }
+  .footnotes-list li.orphaned .fn-claim {
+    color: var(--color-text-tertiary);
+    text-decoration: line-through;
+  }
+
   /* ---------- EVIDENCE BENCH ---------- */
   .evidence-bench {
     display: flex;
@@ -3823,6 +3947,7 @@
           </div>
           <div class="article-title" contenteditable="true" spellcheck="false" data-placeholder="Untitled">The Private Police and the Public Budget</div>
           <div class="article-body" id="article-body" data-placeholder="Start writing… claims will be folded as you cite sources."></div>
+          <section class="footnotes" id="article-footnotes" contenteditable="false" hidden></section>
         </div>
         <div class="statusbar">
           <div class="sstat"><div class="sstat-dot" style="background: var(--amber-mid)"></div><span class="sstat-n" id="stat-g">0</span> grounded</div>
@@ -5474,6 +5599,11 @@ async function dispatchVerb(claimId, action) {
   if (mapping.new_status === 'retracted') {
     unwrapClaimSpan(claimId);
     await saveArticleNow();
+  } else {
+    // Non-retract verbs can still change claim.conf / claim.status, both of
+    // which feed the footnote meta line. Re-render so the registry picks
+    // up the refreshed claim.
+    scheduleCitationsRender(0);
   }
 }
 
@@ -5506,6 +5636,8 @@ function unwrapClaimSpan(claimId) {
       span.replaceWith(textNode);
     });
   }
+  CITATIONS.remove(claimId);
+  scheduleCitationsRender(0);
 }
 
 function renderReview() {
@@ -10349,6 +10481,7 @@ async function confirmAbsence() {
       }
     }
   }
+  renderCitations();
   await saveArticleNow();
   renderCounts();
   const newId = claimId;
@@ -10945,6 +11078,7 @@ async function confirmAnchor() {
   }
 
   lastCitedSourceId = drawerState.sourceId;
+  renderCitations();
   await saveArticleNow();
   renderCounts();
   const newId = claimId;
@@ -10968,13 +11102,417 @@ function scheduleArticleSave() {
   clearTimeout(saveArticleTimer);
   saveArticleTimer = setTimeout(saveArticleNow, 600);
 }
+
+/* ======================================================================
+   CITATION REGISTRY — Wikipedia-style surface
+   ----------------------------------------------------------------------
+   CITATIONS is a Map keyed by claim_id (the same id used on the in-body
+   span's data-id, which is already the identifier the rest of the app
+   dispatches through via showClaim / CLAIMS).
+
+   Render pass (renderCitations):
+     1. Walk #article-body in DOM order, collect spans that carry a
+        data-id matching a known claim, skipping spans already visited.
+     2. Each distinct claim_id gets the next integer [N] at its first
+        occurrence; repeat occurrences reuse the same number.
+     3. Strip any previously-rendered .cite-badge nodes and insert a
+        fresh <sup class="cite-badge" contenteditable="false"> after
+        each cited span.
+     4. Rebuild #article-footnotes from the numbered list, with one <li>
+        per claim carrying back-links (one per occurrence), claim text,
+        source name + location, and metadata (kind / confidence).
+
+   Numbers are NEVER stored. They are recomputed every render so order
+   stays consistent with the current DOM.                                  */
+const CITATIONS = {
+  _entries: new Map(),
+  version: 1,
+  rev: 0,
+
+  upsert(entry) {
+    // entry: { claim_id, claim_text?, source?, kind?, confidence?, agent?, created_at? }
+    const prev = this._entries.get(entry.claim_id) || {};
+    this._entries.set(entry.claim_id, {
+      id: entry.id || prev.id || ('cite_' + entry.claim_id),
+      claim_id: entry.claim_id,
+      claim_text: entry.claim_text ?? prev.claim_text ?? '',
+      source: entry.source ?? prev.source ?? null,
+      kind: entry.kind ?? prev.kind ?? null,
+      confidence: entry.confidence ?? prev.confidence ?? null,
+      agent: entry.agent ?? prev.agent ?? 'human',
+      created_at: prev.created_at || entry.created_at || new Date().toISOString()
+    });
+    this.rev += 1;
+  },
+  remove(claimId) { if (this._entries.delete(claimId)) this.rev += 1; },
+  get(claimId) { return this._entries.get(claimId) || null; },
+  all() { return Array.from(this._entries.values()); },
+  serialize() {
+    return {
+      version: this.version,
+      rev: this.rev,
+      citations: this.all()
+    };
+  },
+  hydrate(raw) {
+    this._entries = new Map();
+    if (!raw || !Array.isArray(raw.citations)) { this.rev = 0; return; }
+    for (const c of raw.citations) {
+      if (c && c.claim_id) this._entries.set(c.claim_id, c);
+    }
+    this.rev = Number(raw.rev) || 0;
+  }
+};
+
+/* Derive a citation entry from a CLAIMS record. The provenance graph
+   already carries everything we need — this function flattens the top
+   layer into the compact shape the footnote row renders from. */
+function citationFromClaim(claim) {
+  if (!claim) return null;
+  const p = claim.prov || {};
+  let source = null;
+  // Choose a source summary based on the top-level provenance kind.
+  // For derived prov we show the expression and point at the first input's
+  // source; that matches the way the footnote reads as a single line.
+  if (p.kind === 'quote') {
+    source = {
+      name: p.src || 'unknown',
+      kind: 'quote',
+      location: p.spanLabel || (p.page != null ? ('p.' + p.page) : '')
+    };
+  } else if (p.kind === 'cell') {
+    source = {
+      name: p.src || 'unknown',
+      kind: 'cell',
+      location: 'row ' + p.row + ' · ' + (p.col || '')
+    };
+  } else if (p.kind === 'derived') {
+    const firstInput = (p.inputs || []).find(i => i && i.src) || {};
+    const rows = (p.inputs || []).map(i => i && i.row).filter(r => r != null);
+    const rowsLabel = rows.length
+      ? (rows.length === 1 ? ('row ' + rows[0])
+         : ('rows ' + Math.min(...rows) + '–' + Math.max(...rows)))
+      : '';
+    const expr = p.expr || (p.op ? (p.op + '(' + (p.inputs || []).length + ')') : 'derived');
+    source = {
+      name: firstInput.src || 'derived',
+      kind: 'derived',
+      location: [rowsLabel, expr].filter(Boolean).join(' · ')
+    };
+  } else if (p.kind === 'conflict') {
+    source = { name: 'two sources', kind: 'conflict', location: '' };
+  } else if (p.kind === 'absence') {
+    source = {
+      name: (p.scanned && p.scanned[0]) || 'absence probe',
+      kind: 'absence',
+      location: p.window || ''
+    };
+  } else {
+    source = { name: p.src || 'unknown', kind: p.kind || claim.type, location: '' };
+  }
+  return {
+    claim_id: claim.id || null,  // set by caller when missing
+    claim_text: claim.text || '',
+    source,
+    kind: p.kind || claim.type,
+    confidence: typeof claim.conf === 'number' ? claim.conf : null,
+    agent: 'human'
+  };
+}
+
+/* Sync the registry with whatever claims are currently rendered in the
+   body. This is the migration path for legacy <span class="g"> markup:
+   every span with a data-id becomes a registry entry derived from its
+   claim, and any registry entry whose claim is no longer in CLAIMS is
+   dropped. Safe to run idempotently. */
+function syncCitationRegistry() {
+  const body = $('#article-body');
+  if (!body) return;
+  const seen = new Set();
+  body.querySelectorAll('[data-id]').forEach(el => {
+    const id = el.dataset.id;
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    const claim = (typeof CLAIMS === 'object' && CLAIMS[id]) || null;
+    // For retracted/missing claims, skip — those spans will be unwrapped
+    // by the normal fold path; we don't want phantom footnotes.
+    if (!claim || claim.status === 'retracted') return;
+    const entry = citationFromClaim(claim);
+    if (!entry) return;
+    entry.claim_id = id;
+    CITATIONS.upsert(entry);
+  });
+  // Drop registry entries whose claim no longer exists
+  for (const entry of CITATIONS.all()) {
+    const claim = (typeof CLAIMS === 'object' && CLAIMS[entry.claim_id]) || null;
+    if (!claim || claim.status === 'retracted') CITATIONS.remove(entry.claim_id);
+  }
+}
+
+/* Remove badges + footnotes from the body so they don't bake into saved
+   HTML. Returns the cleaned innerHTML without mutating the live body. */
+function serializeArticleBody() {
+  const body = $('#article-body');
+  if (!body) return '';
+  const clone = body.cloneNode(true);
+  clone.querySelectorAll('.cite-badge').forEach(el => el.remove());
+  return clone.innerHTML;
+}
+
+function clearRenderedBadges() {
+  const body = $('#article-body');
+  if (!body) return;
+  body.querySelectorAll('.cite-badge').forEach(el => el.remove());
+}
+
+/* Friendly preview for the badge tooltip — short claim text so hover
+   tells the reader "what's cited here?" before they click. */
+function citationTooltip(entry) {
+  const srcName = (entry.source && entry.source.name) || '';
+  const claim = (entry.claim_text || '').trim();
+  const short = claim.length > 90 ? claim.slice(0, 88) + '…' : claim;
+  return srcName ? srcName + ' — ' + short : short;
+}
+
+/* Core render pass. Idempotent: running it again after edits produces the
+   same numbered output. */
+function renderCitations() {
+  const body = $('#article-body');
+  const foot = $('#article-footnotes');
+  if (!body || !foot) return;
+
+  syncCitationRegistry();
+  clearRenderedBadges();
+
+  // Collect spans in DOM order, assign numbers by first occurrence.
+  const nodes = Array.from(body.querySelectorAll('[data-id]'));
+  const numbers = new Map();          // claim_id -> N
+  const occurrences = new Map();       // claim_id -> [DOM node, DOM node, …]
+  let next = 1;
+  for (const el of nodes) {
+    const id = el.dataset.id;
+    if (!id) continue;
+    const entry = CITATIONS.get(id);
+    if (!entry) continue;  // span with no registry row: no badge, no footnote
+    if (!numbers.has(id)) numbers.set(id, next++);
+    if (!occurrences.has(id)) occurrences.set(id, []);
+    occurrences.get(id).push(el);
+  }
+
+  // Insert a badge after each cited span. A span that appears multiple
+  // times gets the same number at every occurrence; the footnote's
+  // back-links (↑ a b c…) walk back through them.
+  for (const el of nodes) {
+    const id = el.dataset.id;
+    const n = numbers.get(id);
+    if (!n) continue;
+    const list = occurrences.get(id);
+    const idx = list.indexOf(el);            // 0-based within this claim
+    const occurrenceId = 'cite-occ-' + id + '-' + (idx + 1);
+    el.id = el.id || occurrenceId;
+    // Pasted-with-provenance spans read as plain text — respect that and
+    // skip the visible badge so the prose stays uncluttered. The entry
+    // still appears in the footnotes so the provenance is discoverable.
+    if (el.classList.contains('g-paste')) continue;
+    const sup = document.createElement('sup');
+    sup.className = 'cite-badge';
+    sup.setAttribute('contenteditable', 'false');
+    sup.dataset.cite = id;
+    const entry = CITATIONS.get(id);
+    const a = document.createElement('a');
+    a.href = '#fn-' + n;
+    a.textContent = '[' + n + ']';
+    a.dataset.cite = id;
+    a.dataset.fn = String(n);
+    if (entry) a.title = citationTooltip(entry);
+    sup.appendChild(a);
+    el.insertAdjacentElement('afterend', sup);
+  }
+
+  // Rebuild footnotes in N order, with orphan rows for registry entries
+  // whose claim no longer has a span in the body.
+  foot.innerHTML = '';
+  if (numbers.size === 0) {
+    // Also surface any orphans so the reporter notices broken citations.
+    const orphans = CITATIONS.all().filter(e => !occurrences.has(e.claim_id));
+    if (orphans.length === 0) { foot.hidden = true; return; }
+  }
+  foot.hidden = false;
+  const h = document.createElement('h2');
+  h.textContent = 'Footnotes';
+  foot.appendChild(h);
+  const ol = document.createElement('ol');
+  ol.className = 'footnotes-list';
+
+  // Numbered entries first, in order.
+  const ordered = Array.from(numbers.entries()).sort((a, b) => a[1] - b[1]);
+  for (const [id, n] of ordered) {
+    ol.appendChild(renderFootnoteRow(id, n, occurrences.get(id) || []));
+  }
+  // Orphans at the end — they have no number since they're not in the body.
+  for (const entry of CITATIONS.all()) {
+    if (numbers.has(entry.claim_id)) continue;
+    ol.appendChild(renderFootnoteRow(entry.claim_id, null, []));
+  }
+  foot.appendChild(ol);
+}
+
+function renderFootnoteRow(claimId, n, occurrenceEls) {
+  const entry = CITATIONS.get(claimId);
+  const li = document.createElement('li');
+  if (n != null) li.id = 'fn-' + n;
+  li.dataset.cite = claimId;
+
+  const isOrphan = occurrenceEls.length === 0;
+  if (isOrphan) li.classList.add('orphaned');
+
+  // Back-arrows, one per occurrence. The single-occurrence case uses a
+  // plain ↑; multiple occurrences get letter labels (a, b, c, …) so the
+  // reader can see they're distinct links.
+  if (!isOrphan) {
+    if (occurrenceEls.length === 1) {
+      li.appendChild(makeBackLink(occurrenceEls[0], '↑'));
+    } else {
+      li.appendChild(document.createTextNode('↑ '));
+      for (let i = 0; i < occurrenceEls.length; i++) {
+        li.appendChild(makeBackLink(occurrenceEls[i], String.fromCharCode(97 + i)));
+        if (i < occurrenceEls.length - 1) li.appendChild(document.createTextNode(' '));
+      }
+    }
+  }
+
+  const claimSpan = document.createElement('span');
+  claimSpan.className = 'fn-claim';
+  claimSpan.dataset.claim = claimId;
+  const claimText = (entry && entry.claim_text) || '(no claim text)';
+  claimSpan.textContent = '“' + claimText + '”';
+  li.appendChild(claimSpan);
+
+  if (entry && entry.source) {
+    const sep = document.createElement('span');
+    sep.className = 'fn-sep';
+    sep.textContent = '—';
+    li.appendChild(sep);
+
+    const src = document.createElement('span');
+    src.className = 'fn-source';
+    const a = document.createElement('a');
+    a.dataset.source = entry.source.name;
+    a.dataset.claim = claimId;
+    a.textContent = entry.source.name;
+    src.appendChild(a);
+    if (entry.source.location) {
+      const loc = document.createElement('span');
+      loc.className = 'fn-loc';
+      loc.textContent = entry.source.location;
+      src.appendChild(loc);
+    }
+    li.appendChild(src);
+  }
+
+  if (entry && (entry.kind || entry.confidence != null)) {
+    const meta = document.createElement('span');
+    meta.className = 'fn-meta';
+    const bits = [];
+    if (entry.kind) bits.push(entry.kind);
+    if (entry.confidence != null) bits.push('conf ' + entry.confidence.toFixed(2));
+    meta.textContent = bits.join(' · ');
+    li.appendChild(meta);
+  }
+
+  return li;
+}
+
+function makeBackLink(targetEl, label) {
+  const a = document.createElement('a');
+  a.className = 'fn-back';
+  a.href = '#' + (targetEl.id || '');
+  a.textContent = label;
+  a.dataset.back = targetEl.id || '';
+  return a;
+}
+
+/* Scroll to an occurrence and briefly flash it so the reader can see
+   where the footnote points. */
+function flashOccurrence(el) {
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.classList.remove('cite-flash');
+  // reflow so the animation restarts on repeated clicks
+  void el.offsetWidth;
+  el.classList.add('cite-flash');
+  setTimeout(() => el.classList.remove('cite-flash'), 1200);
+}
+
+/* Event delegation for badges + footnote controls. Bound once on boot. */
+let citationInteractionsWired = false;
+function wireCitationInteractions() {
+  if (citationInteractionsWired) return;
+  citationInteractionsWired = true;
+  const body = $('#article-body');
+  const foot = $('#article-footnotes');
+
+  // Badge click → open provenance panel for this claim.
+  if (body) {
+    body.addEventListener('click', (e) => {
+      const a = e.target.closest && e.target.closest('.cite-badge a');
+      if (!a) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const claimId = a.dataset.cite;
+      if (claimId) showClaim(claimId);
+    });
+  }
+
+  if (!foot) return;
+  foot.addEventListener('click', (e) => {
+    const back = e.target.closest('.fn-back');
+    if (back) {
+      e.preventDefault();
+      const targetId = back.dataset.back;
+      const target = targetId && document.getElementById(targetId);
+      if (target) flashOccurrence(target);
+      return;
+    }
+    const claimEl = e.target.closest('.fn-claim');
+    if (claimEl) {
+      const id = claimEl.dataset.claim;
+      if (id) showClaim(id);
+      return;
+    }
+    const srcA = e.target.closest('.fn-source a');
+    if (srcA) {
+      e.preventDefault();
+      const name = srcA.dataset.source;
+      const sid = (typeof resolveSourceIdByName === 'function') && resolveSourceIdByName(name);
+      if (sid && typeof showSourceViewer === 'function') {
+        showSourceViewer(sid, {});
+      } else {
+        showToast && showToast('Source not in library');
+      }
+    }
+  });
+}
+
+/* Debounced re-render after edits — cheap enough to run on every input
+   but we coalesce anyway. */
+let citationsRenderTimer = null;
+function scheduleCitationsRender(delay = 120) {
+  clearTimeout(citationsRenderTimer);
+  citationsRenderTimer = setTimeout(() => {
+    citationsRenderTimer = null;
+    try { renderCitations(); } catch (e) { console.warn('[citations] render failed', e); }
+  }, delay);
+}
+
 async function saveArticleNow() {
   const body = $('#article-body');
   const title = $('.article-title');
   if (!body) return;
   const payload = JSON.stringify({
     title: title ? title.innerText.trim() : 'Untitled draft',
-    body: body.innerHTML
+    body: serializeArticleBody(),
+    citations: CITATIONS.serialize()
   });
   await storage.saveArticle(payload);
 }
@@ -10992,6 +11530,9 @@ async function loadPersistedArticle() {
     }
     // strip any legacy decorative cursor spans
     document.querySelectorAll('.article-title .cursor, #article-body .cursor').forEach(el => el.remove());
+    // Also strip any previously-rendered badges — they get recreated by
+    // renderCitations from the registry on the next pass.
+    body.querySelectorAll('.cite-badge').forEach(el => el.remove());
     // rebind claim click handlers
     body.querySelectorAll('[data-id]').forEach(el => {
       el.addEventListener('click', () => showClaim(el.dataset.id));
@@ -11002,6 +11543,10 @@ async function loadPersistedArticle() {
       el.classList.add('g-paste');
       if (!el.title) el.title = 'Pasted with provenance — click to inspect';
     });
+    // Rehydrate the citation registry. If the saved payload predates
+    // the Wikipedia surface, the registry will be empty and renderCitations
+    // will backfill it from CLAIMS via syncCitationRegistry.
+    CITATIONS.hydrate(data.citations || null);
     return true;
   } catch {
     return false;
@@ -11465,6 +12010,10 @@ function wireEditor() {
     updateWordCount();
     refreshToolbarState();
     matrixCollab.scheduleBroadcast();
+    // Edits can drop a cited span entirely (user deletes the whole
+    // underline), split it, or invalidate its content — renumber badges
+    // and surface orphans in the footnotes when that happens.
+    scheduleCitationsRender();
   };
 
   body.addEventListener('input', onEdit);
@@ -14805,6 +15354,7 @@ async function provInsertGroundedFromChain(chain) {
     chain,
   });
 
+  renderCitations();
   await saveArticleNow();
   renderCounts();
   return claimId;
@@ -15466,9 +16016,15 @@ async function init() {
   renderArticleBody($('#article-body'));
   const hadPersisted = await loadPersistedArticle();
   if (!hadPersisted) {
-    // seed → persist baseline so future edits are tracked
+    // seed → persist baseline so future edits are tracked. Citations
+    // render below will backfill the registry from CLAIMS for the
+    // initial seed spans, and saveArticleNow then persists them.
+    renderCitations();
     await saveArticleNow();
+  } else {
+    renderCitations();
   }
+  wireCitationInteractions();
 
   renderCounts();
   wireEditor();
