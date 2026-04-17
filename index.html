@@ -2030,7 +2030,7 @@
 
 <!-- Matrix client SDK (loaded from CDN, exposes window.matrixcs).
      Loaded lazily so the app still works offline; checks for window.matrixcs before use. -->
-<script src="https://cdn.jsdelivr.net/npm/matrix-js-sdk@31.0.0/dist/browser-matrix.min.js" crossorigin="anonymous" referrerpolicy="no-referrer" onerror="console.warn('[matrix] SDK failed to load — Matrix features will be unavailable')"></script>
+<script src="https://cdn.jsdelivr.net/npm/matrix-js-sdk@34.11.0/lib/browser-matrix.min.js" crossorigin="anonymous" referrerpolicy="no-referrer" onerror="this.onerror=null;console.warn('[matrix] jsdelivr failed, trying unpkg');var s=document.createElement('script');s.src='https://unpkg.com/matrix-js-sdk@34.11.0/lib/browser-matrix.min.js';s.crossOrigin='anonymous';s.referrerPolicy='no-referrer';s.onerror=function(){console.warn('[matrix] SDK failed to load — Matrix features will be unavailable')};document.head.appendChild(s)"></script>
 
 <script>
 /* ===========================================================================
