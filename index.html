@@ -3589,6 +3589,8 @@
     </div>
     <div class="topright">
       <span id="boot-status" style="font-family: var(--font-mono); font-size: 10.5px; color: var(--color-text-secondary); margin-right: 4px;">booting…</span>
+      <button id="stage1-badge" hidden title="DEF proposals awaiting review" style="font-family: var(--font-mono); font-size: 10.5px; color: var(--color-amber, #BA7517); margin-right: 6px; background: transparent; border: 1px solid currentColor; border-radius: 3px; padding: 2px 6px; cursor: pointer;">0 await review</button>
+      <button id="ruleset-btn" title="Ruleset history" style="font-family: var(--font-mono); font-size: 10.5px; color: var(--color-text-secondary); margin-right: 6px; background: transparent; border: 0.5px solid var(--color-border-tertiary); border-radius: 3px; padding: 2px 6px; cursor: pointer;"><span id="ruleset-label">rs_v1</span></button>
       <div class="srcbadge"><div class="statdot statdot-green"></div>3 indexed</div>
       <button class="ws-btn" id="ws-btn" title="Workspace / Matrix">
         <span class="ws-dot" id="ws-dot"></span>
@@ -4176,6 +4178,30 @@
   </div>
   <div class="up-panel-body" id="up-panel-body"></div>
   <div class="up-panel-foot" id="up-panel-foot">Uploads can take a while — feel free to keep working.</div>
+</div>
+
+<!-- ===== STAGE 7 MODAL ===== -->
+<!-- Shared modal shell with three tabs (7b pending review, 7c ruleset
+     history, 7a per-entity loop). Rendered dynamically from the fold
+     state; buttons emit direct/inferred EVAs and merge/revert RECs. -->
+<div id="stage7-modal" class="cite-modal" hidden>
+  <div class="cite-modal-backdrop" id="stage7-backdrop"></div>
+  <div class="cite-modal-body" style="width:min(880px,94vw); max-height:86vh;">
+    <div class="cite-modal-head">
+      <div>
+        <div class="cite-modal-title" id="stage7-title">Pending review</div>
+        <div class="cite-modal-sub" id="stage7-sub">Model proposals awaiting a verdict.</div>
+      </div>
+      <button class="rphead-close" id="stage7-close">×</button>
+    </div>
+    <div id="stage7-tabs" style="display:flex; gap:12px; padding:10px 22px; border-bottom:0.5px solid var(--color-border-tertiary); font-family:var(--font-mono); font-size:11px; text-transform:uppercase; letter-spacing:0.06em;">
+      <button class="s7tab" data-tab="queue" style="background:transparent; border:0; color:var(--color-text-primary); cursor:pointer; padding:4px 0; border-bottom:1.5px solid var(--color-text-primary);">Pending</button>
+      <button class="s7tab" data-tab="changelog" style="background:transparent; border:0; color:var(--color-text-secondary); cursor:pointer; padding:4px 0;">Ruleset history</button>
+      <button class="s7tab" data-tab="prompts" style="background:transparent; border:0; color:var(--color-text-secondary); cursor:pointer; padding:4px 0;">Prompt proposals</button>
+      <button class="s7tab" data-tab="entity" style="background:transparent; border:0; color:var(--color-text-secondary); cursor:pointer; padding:4px 0;">Entity loop</button>
+    </div>
+    <div id="stage7-body" style="flex:1; overflow:auto; padding:14px 22px 18px;"></div>
+  </div>
 </div>
 
 <!-- Matrix client SDK (loaded from CDN, exposes window.matrixcs).
@@ -5863,6 +5889,1137 @@ async function removeEntityAlias(entityId, alias) {
   });
 }
 
+/* ======================================================================
+   RULESET VERSIONING (Stage 1 supporting infrastructure)
+   ----------------------------------------------------------------------
+   Every DEF event carries the rule_set_version under which it was
+   produced. Stage 3 ⊛REC events bump the version; Stage 6 revalidation
+   later replays old DEFs against newer rulesets. For Stage 1 we
+   bootstrap at rs_v1 — REC-class bumps land with the ⊛REC pipeline.
+====================================================================== */
+
+const INITIAL_RULESET_VERSION = 'rs_v1';
+let RULE_SET_VERSION = INITIAL_RULESET_VERSION;
+
+function currentRuleSetVersion() {
+  return RULE_SET_VERSION;
+}
+
+function bumpRuleSetVersion() {
+  const n = parseInt(RULE_SET_VERSION.replace(/^rs_v/, ''), 10) + 1;
+  RULE_SET_VERSION = `rs_v${Number.isFinite(n) ? n : 2}`;
+  return RULE_SET_VERSION;
+}
+
+/* ======================================================================
+   STAGE 1 — ⊢DEF: model proposals
+   ----------------------------------------------------------------------
+   The local model never generates article text. It emits typed
+   classification events, each tagged with the EO operator that
+   produced it. Stage 1 has five substages:
+
+     1a  DEF-boundary  span detection         subtype='boundary'
+     1b  DEF-type      type disambiguation    subtype='type'
+     1c  DEF-link      canonical resolution   subtype='link'
+     1d  DEF-coref     within-document chain  subtype='coref'
+     1e  DEF-alias     alias candidate        subtype='alias'
+
+   Stage 5 DEF validation gate is enforced at append time on
+   DEF-boundary: the span's text must match the source content at its
+   offsets exactly, or the event is rejected (no silent acceptance of
+   phantom spans).
+
+   Confidence bands on DEF-link drive UI routing:
+     ≥0.95  indexed      — visible in main surfaces
+     ≥0.85  amber        — indexed with amber tilde marker
+      <0.85 review       — pending review queue, hidden from search
+====================================================================== */
+
+const DEF_BAND_INDEXED = 'indexed';
+const DEF_BAND_AMBER   = 'amber';
+const DEF_BAND_REVIEW  = 'review';
+
+function confidenceBand(c) {
+  const n = typeof c === 'number' ? c : 0;
+  if (n >= 0.95) return DEF_BAND_INDEXED;
+  if (n >= 0.85) return DEF_BAND_AMBER;
+  return DEF_BAND_REVIEW;
+}
+
+// Stage 5 DEF validation gate for boundary DEFs. Spec: "the span's
+// text must match the source content at that offset exactly. The fold
+// rejects malformed boundary DEFs at parse time."
+function validateDefBoundary(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return { valid: false, reason: 'missing payload' };
+  }
+  const { source_id, location, surface } = payload;
+  if (!source_id) return { valid: false, reason: 'missing source_id' };
+  if (!location || typeof location.start !== 'number' || typeof location.end !== 'number') {
+    return { valid: false, reason: 'missing or malformed location' };
+  }
+  if (location.start < 0 || location.end <= location.start) {
+    return { valid: false, reason: 'bad offsets' };
+  }
+  const text = SOURCE_TEXT[source_id];
+  if (typeof text !== 'string') {
+    return { valid: false, reason: 'source text unavailable' };
+  }
+  if (location.end > text.length) {
+    return { valid: false, reason: 'offsets exceed source length' };
+  }
+  if (text.slice(location.start, location.end) !== surface) {
+    return { valid: false, reason: 'surface does not match source at offsets' };
+  }
+  return { valid: true };
+}
+
+async function emitDefEvent(site, payload, { author = 'system' } = {}) {
+  return appendEvent({
+    op: 'DEF',
+    site,
+    resolution: 'Figure',
+    payload,
+    author
+  });
+}
+
+// Stage 1a. DEF-boundary per annotation. Validation gate runs before
+// append. Rejected boundaries do NOT produce downstream type/link
+// DEFs — the whole chain for that annotation is dropped.
+async function emitDefBoundary({ obsId, sourceId, annotation, ruleSetVersion }) {
+  const payload = {
+    subtype: 'boundary',
+    source_id: sourceId,
+    location: annotation.location,
+    surface: annotation.surface,
+    type_candidate: annotation.type || 'UNK',
+    confidence: annotation.confidence != null ? annotation.confidence : 0.9,
+    rule_set_version: ruleSetVersion,
+    agent: `model:${annotation.model}@${annotation.model_version}`,
+    rationale: annotation.rationale || 'Model-tagged span detector'
+  };
+  // CSV cell spans (row/col) bypass the offset-match gate; only text
+  // spans carry start/end that we can validate against SOURCE_TEXT.
+  if (annotation.location && annotation.location.start != null) {
+    const gate = validateDefBoundary(payload);
+    if (!gate.valid) {
+      console.warn('[stage1/DEF-boundary] rejected:', gate.reason, {
+        sourceId, surface: annotation.surface, location: annotation.location
+      });
+      return null;
+    }
+  }
+  return emitDefEvent(`observation:${obsId}`, payload);
+}
+
+// Stage 1b. DEF-type. Spec trigger: confidence < 0.9 OR >1 type
+// candidate. Refines the boundary DEF via pi.
+async function emitDefType({ obsId, annotation, ruleSetVersion }) {
+  const conf = annotation.confidence != null ? annotation.confidence : 0.9;
+  const alternatives = Array.isArray(annotation.alternatives) ? annotation.alternatives : [];
+  if (conf >= 0.9 && alternatives.length <= 1) return null;
+  return emitDefEvent(`observation:${obsId}`, {
+    subtype: 'type',
+    pi: [obsId],
+    type: annotation.type || 'UNK',
+    confidence: conf,
+    alternatives,
+    rule_set_version: ruleSetVersion,
+    agent: `model:${annotation.model}@${annotation.model_version}`,
+    rationale: annotation.rationale || 'Type classification on ambiguous span'
+  });
+}
+
+// Alias similarity scorer. Exact longest-alias match → 0.97; substring
+// either direction → 0.82..0.94 scaled by length ratio; otherwise 0.
+function scoreAliasMatch(surface, alias) {
+  if (!surface || !alias) return 0;
+  const s = surface.trim().toLowerCase();
+  const a = alias.trim().toLowerCase();
+  if (!s || !a) return 0;
+  if (s === a) return 0.97;
+  if (s.includes(a) || a.includes(s)) {
+    const ratio = Math.min(s.length, a.length) / Math.max(s.length, a.length);
+    return 0.82 + 0.12 * ratio;
+  }
+  return 0;
+}
+
+function resolveCanonicalFromEntities(surface) {
+  const scored = [];
+  for (const [eid, e] of Object.entries(ENTITIES || {})) {
+    if (!e || !Array.isArray(e.aliases)) continue;
+    let best = 0;
+    let bestAlias = null;
+    for (const alias of e.aliases) {
+      const s = scoreAliasMatch(surface, alias);
+      if (s > best) { best = s; bestAlias = alias; }
+    }
+    if (best > 0) scored.push({ entity_id: eid, alias: bestAlias, confidence: best, type: e.type });
+  }
+  scored.sort((x, y) => y.confidence - x.confidence);
+  return scored;
+}
+
+// Stage 1c. DEF-link. Every typed mention. null entity_id is a valid
+// outcome (unresolved). Confidence band drives UI routing downstream.
+async function emitDefLink({ obsId, annotation, ruleSetVersion }) {
+  const mentionId = 'em_' + obsId;
+  const ranked = resolveCanonicalFromEntities(annotation.surface);
+  const primary = ranked[0] || null;
+  const alternatives = ranked.slice(1, 4).map(r => ({ entity_id: r.entity_id, confidence: r.confidence }));
+  const entityId   = primary ? primary.entity_id : null;
+  const confidence = primary ? primary.confidence : 0;
+  // Per-entity display threshold (Stage 3e/3f). When unset, the global
+  // bands in confidenceBand apply. When set, it overrides the low
+  // cutoff for this entity — a tuned-up entity needs higher confidence
+  // to index, a trusted entity can be shown at lower confidence.
+  const entity = primary && ENTITIES[primary.entity_id];
+  const displayThreshold = entity && typeof entity.display_threshold === 'number'
+    ? entity.display_threshold
+    : null;
+  const band = bandWithThreshold(confidence, displayThreshold);
+  // Stage 4 link-back: if the matching alias was added by a specific
+  // REC, tag the DEF-link so counter-REC can aggregate rejects on
+  // DEFs produced under that rule.
+  const aliasSource = entity && entity.alias_source && primary
+    ? (entity.alias_source[primary.alias] || null)
+    : null;
+  const rationale  = primary
+    ? `Surface matches alias "${primary.alias}" of ${primary.entity_id}`
+    : 'No alias in the resolution table matches this surface';
+  return emitDefEvent(`claim:${mentionId}`, {
+    subtype: 'link',
+    type: 'entity_mention',
+    pi: [obsId],
+    mention_id: mentionId,
+    entity_id: entityId,
+    alias_matched: primary ? primary.alias : null,
+    applied_rec: aliasSource,
+    confidence,
+    band,
+    display_threshold: displayThreshold,
+    alternatives,
+    rule_set_version: ruleSetVersion,
+    agent: `model:${annotation.model}@${annotation.model_version}`,
+    rationale
+  });
+}
+
+// Band selector with an optional per-entity display threshold. The
+// amber band still covers the default 0.85–0.95 window; a lowered
+// threshold pulls the review→amber boundary down below 0.85; a raised
+// threshold pushes amber→indexed up above 0.95.
+function bandWithThreshold(c, threshold) {
+  if (typeof threshold !== 'number') return confidenceBand(c);
+  if (c >= Math.max(threshold + 0.10, 0.95)) return DEF_BAND_INDEXED;
+  if (c >= threshold) return DEF_BAND_AMBER;
+  return DEF_BAND_REVIEW;
+}
+
+// Stage 1d. DEF-coref: group mentions in the same source by entity_id.
+// Within-document only — cross-document linkage is DEF-link's job.
+async function emitDefCoref({ sourceId, obsByEntity, ruleSetVersion }) {
+  const events = [];
+  for (const [entityId, obsIds] of Object.entries(obsByEntity || {})) {
+    if (!entityId || obsIds.length < 2) continue;
+    const corefId = 'coref_' + ulid().slice(-10);
+    const evt = await emitDefEvent(`link:${corefId}`, {
+      subtype: 'coref',
+      kind: 'coreference',
+      members: obsIds.slice(),
+      canonical_mention: obsIds[0],
+      entity_id: entityId,
+      scope: { source_id: sourceId, document_only: true },
+      confidence: 0.88,
+      rule_set_version: ruleSetVersion,
+      agent: 'model:local_resolver@1',
+      rationale: `Mentions share canonical entity ${entityId}`
+    });
+    events.push(evt);
+  }
+  return events;
+}
+
+// Stage 1e. DEF-alias: for unresolved mentions (DEF-link returned
+// entity_id: null) propose alias candidates against the closest
+// entity table match. Spec describes it as periodic background work;
+// Stage 1 emits proposals inline — the queue gate is the same.
+async function emitDefAliasProposals({ unresolved, ruleSetVersion }) {
+  const byKey = new Map();
+  for (const { obsId, surface } of unresolved) {
+    const key = (surface || '').trim().toLowerCase();
+    if (!key) continue;
+    const bucket = byKey.get(key) || { surface, obsIds: [] };
+    bucket.obsIds.push(obsId);
+    byKey.set(key, bucket);
+  }
+  const events = [];
+  for (const { surface, obsIds } of byKey.values()) {
+    const ranked = resolveCanonicalFromEntities(surface);
+    const candidate = ranked[0];
+    if (!candidate || candidate.confidence < 0.75) continue;
+    const proposalId = 'alias_' + ulid().slice(-10);
+    const evt = await emitDefEvent(`proposal:${proposalId}`, {
+      subtype: 'alias',
+      surface,
+      pi: obsIds,
+      candidate_canonical_id: candidate.entity_id,
+      confidence: candidate.confidence,
+      rule_set_version: ruleSetVersion,
+      agent: 'model:local_resolver@1',
+      rationale: `Surface close to alias "${candidate.alias}" of ${candidate.entity_id}; awaiting confirmation`
+    });
+    events.push(evt);
+  }
+  return events;
+}
+
+// Orchestrator: runs Stage 1a–1e for a single source. Called after
+// OBS events are emitted so DEF-boundary / DEF-link can pi-reference
+// existing obsIds. Returns per-substage counts for logging.
+async function runStage1Defs({ sourceId, obsPairs }) {
+  if (!Array.isArray(obsPairs) || !obsPairs.length) {
+    return { boundary: 0, type: 0, link: 0, coref: 0, alias: 0 };
+  }
+  const rsv = currentRuleSetVersion();
+  let boundary = 0, type = 0, link = 0;
+  const obsByEntity = {};
+  const unresolved = [];
+  for (const { obsId, annotation } of obsPairs) {
+    const b = await emitDefBoundary({ obsId, sourceId, annotation, ruleSetVersion: rsv });
+    if (!b) continue; // validation gate rejection drops the whole chain
+    boundary++;
+    const t = await emitDefType({ obsId, annotation, ruleSetVersion: rsv });
+    if (t) type++;
+    const l = await emitDefLink({ obsId, annotation, ruleSetVersion: rsv });
+    if (l) {
+      link++;
+      const eid = l.payload && l.payload.entity_id;
+      if (eid) (obsByEntity[eid] = obsByEntity[eid] || []).push(obsId);
+      else unresolved.push({ obsId, surface: annotation.surface });
+    }
+  }
+  const corefEvents = await emitDefCoref({ sourceId, obsByEntity, ruleSetVersion: rsv });
+  const aliasEvents = await emitDefAliasProposals({ unresolved, ruleSetVersion: rsv });
+  return {
+    boundary,
+    type,
+    link,
+    coref: corefEvents.length,
+    alias: aliasEvents.length
+  };
+}
+
+/* ======================================================================
+   STAGE 2 — ⊨EVA: evaluation events
+   ----------------------------------------------------------------------
+   Every reaction to a DEF is an EVA event. EVAs evaluate; they never
+   overwrite. Three subtypes differ only by agent and weight:
+
+     2a  direct    human click         weight 1.0
+     2b  inferred  implied-by-action   weight 0.5
+     2c  system    consistency check   weight 0.2
+
+   Event shape (all subtypes):
+     { op: 'EVA', site: <target_site>, payload: {
+         target_event, verdict: 'confirm'|'reject'|'reframe'|'defer',
+         weight, agent, reframe_to?, note?, inferred_from?,
+         detected?, related_events?
+       } }
+
+   Stage 5 EVA gate is enforced in the fold (target_event must exist;
+   reframe_to.entity_id must be a known canonical id). Invalid EVAs are
+   skipped at projection time — they stay in the log for audit but do
+   not contribute weighted pressure.
+====================================================================== */
+
+const EVA_DIRECT_WEIGHT   = 1.0;
+const EVA_INFERRED_WEIGHT = 0.5;
+const EVA_SYSTEM_WEIGHT   = 0.2;
+
+async function emitEvaEvent(site, payload, { author = 'system' } = {}) {
+  return appendEvent({
+    op: 'EVA',
+    site,
+    resolution: 'Figure',
+    payload,
+    author
+  });
+}
+
+// Stage 2a: direct human EVA. Caller supplies the target DEF event id,
+// its site (so the event is co-located with the target), the verdict,
+// and optionally a reframe target and a note.
+async function emitDirectEva({ targetEvent, targetSite, verdict, agent, reframeTo, note }) {
+  const allowed = new Set(['confirm', 'reject', 'reframe', 'defer']);
+  if (!allowed.has(verdict)) {
+    throw new Error(`emitDirectEva: unknown verdict "${verdict}"`);
+  }
+  const payload = {
+    target_event: targetEvent,
+    verdict,
+    weight: EVA_DIRECT_WEIGHT,
+    agent: agent || 'human:reporter',
+    reframe_to: reframeTo || null,
+    note: note || null
+  };
+  return emitEvaEvent(targetSite || `claim:${targetEvent}`, payload, { author: 'human' });
+}
+
+// Stage 2b: inferred human EVA. Fires when a human action unambiguously
+// implies a verdict on a DEF without the user explicitly evaluating it.
+// Conservative: caller must pass the action context; if the action
+// could be read multiple ways, don't call this.
+async function emitInferredEva({ targetEvent, targetSite, verdict, agent, inferredFrom }) {
+  const payload = {
+    target_event: targetEvent,
+    verdict,
+    weight: EVA_INFERRED_WEIGHT,
+    agent: agent || 'human:reporter',
+    inferred_from: inferredFrom || null
+  };
+  return emitEvaEvent(targetSite || `claim:${targetEvent}`, payload, { author: 'human' });
+}
+
+// Stage 2c: system consistency EVA. Produced by the fold's consistency
+// pass (see fold worker). Lowest weight because it's structural
+// inference, not human judgment — used as a tie-breaker.
+async function emitSystemEva({ targetEvent, targetSite, verdict, detected, relatedEvents }) {
+  const payload = {
+    target_event: targetEvent,
+    verdict,
+    weight: EVA_SYSTEM_WEIGHT,
+    agent: 'system:consistency_check',
+    detected: detected || null,
+    related_events: relatedEvents || []
+  };
+  return emitEvaEvent(targetSite || `claim:${targetEvent}`, payload, { author: 'system' });
+}
+
+/* ======================================================================
+   STAGE 3 — ⊛REC: ruleset rewrites
+   ----------------------------------------------------------------------
+   ⊛REC fires when accumulated EVA pressure on a specific rule crosses
+   a trigger. Each REC bumps the rule_set_version. Triggers covered in
+   this cut:
+
+     3a  alias-add         auto, ≥3 confirms on same alias proposal
+     3g  prototype-update  auto, every confirmed DEF-link
+
+   Deferred to follow-on PRs (their triggers and effects are defined
+   in build.md but not yet wired):
+     3b alias-remove, 3c entity-split, 3d entity-merge,
+     3e/3f threshold lower/raise, 3h type-rule, 3i prompt-addition.
+
+   Stage 4 counter-REC is also deferred; the evidence chain on REC
+   events is already recorded so a later counter-REC pass can read it.
+
+   Stage 5 REC gate is enforced in the fold: RECs without triggered_by
+   evidence are dropped at projection time (Rule 4: no skipped ⊨EVA).
+====================================================================== */
+
+const REC_ALIAS_ADD_TRIGGER_COUNT     = 3;
+const REC_ALIAS_ADD_TRIGGER_WEIGHT    = 2.0;
+const REC_ALIAS_REMOVE_TRIGGER_COUNT  = 5;
+const REC_ALIAS_REMOVE_TRIGGER_WEIGHT = 3.0;
+const REC_ENTITY_SPLIT_TRIGGER_COUNT  = 3;
+const REC_ENTITY_SPLIT_TRIGGER_WEIGHT = 2.0;
+const REC_TYPE_RULE_TRIGGER_COUNT     = 4;
+const REC_TYPE_RULE_TRIGGER_WEIGHT    = 3.0;
+const STAGE4_COUNTER_TRIGGER_COUNT    = 3;
+const STAGE4_COUNTER_TRIGGER_WEIGHT   = 2.0;
+const REC_PROTOTYPE_MAX               = 10;
+
+async function emitRecEvent(site, payload, { author = 'system' } = {}) {
+  return appendEvent({
+    op: 'REC',
+    site,
+    resolution: 'Figure',
+    payload,
+    author
+  });
+}
+
+// Stage 3 rewrite engine. Reads the current fold's evaPressure + D
+// view, finds any trigger that has crossed its threshold and hasn't
+// already been rewritten, emits the REC events, updates ENTITIES,
+// bumps the rule_set_version, and refolds once at the end.
+//
+// Must be called AFTER a fold — it reads D_VIEW / PENDING_REVIEW / a
+// fold-produced evaPressure view.
+async function runRewriteEngine() {
+  const state = {
+    evaPressure: LAST_FOLD_STATE.evaPressure || {},
+    D: D_VIEW,
+    pendingReview: PENDING_REVIEW,
+    alreadyRewritten: LAST_FOLD_STATE.alreadyRewritten || new Set()
+  };
+  let fired = 0;
+
+  fired += await fireAliasAddTriggers(state);
+  fired += await fireAliasRemoveTriggers(state);
+  fired += await fireEntitySplitTriggers(state);
+  fired += await fireThresholdLowerTriggers(state);
+  fired += await fireThresholdRaiseTriggers(state);
+  fired += await fireTypeRuleTriggers(state);
+  fired += await firePrototypeUpdateTriggers(state);
+  fired += await fireCounterRecTriggers(state);
+
+  if (fired > 0) {
+    // A single refold rehydrates every cache — including the new
+    // rule_set_version that subsequent DEFs will stamp.
+    const s = await fold();
+    installFoldResult(s);
+  }
+  return fired;
+}
+
+// 3a — REC-alias-add. Trigger: ≥3 confirms on the same DEF-alias
+// proposal (same surface → same canonical_id), total weight ≥2.0.
+// Effect: add the surface as an alias of the canonical entity; bump
+// ruleset; persist ENTITIES.
+async function fireAliasAddTriggers(state) {
+  const byKey = new Map(); // key = candidate_canonical_id + '|' + surface
+  for (const eventId of Object.keys(state.evaPressure)) {
+    const p = state.evaPressure[eventId];
+    if (!p || !p.target || p.target.subtype !== 'alias') continue;
+    if (p.confirm < REC_ALIAS_ADD_TRIGGER_WEIGHT) continue;
+    const target = p.target;
+    const surface = target.surface;
+    const eid = target.candidate_canonical_id;
+    if (!surface || !eid) continue;
+    const key = eid + '|' + surface.toLowerCase();
+    if (state.alreadyRewritten.has('alias_add:' + key)) continue;
+    const confirmEvents = p.events.filter(e => e.verdict === 'confirm');
+    if (confirmEvents.length < REC_ALIAS_ADD_TRIGGER_COUNT) continue;
+    byKey.set(key, { surface, entity_id: eid, confirmEvents, evidence_weight: p.confirm });
+  }
+  let fired = 0;
+  for (const { surface, entity_id, confirmEvents, evidence_weight } of byKey.values()) {
+    const entity = ENTITIES[entity_id];
+    if (!entity) continue;
+    if (!Array.isArray(entity.aliases)) entity.aliases = [];
+    if (!entity.aliases.includes(surface)) entity.aliases.push(surface);
+    await saveEntitiesTable();
+    const prev = currentRuleSetVersion();
+    const next = bumpRuleSetVersion();
+    const rec = await emitRecEvent(`ruleset:${next}`, {
+      rewrite_type: 'alias_add',
+      previous_version: prev,
+      target: { entity_id },
+      change: { add_alias: surface },
+      triggered_by: confirmEvents.map(e => e.event_id),
+      evidence_weight,
+      agent: 'system:rewrite_engine'
+    });
+    // Stage 4 link-back: remember which REC introduced this alias so
+    // subsequent DEF-links that match via it carry applied_rec, and so
+    // counter-REC can revert cleanly.
+    if (!entity.alias_source) entity.alias_source = {};
+    entity.alias_source[surface] = rec && rec.id;
+    await saveEntitiesTable();
+    fired++;
+  }
+  return fired;
+}
+
+// 3b — REC-alias-remove. Trigger: ≥5 rejects of model DEF-links that
+// resolved via a particular alias, total weight ≥3.0. Effect: remove
+// the alias from the canonical entity; future links won't propose it.
+async function fireAliasRemoveTriggers(state) {
+  const byKey = new Map(); // key = entity_id + '|' + alias
+  for (const eventId of Object.keys(state.evaPressure)) {
+    const p = state.evaPressure[eventId];
+    if (!p || !p.target || p.target.subtype !== 'link') continue;
+    if (!p.target.entity_id) continue;
+    const alias = p.target.alias_matched;
+    if (!alias) continue;
+    if (p.reject < REC_ALIAS_REMOVE_TRIGGER_WEIGHT) continue;
+    const key = p.target.entity_id + '|' + alias.toLowerCase();
+    if (state.alreadyRewritten.has('alias_remove:' + key)) continue;
+    const rejectEvents = p.events.filter(e => e.verdict === 'reject');
+    const bucket = byKey.get(key) || {
+      entity_id: p.target.entity_id,
+      alias,
+      rejectEvents: [],
+      weight: 0
+    };
+    bucket.rejectEvents.push(...rejectEvents);
+    bucket.weight += p.reject;
+    byKey.set(key, bucket);
+  }
+  let fired = 0;
+  for (const { entity_id, alias, rejectEvents, weight } of byKey.values()) {
+    if (rejectEvents.length < REC_ALIAS_REMOVE_TRIGGER_COUNT) continue;
+    if (weight < REC_ALIAS_REMOVE_TRIGGER_WEIGHT) continue;
+    const entity = ENTITIES[entity_id];
+    if (!entity || !Array.isArray(entity.aliases)) continue;
+    if (!entity.aliases.includes(alias)) continue;
+    entity.aliases = entity.aliases.filter(a => a !== alias);
+    if (entity.alias_source && entity.alias_source[alias]) delete entity.alias_source[alias];
+    await saveEntitiesTable();
+    const prev = currentRuleSetVersion();
+    const next = bumpRuleSetVersion();
+    await emitRecEvent(`ruleset:${next}`, {
+      rewrite_type: 'alias_remove',
+      previous_version: prev,
+      target: { entity_id },
+      change: { remove_alias: alias },
+      triggered_by: rejectEvents.map(e => e.event_id),
+      evidence_weight: weight,
+      agent: 'system:rewrite_engine'
+    });
+    fired++;
+  }
+  return fired;
+}
+
+// 3c — REC-entity-split. Trigger: ≥3 reframes partitioning a canonical
+// entity's mentions across two distinct targets, total weight ≥2.0.
+// Effect: split the canonical entity into two — existing DEF-links are
+// NOT reassigned; they get flagged via pending_review_count on the REC.
+async function fireEntitySplitTriggers(state) {
+  const byEntity = new Map(); // eid -> { reframes_to: Map<target_eid, {events, weight}>, links_seen: [eventId] }
+  for (const eventId of Object.keys(state.evaPressure)) {
+    const p = state.evaPressure[eventId];
+    if (!p || !p.target || p.target.subtype !== 'link') continue;
+    if (!p.target.entity_id) continue;
+    const reframes = p.events.filter(e => e.verdict === 'reframe' && e.reframe_to && e.reframe_to.entity_id);
+    if (!reframes.length) continue;
+    const bucket = byEntity.get(p.target.entity_id) || { reframes_to: new Map(), link_event_ids: new Set(), total_weight: 0, total_count: 0 };
+    for (const r of reframes) {
+      const to = r.reframe_to.entity_id;
+      if (to === p.target.entity_id) continue;
+      const sub = bucket.reframes_to.get(to) || { events: [], weight: 0 };
+      sub.events.push(r);
+      sub.weight += r.weight;
+      bucket.reframes_to.set(to, sub);
+      bucket.total_weight += r.weight;
+      bucket.total_count++;
+      bucket.link_event_ids.add(eventId);
+    }
+    byEntity.set(p.target.entity_id, bucket);
+  }
+  let fired = 0;
+  for (const [entity_id, bucket] of byEntity) {
+    if (state.alreadyRewritten.has('entity_split:' + entity_id)) continue;
+    if (bucket.total_count < REC_ENTITY_SPLIT_TRIGGER_COUNT) continue;
+    if (bucket.total_weight < REC_ENTITY_SPLIT_TRIGGER_WEIGHT) continue;
+    // Spec: reframes must partition across TWO distinct targets.
+    if (bucket.reframes_to.size < 2) continue;
+    // Pick the strongest alternate target as the split destination.
+    const alternates = Array.from(bucket.reframes_to.entries())
+      .map(([to, v]) => ({ to, count: v.events.length, weight: v.weight, events: v.events }))
+      .sort((a, b) => b.weight - a.weight);
+    const primaryAlt = alternates[0];
+    if (!primaryAlt) continue;
+    const triggered = [];
+    for (const alt of alternates) for (const e of alt.events) triggered.push(e.event_id);
+    const pendingReviewCount = bucket.link_event_ids.size;
+    const prev = currentRuleSetVersion();
+    const next = bumpRuleSetVersion();
+    await emitRecEvent(`ruleset:${next}`, {
+      rewrite_type: 'entity_split',
+      previous_version: prev,
+      target: { entity_id },
+      change: {
+        split_into: [entity_id, primaryAlt.to],
+        pending_review_count: pendingReviewCount
+      },
+      triggered_by: triggered,
+      evidence_weight: bucket.total_weight,
+      agent: 'system:rewrite_engine'
+    });
+    fired++;
+  }
+  return fired;
+}
+
+// 3d — REC-entity-merge. Explicit human action only: the spec requires
+// "merge these two entities" + ≥1 confirming reframe. Exposed as a
+// helper (requestEntityMerge) rather than a scanner trigger — the
+// engine's scan role here is just to keep the entry point consistent.
+// The actual merge fires via the helper below.
+async function fireEntityMergeTriggers() { return 0; }
+
+async function requestEntityMerge({ fromEntityId, intoEntityId, reframeEvaEventId, agent }) {
+  if (!fromEntityId || !intoEntityId || fromEntityId === intoEntityId) {
+    throw new Error('requestEntityMerge: need two distinct entity ids');
+  }
+  const from = ENTITIES[fromEntityId];
+  const into = ENTITIES[intoEntityId];
+  if (!from || !into) throw new Error('requestEntityMerge: unknown entity');
+  // Require at least one confirming reframe in either direction (spec).
+  if (!reframeEvaEventId) {
+    throw new Error('requestEntityMerge: reframeEvaEventId is required (spec: ≥1 confirming reframe)');
+  }
+  // Merge aliases and alias_source, and eject the old entity.
+  if (!Array.isArray(into.aliases)) into.aliases = [];
+  for (const a of (from.aliases || [])) {
+    if (!into.aliases.includes(a)) into.aliases.push(a);
+  }
+  if (from.alias_source) {
+    into.alias_source = Object.assign(into.alias_source || {}, from.alias_source);
+  }
+  if (Array.isArray(from.prototypes)) {
+    into.prototypes = (into.prototypes || []).concat(from.prototypes).slice(-REC_PROTOTYPE_MAX);
+  }
+  delete ENTITIES[fromEntityId];
+  await saveEntitiesTable();
+  const prev = currentRuleSetVersion();
+  const next = bumpRuleSetVersion();
+  await emitRecEvent(`ruleset:${next}`, {
+    rewrite_type: 'entity_merge',
+    previous_version: prev,
+    target: { entity_id: intoEntityId },
+    change: { merged_from: fromEntityId, into: intoEntityId },
+    triggered_by: [reframeEvaEventId],
+    evidence_weight: EVA_DIRECT_WEIGHT,
+    agent: agent || 'human:reporter'
+  });
+  installFoldResult(await fold());
+  return 1;
+}
+
+// 3e — REC-threshold-lower. Trigger: last 20 confirms for an entity
+// averaged ≥0.85 confidence with no rejects in that window. Effect:
+// lower the entity's display_threshold to 0.80; previously review-band
+// DEFs surface as amber on the next refold.
+async function fireThresholdLowerTriggers(state) {
+  const windows = collectEntityConfidenceWindow(state.evaPressure, 20);
+  let fired = 0;
+  for (const [entity_id, w] of windows) {
+    if (state.alreadyRewritten.has('threshold_lower:' + entity_id)) continue;
+    if (w.rejects > 0) continue;
+    if (w.confirms < 20) continue;
+    if (w.avgConfidence < 0.85) continue;
+    const entity = ENTITIES[entity_id];
+    if (!entity) continue;
+    const current = typeof entity.display_threshold === 'number' ? entity.display_threshold : 0.85;
+    if (current <= 0.80) continue;
+    entity.display_threshold = 0.80;
+    await saveEntitiesTable();
+    const prev = currentRuleSetVersion();
+    const next = bumpRuleSetVersion();
+    await emitRecEvent(`ruleset:${next}`, {
+      rewrite_type: 'threshold_lower',
+      previous_version: prev,
+      target: { entity_id },
+      change: { display_threshold: 0.80, previous_threshold: current },
+      triggered_by: w.confirmEventIds,
+      evidence_weight: w.confirms,
+      agent: 'system:rewrite_engine'
+    });
+    fired++;
+  }
+  return fired;
+}
+
+// 3f — REC-threshold-raise. Trigger: last 20 rejects averaged ≥0.90
+// confidence. Effect: raise the entity's display_threshold to 0.95 and
+// flag it for ambiguity review.
+async function fireThresholdRaiseTriggers(state) {
+  const windows = collectEntityConfidenceWindow(state.evaPressure, 20);
+  let fired = 0;
+  for (const [entity_id, w] of windows) {
+    if (state.alreadyRewritten.has('threshold_raise:' + entity_id)) continue;
+    if (w.rejects < 20) continue;
+    if (w.avgRejectConfidence < 0.90) continue;
+    const entity = ENTITIES[entity_id];
+    if (!entity) continue;
+    const current = typeof entity.display_threshold === 'number' ? entity.display_threshold : 0.85;
+    if (current >= 0.95) continue;
+    entity.display_threshold = 0.95;
+    entity.ambiguity_review = true;
+    await saveEntitiesTable();
+    const prev = currentRuleSetVersion();
+    const next = bumpRuleSetVersion();
+    await emitRecEvent(`ruleset:${next}`, {
+      rewrite_type: 'threshold_raise',
+      previous_version: prev,
+      target: { entity_id },
+      change: { display_threshold: 0.95, previous_threshold: current, ambiguity_review: true },
+      triggered_by: w.rejectEventIds,
+      evidence_weight: w.rejects,
+      agent: 'system:rewrite_engine'
+    });
+    fired++;
+  }
+  return fired;
+}
+
+// Helper for 3e / 3f. Walks evaPressure, groups EVAs by target
+// entity id, and returns the last-N confirm/reject window per entity.
+function collectEntityConfidenceWindow(evaPressure, N) {
+  const perEntity = new Map();
+  for (const eventId of Object.keys(evaPressure)) {
+    const p = evaPressure[eventId];
+    if (!p || !p.target || p.target.subtype !== 'link') continue;
+    if (!p.target.entity_id) continue;
+    const bucket = perEntity.get(p.target.entity_id) || {
+      confirms: 0, rejects: 0,
+      confirmConfSum: 0, rejectConfSum: 0,
+      confirmEventIds: [], rejectEventIds: [],
+      all: []
+    };
+    const conf = typeof p.target.confidence === 'number' ? p.target.confidence : 0;
+    for (const e of p.events) {
+      if (e.verdict === 'confirm') {
+        bucket.confirms++;
+        bucket.confirmConfSum += conf;
+        bucket.confirmEventIds.push(e.event_id);
+        bucket.all.push({ verdict: 'confirm', ts: e.ts, conf });
+      } else if (e.verdict === 'reject') {
+        bucket.rejects++;
+        bucket.rejectConfSum += conf;
+        bucket.rejectEventIds.push(e.event_id);
+        bucket.all.push({ verdict: 'reject', ts: e.ts, conf });
+      }
+    }
+    perEntity.set(p.target.entity_id, bucket);
+  }
+  // Restrict to last-N per verdict by timestamp.
+  for (const [, bucket] of perEntity) {
+    bucket.all.sort((a, b) => (a.ts < b.ts ? 1 : -1));
+    const confirmsWindow = bucket.all.filter(e => e.verdict === 'confirm').slice(0, N);
+    const rejectsWindow  = bucket.all.filter(e => e.verdict === 'reject').slice(0, N);
+    bucket.confirms = confirmsWindow.length;
+    bucket.rejects  = rejectsWindow.length;
+    bucket.avgConfidence = confirmsWindow.length
+      ? confirmsWindow.reduce((s, e) => s + e.conf, 0) / confirmsWindow.length
+      : 0;
+    bucket.avgRejectConfidence = rejectsWindow.length
+      ? rejectsWindow.reduce((s, e) => s + e.conf, 0) / rejectsWindow.length
+      : 0;
+  }
+  return perEntity;
+}
+
+// 3h — REC-type-rule. Trigger: ≥4 reframes of the same (surface,
+// context) → (type) mapping, weight ≥3.0. Effect: store a
+// context-specific type rule on the entity so future DEF-type calls
+// short-circuit the ambiguous classification.
+async function fireTypeRuleTriggers(state) {
+  const byRule = new Map(); // key = entity_id|surface|context_hint|new_type
+  for (const eventId of Object.keys(state.evaPressure)) {
+    const p = state.evaPressure[eventId];
+    if (!p || !p.target || p.target.subtype !== 'link') continue;
+    const reframes = p.events.filter(e => e.verdict === 'reframe' && e.reframe_to && e.reframe_to.type);
+    if (!reframes.length) continue;
+    const surface = p.target.surface || '';
+    const sourceId = p.target.source_id || '';
+    for (const r of reframes) {
+      const toType = r.reframe_to.type;
+      const toEntity = r.reframe_to.entity_id || p.target.entity_id;
+      const contextHint = r.reframe_to.context_hint || '';
+      const key = [toEntity, surface.toLowerCase(), contextHint.toLowerCase(), toType].join('|');
+      const bucket = byRule.get(key) || {
+        entity_id: toEntity,
+        surface,
+        context_hint: contextHint,
+        type: toType,
+        events: [],
+        weight: 0
+      };
+      bucket.events.push(r);
+      bucket.weight += r.weight;
+      byRule.set(key, bucket);
+    }
+  }
+  let fired = 0;
+  for (const [key, bucket] of byRule) {
+    if (state.alreadyRewritten.has('type_rule:' + key)) continue;
+    if (bucket.events.length < REC_TYPE_RULE_TRIGGER_COUNT) continue;
+    if (bucket.weight < REC_TYPE_RULE_TRIGGER_WEIGHT) continue;
+    const entity = ENTITIES[bucket.entity_id];
+    if (!entity) continue;
+    if (!Array.isArray(entity.type_rules)) entity.type_rules = [];
+    entity.type_rules.push({
+      surface: bucket.surface,
+      context_hint: bucket.context_hint,
+      type: bucket.type,
+      ts: new Date().toISOString()
+    });
+    await saveEntitiesTable();
+    const prev = currentRuleSetVersion();
+    const next = bumpRuleSetVersion();
+    await emitRecEvent(`ruleset:${next}`, {
+      rewrite_type: 'type_rule',
+      previous_version: prev,
+      target: { entity_id: bucket.entity_id },
+      change: {
+        surface: bucket.surface,
+        context_hint: bucket.context_hint,
+        type: bucket.type
+      },
+      triggered_by: bucket.events.map(e => e.event_id),
+      evidence_weight: bucket.weight,
+      agent: 'system:rewrite_engine'
+    });
+    fired++;
+  }
+  return fired;
+}
+
+// Stage 4 — counter-REC. If a REC is followed by ≥3 rejects on DEFs
+// that used the new rule (tagged via applied_rec on DEF-link),
+// combined weight ≥2.0, fire a revert REC. The prior REC is NOT
+// deleted — both events stay in the log (append-only).
+async function fireCounterRecTriggers(state) {
+  const recPayloads = LAST_FOLD_STATE.recEvents || {};
+  const byRec = new Map(); // rec_id -> { rejects: n, weight, events: [ids] }
+  for (const eventId of Object.keys(state.evaPressure)) {
+    const p = state.evaPressure[eventId];
+    if (!p || !p.target || p.target.subtype !== 'link') continue;
+    const recId = p.target.applied_rec;
+    if (!recId) continue;
+    const rejects = p.events.filter(e => e.verdict === 'reject');
+    if (!rejects.length) continue;
+    const bucket = byRec.get(recId) || { rejects: 0, weight: 0, events: [] };
+    bucket.rejects += rejects.length;
+    bucket.weight += rejects.reduce((s, e) => s + e.weight, 0);
+    for (const e of rejects) bucket.events.push(e.event_id);
+    byRec.set(recId, bucket);
+  }
+  let fired = 0;
+  for (const [recId, bucket] of byRec) {
+    if (state.alreadyRewritten.has('counter_rec:' + recId)) continue;
+    if (bucket.rejects < STAGE4_COUNTER_TRIGGER_COUNT) continue;
+    if (bucket.weight < STAGE4_COUNTER_TRIGGER_WEIGHT) continue;
+    const target = recPayloads[recId];
+    if (!target) continue;
+    // Revert the effect. Only alias_add and type_rule are structurally
+    // auto-revertible here; other rewrite types fall back to just
+    // recording the revert event (operator has to unwind manually).
+    if (target.rewrite_type === 'alias_add' && target.target && target.change && target.change.add_alias) {
+      const entity = ENTITIES[target.target.entity_id];
+      if (entity && Array.isArray(entity.aliases)) {
+        entity.aliases = entity.aliases.filter(a => a !== target.change.add_alias);
+        if (entity.alias_source) delete entity.alias_source[target.change.add_alias];
+        await saveEntitiesTable();
+      }
+    } else if (target.rewrite_type === 'type_rule' && target.target && target.change) {
+      const entity = ENTITIES[target.target.entity_id];
+      if (entity && Array.isArray(entity.type_rules)) {
+        entity.type_rules = entity.type_rules.filter(r =>
+          !(r.surface === target.change.surface && r.type === target.change.type)
+        );
+        await saveEntitiesTable();
+      }
+    }
+    const prev = currentRuleSetVersion();
+    const next = bumpRuleSetVersion();
+    await emitRecEvent(`ruleset:${next}`, {
+      rewrite_type: 'revert',
+      previous_version: prev,
+      target: { reverts: recId, rewrite_type: target.rewrite_type, entity_id: target.target && target.target.entity_id },
+      change: { revert_to: target.previous_version || null },
+      triggered_by: bucket.events,
+      evidence_weight: bucket.weight,
+      agent: 'system:rewrite_engine'
+    });
+    fired++;
+  }
+  return fired;
+}
+
+// 3g — REC-prototype-update. Continuous. Every confirmed DEF-link
+// seeds the entity's prototype set with the surface + surrounding
+// context. Oldest prototype is evicted when the set exceeds the cap.
+async function firePrototypeUpdateTriggers(state) {
+  let fired = 0;
+  for (const eventId of Object.keys(state.evaPressure)) {
+    const p = state.evaPressure[eventId];
+    if (!p || !p.target || p.target.subtype !== 'link') continue;
+    if (!p.target.entity_id) continue;
+    if (state.alreadyRewritten.has('prototype:' + eventId)) continue;
+    // Require at least one direct confirm; prototype updates are
+    // meant to be evidence of a good read, not noisy pressure.
+    const firstConfirm = p.events.find(e => e.verdict === 'confirm' && e.weight >= EVA_DIRECT_WEIGHT);
+    if (!firstConfirm) continue;
+    const entityId = p.target.entity_id;
+    const entity = ENTITIES[entityId];
+    if (!entity) continue;
+    if (!Array.isArray(entity.prototypes)) entity.prototypes = [];
+    const proto = {
+      id: 'proto_' + ulid().slice(-8),
+      context: p.target.surface || '',
+      source_id: p.target.source_id || null,
+      confirmed_via: firstConfirm.event_id,
+      ts: new Date().toISOString()
+    };
+    entity.prototypes.push(proto);
+    let evicted = null;
+    while (entity.prototypes.length > REC_PROTOTYPE_MAX) {
+      const removed = entity.prototypes.shift();
+      evicted = removed && removed.id;
+    }
+    await saveEntitiesTable();
+    const prev = currentRuleSetVersion();
+    const next = bumpRuleSetVersion();
+    await emitRecEvent(`ruleset:${next}`, {
+      rewrite_type: 'prototype_update',
+      previous_version: prev,
+      target: { entity_id: entityId },
+      change: {
+        add_prototype: proto,
+        evict_prototype: evicted
+      },
+      triggered_by: [firstConfirm.event_id],
+      evidence_weight: firstConfirm.weight,
+      agent: 'system:rewrite_engine'
+    });
+    fired++;
+  }
+  return fired;
+}
+
+// Installer used after the rewrite engine's post-fire refold, and
+// exposed to other refold call sites. Avoids duplicating the cache
+// assignment stanza across the file.
+function installFoldResult(s) {
+  CLAIMS = s.claims;
+  USER_SOURCES = s.sources;
+  G_VIEW = s.G; M_VIEW = s.M; S_VIEW = s.S;
+  MENTIONS = s.mentions || {};
+  ENTITY_INDEX = s.entityIndex || {};
+  D_VIEW = s.D || {};
+  PENDING_REVIEW = s.pendingReview || [];
+  AMBER_MENTIONS = s.amberMentions || {};
+  DEF_COUNTS = s.defCounts || DEF_COUNTS;
+  LAST_FOLD_STATE = {
+    evaPressure: s.evaPressure || {},
+    recEvents: s.recEvents || {},
+    alreadyRewritten: s.alreadyRewritten || new Set(),
+    ruleSetVersion: s.ruleSetVersion || currentRuleSetVersion(),
+    pendingConsistencyEvas: s.pendingConsistencyEvas || [],
+    staleCounts: s.staleCounts || { boundary: 0, type: 0, link: 0 },
+    staleSources: Array.isArray(s.staleSources) ? s.staleSources : [],
+    promptProposals: Array.isArray(s.promptProposals) ? s.promptProposals : []
+  };
+  // Adopt the fold's authoritative rule_set_version so subsequent DEFs
+  // (and the next rewrite pass) stamp the correct version.
+  if (s.ruleSetVersion) RULE_SET_VERSION = s.ruleSetVersion;
+  refreshStage1Badge();
+}
+
+// Holds fold-derived state the rewrite engine needs between passes.
+let LAST_FOLD_STATE = {
+  evaPressure: {},
+  recEvents: {},
+  alreadyRewritten: new Set(),
+  ruleSetVersion: INITIAL_RULESET_VERSION,
+  pendingConsistencyEvas: [],
+  staleCounts: { boundary: 0, type: 0, link: 0 },
+  staleSources: [],
+  promptProposals: []
+};
+
+// After a refold, drain any system-consistency EVAs the fold detected
+// and emit them into the log. Keeps the fold pure (no append-side
+// effects in the worker) while still producing the required signal.
+async function drainConsistencyEvas() {
+  const pending = LAST_FOLD_STATE.pendingConsistencyEvas || [];
+  if (!pending.length) return 0;
+  LAST_FOLD_STATE.pendingConsistencyEvas = [];
+  for (const c of pending) {
+    await emitSystemEva({
+      targetEvent: c.target_event,
+      targetSite: c.target_site,
+      verdict: c.verdict,
+      detected: c.detected,
+      relatedEvents: c.related_events || []
+    });
+  }
+  return pending.length;
+}
+
+/* ======================================================================
+   STAGE 6 — Revalidation
+   ----------------------------------------------------------------------
+   When a REC fires, prior DEFs produced under the old ruleset become
+   potentially stale. Revalidation is lazy, not eager:
+
+     - Mark stale. The fold tags every DEF whose rule_set_version is
+       older than the current version. Stale ≠ wrong; they remain in
+       the log and remain resolvable.
+     - Lazy revalidation. Run the model once on the span when a stale
+       DEF is viewed. If the new DEF agrees, both stay (old no longer
+       stale). If they disagree, both stay and the conflict surfaces in
+       the review queue. Wired via revalidateSource below.
+     - Manual batch. revalidateWorkspace() runs over every source that
+       still has stale DEFs — background, resumable, non-blocking.
+     - Frozen audit trail. Old DEFs are never deleted. A reporter can
+       replay any past rule_set_version against the log.
+
+   Mark-stale happens in the fold (see D-view staleness tagging). The
+   helpers below drive the revalidation side.
+====================================================================== */
+
+// Re-run Stage 1 for a single source. Emits fresh OBS + DEF events
+// under the current ruleset; the old DEFs stay in the log for audit.
+async function revalidateSource(sourceId) {
+  const src = USER_SOURCES[sourceId];
+  if (!src) throw new Error('revalidateSource: unknown source ' + sourceId);
+  const text = SOURCE_TEXT[sourceId] != null
+    ? SOURCE_TEXT[sourceId]
+    : (await storage.readSource(sourceId)) || '';
+  if (!text) return { boundary: 0, type: 0, link: 0, coref: 0, alias: 0 };
+  SOURCE_TEXT[sourceId] = text;
+  const annotations = resolveAnnotationsForSource(null, text, src.kind || 'txt');
+  const obsPairs = await emitDerivedObsForAnnotations(annotations, {
+    sourceId,
+    position: { workspace: 'revalidate' }
+  });
+  const counts = await runStage1Defs({ sourceId, obsPairs });
+  installFoldResult(await fold());
+  if (await drainConsistencyEvas() > 0) installFoldResult(await fold());
+  await runRewriteEngine();
+  return counts;
+}
+
+// Batch. Walks every source and revalidates any that still has stale
+// DEFs (i.e. any DEF whose rule_set_version != the current one).
+// Returns per-source counts. The fold's staleCounts view tells us
+// which sources still need attention.
+async function revalidateWorkspace() {
+  const staleSources = (LAST_FOLD_STATE.staleSources || []).slice();
+  const results = {};
+  for (const sourceId of staleSources) {
+    try { results[sourceId] = await revalidateSource(sourceId); }
+    catch (err) { results[sourceId] = { error: err.message || String(err) }; }
+  }
+  return results;
+}
+
+/* ======================================================================
+   STAGE 8 — Failure mode prevention (cross-reference)
+   ----------------------------------------------------------------------
+   Three pathologies in the loop doc, and where each is prevented:
+
+   Suppressed ⊛REC → sclerosis.
+     Prevented by Stage 3's automatic triggers + counter-REC. Accumulated
+     EVA pressure cannot stagnate: alias-add, alias-remove, entity-split,
+     threshold tuning, type-rule, and prototype-update all fire on
+     thresholds; counter-REC unwinds bad rewrites on pushback. Trigger
+     constants above are the knobs.
+
+   Skipped ⊨EVA → ideology.
+     Prevented by the Stage 5 REC gate (see fold worker). RECs without
+     triggered_by EVAs are rejected at projection time. Helpers above
+     that emit REC events always pass the triggered_by event ids they
+     accumulated; any attempt to rewrite rules from internal reasoning
+     alone leaves no trail and is dropped.
+
+   Skipped ⊢DEF → chaos.
+     Prevented by rule-set versioning. Each REC bumps the version; old
+     DEFs are tagged stale (Stage 6) rather than invalidated. New
+     rulesets don't destabilize existing categories — reporters revalidate
+     lazily or in batches and nothing shifts under them silently.
+====================================================================== */
+
 /* ---------- Fold worker — runs on a blob URL ---------- */
 /* The fold here is Phase A: it only handles claim-status mutations.
    All the provenance-producing events (SIG/INS/CON/DEF for source
@@ -5894,9 +7051,47 @@ self.addEventListener('message', (ev) => {
   // edits propagate on the next fold without re-ingesting sources.
   const mentions = {}; // mentionId -> M-entry shape
 
+  // Stage 1 — DEF projection. D[obsId] carries { boundary, type, link }
+  // payloads for that observation; corefs land in D.__coref; alias
+  // proposals in D.__aliases. pendingReview is the queue of link DEFs
+  // in band='review' plus alias proposals. amberMentions is a set
+  // (object) of mentionIds whose DEF-link band is 'amber'.
+  const D = {};
+  const pendingReview = [];
+  const amberMentions = {};
+  const defCounts = { boundary: 0, type: 0, link: 0, coref: 0, alias: 0 };
+
+  // Stage 2/3/5 projections.
+  // - eventsById     : event_id -> raw event (used by Stage 5 gates).
+  // - evaPressure    : target_event_id -> accumulated weighted verdicts
+  //                     plus a copy of the target DEF payload (for the
+  //                     rewrite engine's trigger readout).
+  // - recEvents      : event_id -> REC payload (for audit + counter-REC).
+  // - alreadyRewritten : set of "kind:key" strings, one per REC that has
+  //                     already fired for a given trigger (keeps the
+  //                     rewrite engine idempotent across refolds).
+  // - ruleSetVersion : the latest rs_v* string observed on a REC event,
+  //                     or 'rs_v1' if no RECs have landed yet.
+  // - pendingConsistencyEvas : fold-detected contradictions that the
+  //                     main thread will emit as system EVAs.
+  const eventsById = {};
+  const evaPressure = {};
+  const recEvents = {};
+  const alreadyRewritten = new Set();
+  let   ruleSetVersion = 'rs_v1';
+  const pendingConsistencyEvas = [];
+  // Stage 3i — prompt-addition proposal queue. Fold clusters rejects
+  // by (surface_lower, source_id, wrong_target_entity_id); if a cluster
+  // hits ≥5 rejects, a proposal string is surfaced for human approval.
+  const promptProposals = [];
+
   for (const raw of events) {
     let evt;
     try { evt = JSON.parse(raw); } catch { continue; }
+
+    // Index every event by id so downstream gates (Stage 5 EVA + REC)
+    // can validate target_event references without re-walking the log.
+    if (evt && evt.id) eventsById[evt.id] = evt;
 
     // OBS — a G-entry. An observation: someone read this content at this
     // location at this time. The atomic unit of provenance.
@@ -6041,7 +7236,11 @@ self.addEventListener('message', (ev) => {
     // EVA on a claim: an evaluation. Later EVA events supersede earlier
     // ones; the latest reading wins. The fold stores a σ-chain so readers
     // can walk supersessions back.
-    if (evt.op === 'EVA' && evt.site && evt.site.startsWith('claim:')) {
+    if (evt.op === 'EVA' && evt.site && evt.site.startsWith('claim:')
+        && !(evt.payload && evt.payload.target_event)) {
+      // Legacy claim-EVA handler: new_status + sigma chain on the
+      // claim itself. Stage 2 DEF-EVAs (which carry target_event)
+      // fall through to the projection block below.
       const id = evt.site.slice('claim:'.length);
       if (!claims[id]) continue;
       const s = evt.payload && evt.payload.new_status;
@@ -6093,6 +7292,150 @@ self.addEventListener('message', (ev) => {
           { op: 'EVA', txt: kind + ' relation registered — pending resolution' }
         ]
       };
+      continue;
+    }
+
+    // DEF — Stage 1 typed classification event. Subtypes:
+    //   boundary, type, link (keyed by obsId via evt.site or payload.pi),
+    //   coref (keyed by link:<corefId>),
+    //   alias (keyed by proposal:<aliasId>, awaiting human confirm).
+    if (evt.op === 'DEF' && evt.payload && evt.payload.subtype) {
+      const p = evt.payload;
+      if (p.subtype === 'boundary' && evt.site && evt.site.startsWith('observation:')) {
+        const obsId = evt.site.slice('observation:'.length);
+        (D[obsId] = D[obsId] || {}).boundary = Object.assign({ event_id: evt.id, ts: evt.ts }, p);
+        defCounts.boundary++;
+        continue;
+      }
+      if (p.subtype === 'type' && evt.site && evt.site.startsWith('observation:')) {
+        const obsId = evt.site.slice('observation:'.length);
+        (D[obsId] = D[obsId] || {}).type = Object.assign({ event_id: evt.id, ts: evt.ts }, p);
+        defCounts.type++;
+        continue;
+      }
+      if (p.subtype === 'link') {
+        const obsId = Array.isArray(p.pi) ? p.pi[0] : null;
+        if (obsId) (D[obsId] = D[obsId] || {}).link = Object.assign({ event_id: evt.id, ts: evt.ts }, p);
+        defCounts.link++;
+        if (p.band === 'review') pendingReview.push({ kind: 'link', event_id: evt.id, ts: evt.ts, payload: p });
+        if (p.band === 'amber' && p.mention_id) amberMentions[p.mention_id] = true;
+        continue;
+      }
+      if (p.subtype === 'coref') {
+        (D.__coref = D.__coref || []).push({ event_id: evt.id, ts: evt.ts, payload: p });
+        defCounts.coref++;
+        continue;
+      }
+      if (p.subtype === 'alias') {
+        (D.__aliases = D.__aliases || []).push({ event_id: evt.id, ts: evt.ts, payload: p });
+        defCounts.alias++;
+        pendingReview.push({ kind: 'alias', event_id: evt.id, ts: evt.ts, payload: p });
+        continue;
+      }
+      // Unknown subtype — skip silently; the log is forward-compatible.
+      continue;
+    }
+
+    // EVA targeting a DEF event. Stage 5 gate: target_event must exist
+    // and must itself be a DEF. Reframe_to, if present, must name a
+    // known canonical entity id. Invalid EVAs stay in the log but do
+    // not contribute weighted pressure. Legacy claim-EVAs (which carry
+    // payload.new_status, not target_event) fall through to the
+    // existing claim handler below.
+    if (evt.op === 'EVA' && evt.payload && evt.payload.target_event) {
+      const p = evt.payload;
+      const tgtEvt = eventsById[p.target_event];
+      let validTarget = tgtEvt && tgtEvt.op === 'DEF';
+      // reframe_to (if present) must name a canonical entity.
+      if (validTarget && p.reframe_to && p.reframe_to.entity_id) {
+        if (!entities || !entities[p.reframe_to.entity_id]) {
+          validTarget = false;
+        }
+      }
+      if (validTarget) {
+        const verdict = p.verdict;
+        const weight  = typeof p.weight === 'number' ? p.weight : 1.0;
+        const entry = (evaPressure[p.target_event] = evaPressure[p.target_event] || {
+          confirm: 0, reject: 0, reframe: 0, defer: 0,
+          count: 0, events: [], target: null
+        });
+        if (verdict === 'confirm' || verdict === 'reject' || verdict === 'reframe' || verdict === 'defer') {
+          entry[verdict] += weight;
+        }
+        entry.count++;
+        entry.events.push({
+          event_id: evt.id,
+          verdict, weight,
+          agent: p.agent,
+          ts: evt.ts,
+          reframe_to: p.reframe_to || null,
+          inferred_from: p.inferred_from || null
+        });
+        // Cache a compact copy of the target DEF's payload on the
+        // pressure entry so the rewrite engine doesn't need the full
+        // eventsById table to read trigger conditions.
+        if (!entry.target && tgtEvt.payload) {
+          const tp = tgtEvt.payload;
+          entry.target = {
+            subtype: tp.subtype,
+            entity_id: tp.entity_id || null,
+            candidate_canonical_id: tp.candidate_canonical_id || null,
+            alias_matched: tp.alias_matched || null,
+            applied_rec: tp.applied_rec || null,
+            surface: tp.surface || null,
+            source_id: tp.source_id || null,
+            confidence: tp.confidence != null ? tp.confidence : null,
+            band: tp.band || null,
+            rule_set_version: tp.rule_set_version || null,
+            mention_id: tp.mention_id || null
+          };
+        }
+        continue;
+      }
+      // Target unresolved — fall through so legacy handlers downstream
+      // still see the event (avoids regressions on existing EVAs).
+    }
+
+    // REC on the ruleset itself. Stage 5 REC gate: triggered_by must
+    // reference EVAs that exist and whose combined weight meets the
+    // rewrite_type's documented threshold. (Rule 4 enforcement.)
+    if (evt.op === 'REC' && evt.site && evt.site.startsWith('ruleset:')) {
+      const p = evt.payload || {};
+      const trig = Array.isArray(p.triggered_by) ? p.triggered_by : [];
+      let weight = 0;
+      let ok = trig.length > 0;
+      for (const eid of trig) {
+        const e = eventsById[eid];
+        if (!e || e.op !== 'EVA') { ok = false; break; }
+        weight += typeof (e.payload && e.payload.weight) === 'number' ? e.payload.weight : 0;
+      }
+      if (!ok) continue; // gate rejection
+      recEvents[evt.id] = Object.assign({ event_id: evt.id, ts: evt.ts }, p);
+      // Ruleset version follows the site tag: 'ruleset:rs_v48'.
+      const v = evt.site.slice('ruleset:'.length);
+      if (/^rs_v\d+$/.test(v)) ruleSetVersion = v;
+      // Mark the trigger handled so the rewrite engine doesn't re-fire
+      // the same REC on every refold. Key format mirrors runRewriteEngine.
+      if (p.rewrite_type === 'alias_add' && p.target && p.change && p.change.add_alias) {
+        alreadyRewritten.add('alias_add:' + p.target.entity_id + '|' + p.change.add_alias.toLowerCase());
+      } else if (p.rewrite_type === 'alias_remove' && p.target && p.change && p.change.remove_alias) {
+        alreadyRewritten.add('alias_remove:' + p.target.entity_id + '|' + p.change.remove_alias.toLowerCase());
+      } else if (p.rewrite_type === 'entity_split' && p.target && p.target.entity_id) {
+        alreadyRewritten.add('entity_split:' + p.target.entity_id);
+      } else if (p.rewrite_type === 'threshold_lower' && p.target && p.target.entity_id) {
+        alreadyRewritten.add('threshold_lower:' + p.target.entity_id);
+      } else if (p.rewrite_type === 'threshold_raise' && p.target && p.target.entity_id) {
+        alreadyRewritten.add('threshold_raise:' + p.target.entity_id);
+      } else if (p.rewrite_type === 'type_rule' && p.target && p.target.entity_id && p.change) {
+        const k = [p.target.entity_id, (p.change.surface || '').toLowerCase(),
+                   (p.change.context_hint || '').toLowerCase(), p.change.type || ''].join('|');
+        alreadyRewritten.add('type_rule:' + k);
+      } else if (p.rewrite_type === 'revert' && p.target && p.target.reverts) {
+        alreadyRewritten.add('counter_rec:' + p.target.reverts);
+      } else if (p.rewrite_type === 'prototype_update') {
+        const firstTrig = trig[0];
+        if (firstTrig) alreadyRewritten.add('prototype:' + firstTrig);
+      }
       continue;
     }
 
@@ -6199,7 +7542,173 @@ self.addEventListener('message', (ev) => {
     }
   }
 
-  self.postMessage({ type: 'state', claims, sources, G, M, S, mentions, entityIndex });
+  // Overlay Stage 1 DEF-link metadata onto synthesized mentions so the
+  // UI can read confidence band, rationale, rule_set_version, and
+  // alternatives off the mention without re-walking D. Stage 6 adds
+  // stale tagging: any DEF whose rule_set_version is older than the
+  // current one is flagged — stale is a view-time signal, never a
+  // mutation of the underlying event.
+  const staleSources = new Set();
+  const staleCounts = { boundary: 0, type: 0, link: 0 };
+  for (const [obsId, d] of Object.entries(D)) {
+    if (obsId === '__coref' || obsId === '__aliases' || !d) continue;
+    const markStale = (def, kind) => {
+      if (!def) return;
+      if (def.rule_set_version && def.rule_set_version !== ruleSetVersion) {
+        def.stale = true;
+        staleCounts[kind] = (staleCounts[kind] || 0) + 1;
+      }
+    };
+    markStale(d.boundary, 'boundary');
+    markStale(d.type, 'type');
+    markStale(d.link, 'link');
+    if (d.boundary && d.boundary.stale && d.boundary.source_id) {
+      staleSources.add(d.boundary.source_id);
+    }
+    if (!d.link) continue;
+    const l = d.link;
+    const mentionId = l.mention_id || ('em_' + obsId);
+    const m = mentions[mentionId];
+    if (!m) continue;
+    if (typeof l.confidence === 'number') m.def_confidence = l.confidence;
+    if (l.band) m.def_band = l.band;
+    if (l.rule_set_version) m.rule_set_version = l.rule_set_version;
+    if (l.rationale) m.def_rationale = l.rationale;
+    if (Array.isArray(l.alternatives)) m.def_alternatives = l.alternatives;
+    if (l.stale) m.stale = true;
+  }
+
+  // ---------- Stage 2c: system consistency pass ----------
+  // The fold stays pure — it does not append events. Instead it
+  // surfaces detected contradictions as pendingConsistencyEvas, which
+  // the main thread reads and emits via emitSystemEva. This preserves
+  // the append-only log invariant and keeps the worker deterministic.
+  //
+  // Two detectors covered in this cut:
+  //   1. A coref chain whose members resolve to conflicting entity ids
+  //      via their DEF-link payloads — one or both links are wrong.
+  //   2. Two DEF-boundary events that assert different type_candidates
+  //      for the same surface within the same source — tie to review.
+  (function detectConsistency() {
+    const corefChains = Array.isArray(D.__coref) ? D.__coref : [];
+    for (const chain of corefChains) {
+      const members = chain.payload && Array.isArray(chain.payload.members) ? chain.payload.members : [];
+      const seen = new Map(); // entity_id -> obsId[]
+      for (const obsId of members) {
+        const d = D[obsId];
+        const eid = d && d.link && d.link.entity_id;
+        if (!eid) continue;
+        const bucket = seen.get(eid) || [];
+        bucket.push(obsId);
+        seen.set(eid, bucket);
+      }
+      if (seen.size > 1) {
+        // The chain says these are the same referent; the links
+        // disagree. Flag every link in the chain for review.
+        const related = [];
+        for (const obsId of members) {
+          const d = D[obsId];
+          if (d && d.link && d.link.event_id) related.push(d.link.event_id);
+        }
+        for (const obsId of members) {
+          const d = D[obsId];
+          const linkEvt = d && d.link;
+          if (!linkEvt || !linkEvt.event_id) continue;
+          pendingConsistencyEvas.push({
+            target_event: linkEvt.event_id,
+            target_site: 'claim:' + (linkEvt.mention_id || ('em_' + obsId)),
+            verdict: 'reject',
+            detected: 'coref_chain_disagrees',
+            related_events: related
+          });
+        }
+      }
+    }
+    // Surface+source type disagreements.
+    const bySurfaceSource = new Map();
+    for (const [obsId, d] of Object.entries(D)) {
+      if (obsId === '__coref' || obsId === '__aliases' || !d || !d.boundary) continue;
+      const b = d.boundary;
+      if (!b.surface || !b.source_id) continue;
+      const key = b.source_id + '|' + b.surface.toLowerCase();
+      const bucket = bySurfaceSource.get(key) || [];
+      bucket.push({ obsId, boundary: b });
+      bySurfaceSource.set(key, bucket);
+    }
+    for (const bucket of bySurfaceSource.values()) {
+      if (bucket.length < 2) continue;
+      const types = new Set(bucket.map(e => e.boundary.type_candidate || 'UNK'));
+      if (types.size < 2) continue;
+      const related = bucket.map(e => e.boundary.event_id).filter(Boolean);
+      for (const { obsId, boundary } of bucket) {
+        if (!boundary.event_id) continue;
+        pendingConsistencyEvas.push({
+          target_event: boundary.event_id,
+          target_site: 'observation:' + obsId,
+          verdict: 'defer',
+          detected: 'surface_type_disagrees',
+          related_events: related
+        });
+      }
+    }
+  })();
+
+  // ---------- Stage 3i: prompt-addition proposal clustering ----------
+  // Spec: ≥5 rejects of the same error pattern cluster by
+  // (surface_pattern, context_pattern, wrong_target) produce a human-
+  // review proposal for a workspace-level prompt addition. We key the
+  // cluster on (surface.toLowerCase(), source_id, wrong_target_entity_id)
+  // — source_id is a reasonable proxy for "context pattern" at this
+  // fidelity. The approval flow lives in the main thread (Stage 7 UI).
+  (function detectPromptProposals() {
+    const byCluster = new Map();
+    for (const eventId of Object.keys(evaPressure)) {
+      const p = evaPressure[eventId];
+      if (!p || !p.target || p.target.subtype !== 'link') continue;
+      const rejects = p.events.filter(e => e.verdict === 'reject');
+      if (!rejects.length) continue;
+      const surface = (p.target.surface || '').toLowerCase();
+      const wrong   = p.target.entity_id || 'null';
+      const source  = p.target.source_id || '*';
+      const key     = surface + '|' + source + '|' + wrong;
+      const bucket  = byCluster.get(key) || {
+        surface: p.target.surface || '',
+        source_id: p.target.source_id || null,
+        wrong_target: wrong,
+        rejects: [],
+        weight: 0
+      };
+      bucket.rejects.push(...rejects.map(e => e.event_id));
+      bucket.weight += rejects.reduce((s, e) => s + e.weight, 0);
+      byCluster.set(key, bucket);
+    }
+    for (const bucket of byCluster.values()) {
+      if (bucket.rejects.length < 5) continue;
+      promptProposals.push({
+        key: bucket.surface + '|' + (bucket.source_id || '*') + '|' + bucket.wrong_target,
+        surface: bucket.surface,
+        source_id: bucket.source_id,
+        wrong_target: bucket.wrong_target,
+        reject_count: bucket.rejects.length,
+        evidence_weight: bucket.weight,
+        triggered_by: bucket.rejects,
+        proposed_text: 'When evaluating "' + bucket.surface + '"' +
+          (bucket.source_id ? ' in ' + bucket.source_id : '') +
+          ', do not resolve to ' + bucket.wrong_target +
+          '. This is a repeated reporter correction (' + bucket.rejects.length + ' rejects).'
+      });
+    }
+  })();
+
+  self.postMessage({
+    type: 'state',
+    claims, sources, G, M, S, mentions, entityIndex,
+    D, pendingReview, amberMentions, defCounts,
+    evaPressure, recEvents, alreadyRewritten: Array.from(alreadyRewritten),
+    ruleSetVersion, pendingConsistencyEvas,
+    staleCounts, staleSources: Array.from(staleSources),
+    promptProposals
+  });
 });
 `;
 
@@ -6231,7 +7740,19 @@ async function fold() {
           M: ev.data.M || {},
           S: ev.data.S || {},
           mentions: ev.data.mentions || {},
-          entityIndex: ev.data.entityIndex || {}
+          entityIndex: ev.data.entityIndex || {},
+          D: ev.data.D || {},
+          pendingReview: ev.data.pendingReview || [],
+          amberMentions: ev.data.amberMentions || {},
+          defCounts: ev.data.defCounts || { boundary: 0, type: 0, link: 0, coref: 0, alias: 0 },
+          evaPressure: ev.data.evaPressure || {},
+          recEvents: ev.data.recEvents || {},
+          alreadyRewritten: new Set(Array.isArray(ev.data.alreadyRewritten) ? ev.data.alreadyRewritten : []),
+          ruleSetVersion: ev.data.ruleSetVersion || 'rs_v1',
+          pendingConsistencyEvas: ev.data.pendingConsistencyEvas || [],
+          staleCounts: ev.data.staleCounts || { boundary: 0, type: 0, link: 0 },
+          staleSources: Array.isArray(ev.data.staleSources) ? ev.data.staleSources : [],
+          promptProposals: Array.isArray(ev.data.promptProposals) ? ev.data.promptProposals : []
         });
       }
     };
@@ -6250,18 +7771,355 @@ let S_VIEW = {};
 // Keyed by mentionId. entityIndex: entity_id -> [obsId, ...].
 let MENTIONS = {};
 let ENTITY_INDEX = {};
+// Stage 1 DEF projections.
+let D_VIEW = {};
+let PENDING_REVIEW = [];
+let AMBER_MENTIONS = {};
+let DEF_COUNTS = { boundary: 0, type: 0, link: 0, coref: 0, alias: 0 };
 
-/* Convenience: append an event then refold and install into CLAIMS + USER_SOURCES */
+// Stage 1 status badge. Spec §7b: "Pending EVA queue — Persistent
+// badge in the workspace bar: '12 model suggestions await review.'"
+// Stage 1 populates the count from DEF-link review-band events and
+// DEF-alias proposals; the queue interaction itself is Stage 2 work.
+function refreshStage1Badge() {
+  if (typeof document === 'undefined' || !document.getElementById) return;
+  const el = document.getElementById('stage1-badge');
+  const n = Array.isArray(PENDING_REVIEW) ? PENDING_REVIEW.length : 0;
+  if (el) {
+    if (!n) el.hidden = true;
+    else { el.hidden = false; el.textContent = `${n} DEF${n === 1 ? '' : 's'} await review`; }
+  }
+  const rs = document.getElementById('ruleset-label');
+  if (rs) rs.textContent = RULE_SET_VERSION;
+}
+
+/* ======================================================================
+   STAGE 7 — UI surfaces
+   ----------------------------------------------------------------------
+   One shared modal with four tabs — covers 7a (per-entity loop), 7b
+   (pending EVA queue), 7c (ruleset changelog), and the Stage 3i prompt
+   approval flow. 7d (resistance profile dashboard) is deferred.
+====================================================================== */
+
+function stage7Open(tab) {
+  const modal = document.getElementById('stage7-modal');
+  if (!modal) return;
+  modal.hidden = false;
+  stage7SetTab(tab || 'queue');
+}
+
+function stage7Close() {
+  const modal = document.getElementById('stage7-modal');
+  if (modal) modal.hidden = true;
+}
+
+function stage7SetTab(tab) {
+  const buttons = document.querySelectorAll('#stage7-tabs .s7tab');
+  buttons.forEach(b => {
+    const active = b.dataset.tab === tab;
+    b.style.color = active ? 'var(--color-text-primary)' : 'var(--color-text-secondary)';
+    b.style.borderBottom = active ? '1.5px solid var(--color-text-primary)' : '0';
+  });
+  const body = document.getElementById('stage7-body');
+  const title = document.getElementById('stage7-title');
+  const sub   = document.getElementById('stage7-sub');
+  if (!body || !title || !sub) return;
+  if (tab === 'queue')     { title.textContent = 'Pending review';     sub.textContent = 'Model proposals awaiting a verdict. Ripping through 50 in 60 seconds is the design point.'; body.innerHTML = renderStage7Queue(); }
+  else if (tab === 'changelog') { title.textContent = 'Ruleset history'; sub.textContent = 'Every ⊛REC event that rewrote the encoding layer.'; body.innerHTML = renderStage7Changelog(); }
+  else if (tab === 'prompts')   { title.textContent = 'Prompt proposals'; sub.textContent = 'Stage 3i — repeated reject patterns the model should learn to avoid. Human approval required.'; body.innerHTML = renderStage7Prompts(); }
+  else if (tab === 'entity')    { title.textContent = 'Entity loop';   sub.textContent = 'Per-entity DEF/EVA/REC counts.';           body.innerHTML = renderStage7Entity(); }
+  wireStage7BodyClicks();
+}
+
+function escapeHtmlSafe(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function renderStage7Queue() {
+  const rows = (PENDING_REVIEW || []).slice(0, 50);
+  if (!rows.length) return '<div style="font-size:12.5px; color:var(--color-text-secondary);">No pending proposals.</div>';
+  const parts = [];
+  parts.push('<div style="display:flex; flex-direction:column; gap:10px;">');
+  for (const r of rows) {
+    const p = r.payload || {};
+    const kind = r.kind;
+    const eid = kind === 'alias' ? p.candidate_canonical_id : p.entity_id;
+    const label = kind === 'alias'
+      ? `Alias proposal: <strong>${escapeHtmlSafe(p.surface)}</strong> → ${escapeHtmlSafe(eid || 'null')}`
+      : `Low-confidence link: <strong>${escapeHtmlSafe(p.mention_id || '')}</strong> → ${escapeHtmlSafe(eid || 'null')}`;
+    const rationale = p.rationale ? escapeHtmlSafe(p.rationale) : '';
+    const conf = typeof p.confidence === 'number' ? p.confidence.toFixed(2) : '—';
+    const band = p.band || '—';
+    parts.push(`
+      <div class="s7-row" data-event-id="${escapeHtmlSafe(r.event_id)}" data-kind="${escapeHtmlSafe(kind)}" style="border:0.5px solid var(--color-border-tertiary); border-radius:4px; padding:10px 12px;">
+        <div style="font-size:13px; margin-bottom:3px;">${label}</div>
+        <div style="font-family:var(--font-mono); font-size:10.5px; color:var(--color-text-secondary);">conf ${conf} · band ${escapeHtmlSafe(band)} · ${escapeHtmlSafe(p.rule_set_version || '')}</div>
+        ${rationale ? `<div style="font-size:11.5px; color:var(--color-text-secondary); margin-top:4px;">${rationale}</div>` : ''}
+        <div style="display:flex; gap:6px; margin-top:8px;">
+          <button class="btn-sm" data-verdict="confirm">Confirm</button>
+          <button class="btn-sm" data-verdict="reject">Reject</button>
+          <button class="btn-sm" data-verdict="defer">Defer</button>
+        </div>
+      </div>`);
+  }
+  parts.push('</div>');
+  return parts.join('');
+}
+
+function renderStage7Changelog() {
+  const recs = Object.values(LAST_FOLD_STATE.recEvents || {}).slice().sort((a, b) => (a.ts < b.ts ? 1 : -1));
+  if (!recs.length) return '<div style="font-size:12.5px; color:var(--color-text-secondary);">No ⊛REC events yet. Accumulated evaluation pressure will populate this timeline.</div>';
+  const parts = ['<div style="display:flex; flex-direction:column; gap:8px;">'];
+  for (const rec of recs.slice(0, 100)) {
+    const t   = rec.ts ? new Date(rec.ts).toLocaleString() : '';
+    const kind = rec.rewrite_type || 'rewrite';
+    const target = rec.target && (rec.target.entity_id || rec.target.reverts) || '';
+    const change = rec.change ? escapeHtmlSafe(JSON.stringify(rec.change)) : '';
+    const evidence = Array.isArray(rec.triggered_by) ? rec.triggered_by.length : 0;
+    parts.push(`
+      <div style="border-left:2px solid var(--color-border-tertiary); padding:6px 0 6px 12px;">
+        <div style="font-family:var(--font-mono); font-size:11px; color:var(--color-text-secondary);">${escapeHtmlSafe(t)} · ${escapeHtmlSafe(kind)} · ${escapeHtmlSafe(String(target))}</div>
+        <div style="font-size:12px; margin-top:2px;">${change}</div>
+        <div style="font-family:var(--font-mono); font-size:10.5px; color:var(--color-text-secondary); margin-top:2px;">triggered by ${evidence} ⊨EVA · weight ${typeof rec.evidence_weight === 'number' ? rec.evidence_weight.toFixed(2) : '—'}</div>
+      </div>`);
+  }
+  parts.push('</div>');
+  return parts.join('');
+}
+
+function renderStage7Prompts() {
+  const proposals = LAST_FOLD_STATE.promptProposals || [];
+  if (!proposals.length) return '<div style="font-size:12.5px; color:var(--color-text-secondary);">No prompt proposals. A cluster of ≥5 rejects on the same surface/source/target produces one.</div>';
+  const parts = ['<div style="display:flex; flex-direction:column; gap:12px;">'];
+  for (const p of proposals) {
+    parts.push(`
+      <div class="s7-prompt" data-key="${escapeHtmlSafe(p.key)}" style="border:0.5px solid var(--color-border-tertiary); border-radius:4px; padding:12px;">
+        <div style="font-size:12.5px; margin-bottom:6px;"><strong>${escapeHtmlSafe(p.surface)}</strong> · ${escapeHtmlSafe(p.reject_count)} rejects · weight ${p.evidence_weight.toFixed(2)}</div>
+        <div style="font-size:12px; font-family:var(--font-mono); background:var(--color-background-secondary, #f5f3ef); padding:8px; border-radius:3px; margin-bottom:8px;">${escapeHtmlSafe(p.proposed_text)}</div>
+        <div style="display:flex; gap:6px;">
+          <button class="btn-sm btn-sm-primary" data-action="approve">Approve &amp; add to prompt</button>
+          <button class="btn-sm" data-action="dismiss">Dismiss</button>
+        </div>
+      </div>`);
+  }
+  parts.push('</div>');
+  return parts.join('');
+}
+
+function renderStage7Entity() {
+  const counts = computeEntityLoopCounts();
+  const rows = Object.entries(counts).sort((a, b) => b[1].defs - a[1].defs);
+  if (!rows.length) return '<div style="font-size:12.5px; color:var(--color-text-secondary);">No entity activity yet.</div>';
+  const parts = ['<div style="display:flex; flex-direction:column; gap:6px;">'];
+  for (const [entityId, c] of rows) {
+    const entity = ENTITIES[entityId] || {};
+    parts.push(`
+      <div style="display:flex; justify-content:space-between; align-items:baseline; padding:6px 0; border-bottom:0.5px solid var(--color-border-tertiary);">
+        <div>
+          <div style="font-size:13px;">${escapeHtmlSafe(entity.canonical || entityId)}</div>
+          <div style="font-family:var(--font-mono); font-size:10.5px; color:var(--color-text-secondary);">${escapeHtmlSafe(entityId)}</div>
+        </div>
+        <div style="font-family:var(--font-mono); font-size:11px; color:var(--color-text-secondary);">
+          ${c.defs} DEFs · ${c.confirms} confirms · ${c.rejects} rejects · ${c.reframes} reframes
+        </div>
+      </div>`);
+  }
+  parts.push('</div>');
+  return parts.join('');
+}
+
+// Helper for 7a. Walks D_VIEW + LAST_FOLD_STATE.evaPressure and sums
+// per-entity DEF/EVA counts. Reframes / confirms / rejects come off
+// the pressure buckets; DEF count comes from link DEFs keyed by entity.
+function computeEntityLoopCounts() {
+  const out = {};
+  const bump = (eid, k) => {
+    if (!eid) return;
+    const e = out[eid] = out[eid] || { defs: 0, confirms: 0, rejects: 0, reframes: 0, defers: 0 };
+    e[k]++;
+  };
+  for (const [obsId, d] of Object.entries(D_VIEW || {})) {
+    if (obsId === '__coref' || obsId === '__aliases' || !d || !d.link) continue;
+    if (d.link.entity_id) bump(d.link.entity_id, 'defs');
+  }
+  for (const p of Object.values(LAST_FOLD_STATE.evaPressure || {})) {
+    if (!p.target || !p.target.entity_id) continue;
+    const eid = p.target.entity_id;
+    for (const e of p.events) {
+      if (e.verdict === 'confirm') bump(eid, 'confirms');
+      else if (e.verdict === 'reject') bump(eid, 'rejects');
+      else if (e.verdict === 'reframe') bump(eid, 'reframes');
+      else if (e.verdict === 'defer') bump(eid, 'defers');
+    }
+  }
+  return out;
+}
+
+// Delegated click handler for buttons inside the modal body.
+function wireStage7BodyClicks() {
+  const body = document.getElementById('stage7-body');
+  if (!body) return;
+  body.onclick = async (ev) => {
+    const verdictBtn = ev.target.closest('[data-verdict]');
+    if (verdictBtn) {
+      const row = verdictBtn.closest('[data-event-id]');
+      if (!row) return;
+      const eventId = row.dataset.eventId;
+      const kind    = row.dataset.kind;
+      const verdict = verdictBtn.dataset.verdict;
+      const site    = kind === 'alias'
+        ? 'proposal:' + eventId
+        : 'claim:';
+      try {
+        await emitDirectEva({ targetEvent: eventId, targetSite: site, verdict, agent: 'human:reporter' });
+        installFoldResult(await fold());
+        if (await drainConsistencyEvas() > 0) installFoldResult(await fold());
+        await runRewriteEngine();
+        stage7SetTab('queue');
+      } catch (err) {
+        console.error('[stage7] EVA emit failed', err);
+      }
+      return;
+    }
+    const promptBtn = ev.target.closest('[data-action]');
+    if (promptBtn) {
+      const promptEl = promptBtn.closest('.s7-prompt');
+      if (!promptEl) return;
+      const key = promptEl.dataset.key;
+      const proposal = (LAST_FOLD_STATE.promptProposals || []).find(p => p.key === key);
+      if (!proposal) return;
+      if (promptBtn.dataset.action === 'approve') {
+        await approvePromptProposal(proposal);
+      } else {
+        await dismissPromptProposal(proposal);
+      }
+      stage7SetTab('prompts');
+      return;
+    }
+  };
+}
+
+// Stage 3i — approve a queued prompt proposal. Appends to the
+// workspace-level prompt_additions list stored under ENTITIES._workspace,
+// bumps the ruleset, and emits a REC-prompt_addition event with the
+// triggering EVA evidence (Stage 5 gate enforces triggered_by).
+async function approvePromptProposal(proposal) {
+  if (!ENTITIES._workspace) ENTITIES._workspace = { prompt_additions: [], dismissed_prompts: [] };
+  if (!Array.isArray(ENTITIES._workspace.prompt_additions)) ENTITIES._workspace.prompt_additions = [];
+  ENTITIES._workspace.prompt_additions.push({
+    text: proposal.proposed_text,
+    approved_at: new Date().toISOString(),
+    approved_by: 'human:reporter',
+    key: proposal.key
+  });
+  await saveEntitiesTable();
+  const prev = currentRuleSetVersion();
+  const next = bumpRuleSetVersion();
+  await emitRecEvent(`ruleset:${next}`, {
+    rewrite_type: 'prompt_addition',
+    previous_version: prev,
+    target: { workspace: '_workspace' },
+    change: { append_to_prompt: proposal.proposed_text, key: proposal.key },
+    triggered_by: proposal.triggered_by || [],
+    evidence_weight: proposal.evidence_weight || 0,
+    agent: 'human:reporter',
+    approval: { approved_by: 'human:reporter', at: new Date().toISOString() }
+  });
+  installFoldResult(await fold());
+}
+
+// Dismissing a proposal records a no-op note on the workspace so the
+// same cluster doesn't keep resurfacing. No REC is emitted.
+async function dismissPromptProposal(proposal) {
+  if (!ENTITIES._workspace) ENTITIES._workspace = { prompt_additions: [], dismissed_prompts: [] };
+  if (!Array.isArray(ENTITIES._workspace.dismissed_prompts)) ENTITIES._workspace.dismissed_prompts = [];
+  ENTITIES._workspace.dismissed_prompts.push({ key: proposal.key, dismissed_at: new Date().toISOString() });
+  await saveEntitiesTable();
+}
+
+function wireStage7Controls() {
+  if (typeof document === 'undefined') return;
+  const badge = document.getElementById('stage1-badge');
+  if (badge) badge.addEventListener('click', () => stage7Open('queue'));
+  const rulesetBtn = document.getElementById('ruleset-btn');
+  if (rulesetBtn) rulesetBtn.addEventListener('click', () => stage7Open('changelog'));
+  const close = document.getElementById('stage7-close');
+  if (close) close.addEventListener('click', stage7Close);
+  const backdrop = document.getElementById('stage7-backdrop');
+  if (backdrop) backdrop.addEventListener('click', stage7Close);
+  const tabs = document.querySelectorAll('#stage7-tabs .s7tab');
+  tabs.forEach(btn => btn.addEventListener('click', () => stage7SetTab(btn.dataset.tab)));
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') stage7Close();
+  });
+}
+
+// Developer surface: expose Stage 1/2/3 state on window for
+// inspection. Keeps the UI minimal while the full DEF/EVA/REC chain
+// remains auditable from the console.
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'PROVEO_STAGE1', {
+    configurable: true,
+    get() {
+      return {
+        rule_set_version: RULE_SET_VERSION,
+        def_counts: DEF_COUNTS,
+        pending_review: PENDING_REVIEW,
+        amber_mentions: AMBER_MENTIONS,
+        D: D_VIEW
+      };
+    }
+  });
+  Object.defineProperty(window, 'PROVEO_STAGE2', {
+    configurable: true,
+    get() {
+      return {
+        eva_pressure: LAST_FOLD_STATE.evaPressure || {},
+        pending_consistency: LAST_FOLD_STATE.pendingConsistencyEvas || [],
+        emit_direct: emitDirectEva,
+        emit_inferred: emitInferredEva,
+        emit_system: emitSystemEva
+      };
+    }
+  });
+  Object.defineProperty(window, 'PROVEO_STAGE3', {
+    configurable: true,
+    get() {
+      return {
+        rule_set_version: RULE_SET_VERSION,
+        rec_events: (LAST_FOLD_STATE.recEvents) || {},
+        already_rewritten: Array.from(LAST_FOLD_STATE.alreadyRewritten || []),
+        run_rewrite_engine: runRewriteEngine,
+        request_entity_merge: requestEntityMerge
+      };
+    }
+  });
+  Object.defineProperty(window, 'PROVEO_STAGE6', {
+    configurable: true,
+    get() {
+      return {
+        rule_set_version: RULE_SET_VERSION,
+        stale_counts: LAST_FOLD_STATE.staleCounts || { boundary: 0, type: 0, link: 0 },
+        stale_sources: (LAST_FOLD_STATE.staleSources || []).slice(),
+        revalidate_source: revalidateSource,
+        revalidate_workspace: revalidateWorkspace
+      };
+    }
+  });
+}
+
+/* Convenience: append an event then refold and install into CLAIMS +
+   USER_SOURCES. After the fold, drain any system-consistency EVAs the
+   fold detected and run the Stage 3 rewrite engine — each pass runs at
+   most once per call so the event loop can't livelock. */
 async function appendEventAndRefold(e) {
   await appendEvent(e);
-  const state = await fold();
-  CLAIMS = state.claims;
-  USER_SOURCES = state.sources;
-  G_VIEW = state.G;
-  M_VIEW = state.M;
-  S_VIEW = state.S;
-  MENTIONS = state.mentions || {};
-  ENTITY_INDEX = state.entityIndex || {};
+  installFoldResult(await fold());
+  const drained = await drainConsistencyEvas();
+  if (drained > 0) installFoldResult(await fold());
+  await runRewriteEngine();
 }
 
 /* ---------- Seed on first run ---------- */
@@ -6615,11 +8473,12 @@ function localHeuristicNer(text) {
   return pruned;
 }
 
-// Emit an OBS event per annotation. Returns the number emitted so the
-// caller can surface a count. Caller is responsible for refolding after.
+// Emit an OBS event per annotation. Returns the obs↔annotation pairs
+// so downstream Stage 1 DEF emitters can pi-reference the obsIds.
+// Caller is responsible for refolding after.
 async function emitDerivedObsForAnnotations(annotations, { sourceId, position }) {
-  if (!Array.isArray(annotations) || !annotations.length) return 0;
-  let n = 0;
+  if (!Array.isArray(annotations) || !annotations.length) return [];
+  const pairs = [];
   for (const a of annotations) {
     const obsId = 'o_' + ulid().slice(-10);
     await appendEvent({
@@ -6640,9 +8499,9 @@ async function emitDerivedObsForAnnotations(annotations, { sourceId, position })
       },
       author: 'system'
     });
-    n++;
+    pairs.push({ obsId, annotation: a });
   }
-  return n;
+  return pairs;
 }
 
 // Extract entities from whatever channels are available, in order:
@@ -6785,24 +8644,29 @@ async function handleUpload(files) {
       // with agent=model:<name>@<version> so downstream never mistakes
       // derived reads for human reads.
       const annotations = resolveAnnotationsForSource(proveo, text, kind);
-      await emitDerivedObsForAnnotations(annotations, {
+      const obsPairs = await emitDerivedObsForAnnotations(annotations, {
         sourceId: id,
         position: { workspace: matrix.activeRoomId || 'local' }
       });
+      // Stage 1 ⊢DEF: model proposals. Each annotation produces a
+      // boundary DEF (validated against source text), an optional type
+      // DEF, and a link DEF with a confidence band. After the per-
+      // annotation chain, coref and alias-proposal DEFs fire.
+      const defCounts = await runStage1Defs({ sourceId: id, obsPairs });
 
-      // Single refold after SRC + any derived OBS — keeps the projected
-      // state coherent (resolution can't see OBS that were filed after
-      // this SRC's refold point).
-      const state = await fold();
-      CLAIMS = state.claims;
-      USER_SOURCES = state.sources;
-      G_VIEW = state.G; M_VIEW = state.M; S_VIEW = state.S;
-      MENTIONS = state.mentions || {};
-      ENTITY_INDEX = state.entityIndex || {};
+      // Single refold after SRC + any derived OBS + DEFs — keeps the
+      // projected state coherent (resolution can't see OBS that were
+      // filed after this SRC's refold point).
+      installFoldResult(await fold());
+      if (await drainConsistencyEvas() > 0) installFoldResult(await fold());
+      await runRewriteEngine();
 
       added++;
       if (annotations.length) {
         console.log(`[entities] ${file.name}: ${annotations.length} annotations emitted`);
+        console.log(`[stage1] ${file.name}: DEF ` +
+          `boundary=${defCounts.boundary} type=${defCounts.type} ` +
+          `link=${defCounts.link} coref=${defCounts.coref} alias=${defCounts.alias}`);
       }
     } catch (err) {
       console.error('[upload] failed for', file.name, err);
@@ -7000,17 +8864,16 @@ async function handleAutoArchiveUpload(files) {
       });
 
       const annotations = resolveAnnotationsForSource(proveo, localText, kind);
-      await emitDerivedObsForAnnotations(annotations, {
+      const obsPairs = await emitDerivedObsForAnnotations(annotations, {
         sourceId: id,
         position: { workspace: matrix.activeRoomId || 'local' }
       });
+      // Stage 1 ⊢DEF: same pipeline as the local upload path.
+      const defCounts = await runStage1Defs({ sourceId: id, obsPairs });
 
-      const state = await fold();
-      CLAIMS = state.claims;
-      USER_SOURCES = state.sources;
-      G_VIEW = state.G; M_VIEW = state.M; S_VIEW = state.S;
-      MENTIONS = state.mentions || {};
-      ENTITY_INDEX = state.entityIndex || {};
+      installFoldResult(await fold());
+      if (await drainConsistencyEvas() > 0) installFoldResult(await fold());
+      await runRewriteEngine();
 
       added++;
       const archiveUrl = proveo?.archive?.url;
@@ -7020,6 +8883,9 @@ async function handleAutoArchiveUpload(files) {
           : 'archived');
       if (annotations.length) {
         console.log(`[entities] ${file.name}: ${annotations.length} annotations emitted`);
+        console.log(`[stage1] ${file.name}: DEF ` +
+          `boundary=${defCounts.boundary} type=${defCounts.type} ` +
+          `link=${defCounts.link} coref=${defCounts.coref} alias=${defCounts.alias}`);
       }
     } catch (err) {
       console.error('[auto-archive] failed for', file.name, err);
@@ -13069,12 +14935,11 @@ async function init() {
   await storage.init();
   await seedIfNeeded();
   await ensureEntitiesSeeded();
-  const state = await fold();
-  CLAIMS = state.claims;
-  USER_SOURCES = state.sources;
-  G_VIEW = state.G; M_VIEW = state.M; S_VIEW = state.S;
-  MENTIONS = state.mentions || {};
-  ENTITY_INDEX = state.entityIndex || {};
+  installFoldResult(await fold());
+  // Boot-time drain: if the log already has DEFs that would trigger
+  // consistency EVAs, fire them now so the user sees an accurate
+  // badge count on first paint.
+  if (await drainConsistencyEvas() > 0) installFoldResult(await fold());
 
   renderSources();
 
@@ -13092,6 +14957,7 @@ async function init() {
   wireSelectionToolbar();
   wireSourceViewer();
   wireAnchorDrawer();
+  wireStage7Controls();
   loadEvidenceBench();
   renderEvidenceBench();
   wireEvidenceDnd();
@@ -13184,9 +15050,7 @@ async function init() {
     },
     refold: async () => {
       const s = await fold();
-      CLAIMS = s.claims; USER_SOURCES = s.sources;
-      G_VIEW = s.G; M_VIEW = s.M; S_VIEW = s.S;
-      MENTIONS = s.mentions || {}; ENTITY_INDEX = s.entityIndex || {};
+      installFoldResult(s);
       renderSources(); renderCounts();
       console.log('refolded'); return s;
     }
