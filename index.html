@@ -2190,6 +2190,15 @@
           <label>Members</label>
           <div id="ws-members" class="ws-member-list"></div>
         </div>
+        <div class="ws-form-row">
+          <label for="ws-e2ee-pass">End-to-end passphrase</label>
+          <div style="display:flex; gap:6px; align-items:center">
+            <input id="ws-e2ee-pass" class="ws-input" type="password" autocomplete="off" placeholder="shared secret — share out-of-band with collaborators" style="flex:1">
+            <button class="btn-sm" id="ws-e2ee-save">Save</button>
+            <button class="btn-sm" id="ws-e2ee-clear" title="Clear passphrase (sends go plaintext)">Clear</button>
+          </div>
+          <div class="ws-section-sub" id="ws-e2ee-status" style="margin-top:6px">Plaintext — to-device messages travel unencrypted through the homeserver.</div>
+        </div>
         <label class="ws-toggle">
           <input type="checkbox" id="toggle-sample-in"> Show built-in sample article &amp; sources
         </label>
@@ -4304,6 +4313,151 @@ function buildToDeviceMap(targets, content) {
   return outer;
 }
 
+/* ----------------------------------------------------------------------
+   APPLICATION-LAYER E2EE (AES-256-GCM via WebCrypto)
+   ----------------------------------------------------------------------
+   Matrix's native olm/Rust crypto requires loading a separate WASM blob
+   and an IndexedDB keystore — heavy for a single-file CDN app. This
+   module gives us plain-spoken symmetric encryption instead:
+
+     - Key = PBKDF2(passphrase, salt = roomId, 200k iters, SHA-256 → 32B)
+     - Each payload sealed as { alg, fp, iv, ct } where:
+         alg  = 'aes-256-gcm'
+         fp   = SHA-256(key)[:8] (hex) — lets peers verify they share
+                the same passphrase without transmitting it
+         iv   = 12 random bytes, base64
+         ct   = AES-GCM ciphertext (payload JSON), base64
+     - Passphrase is stored per-room in localStorage and never leaves
+       this device. The server sees only {alg, fp, iv, ct}.
+
+   Limitations: no forward secrecy, no ratchet, no device verification.
+   Good enough to hide content from the homeserver operator; not a
+   replacement for Matrix's native E2EE if you need those properties.
+---------------------------------------------------------------------- */
+const LS_E2EE_PREFIX = 'nl.e2ee.v1.';
+const E2EE_ALG = 'aes-256-gcm';
+const E2EE_PBKDF2_ITERS = 200000;
+
+function toB64(buf) {
+  const bytes = new Uint8Array(buf);
+  let s = '';
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
+function fromB64(str) {
+  const bin = atob(str);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+function toHex(buf) {
+  const bytes = new Uint8Array(buf);
+  let s = '';
+  for (let i = 0; i < bytes.length; i++) s += bytes[i].toString(16).padStart(2, '0');
+  return s;
+}
+
+const collabCrypto = {
+  key: null,              // CryptoKey
+  keyRaw: null,           // Uint8Array(32) — used only for fingerprint
+  fingerprint: null,      // hex short-hash of the key
+  roomId: null,
+
+  async derive(passphrase, roomId) {
+    this.clear();
+    if (!passphrase) return false;
+    if (!globalThis.crypto?.subtle) {
+      console.warn('[e2ee] WebCrypto unavailable');
+      return false;
+    }
+    const enc = new TextEncoder();
+    const material = await crypto.subtle.importKey(
+      'raw', enc.encode(passphrase),
+      { name: 'PBKDF2' }, false, ['deriveBits']
+    );
+    const bits = await crypto.subtle.deriveBits(
+      { name: 'PBKDF2', salt: enc.encode('proveo:' + roomId), iterations: E2EE_PBKDF2_ITERS, hash: 'SHA-256' },
+      material, 256
+    );
+    const raw = new Uint8Array(bits);
+    this.key = await crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+    this.keyRaw = raw;
+    this.roomId = roomId;
+    const fpBuf = await crypto.subtle.digest('SHA-256', raw);
+    this.fingerprint = toHex(fpBuf).slice(0, 16);
+    return true;
+  },
+
+  clear() {
+    this.key = null;
+    this.keyRaw = null;
+    this.fingerprint = null;
+    this.roomId = null;
+  },
+
+  enabled() { return !!this.key; },
+
+  async encrypt(obj) {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const plaintext = new TextEncoder().encode(JSON.stringify(obj));
+    const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, this.key, plaintext);
+    // Envelope shape borrowed from EO-DB's EncryptedPeerPayload with a
+    // `v` version marker for forward-compat with future format changes.
+    return { v: 1, alg: E2EE_ALG, fp: this.fingerprint, iv: toB64(iv), ct: toB64(ct) };
+  },
+
+  async decrypt(envelope) {
+    if (!envelope || envelope.alg !== E2EE_ALG) throw new Error('not an e2ee envelope');
+    if (envelope.v && envelope.v !== 1) throw new Error('unknown envelope version: ' + envelope.v);
+    if (envelope.fp !== this.fingerprint) throw new Error('key fingerprint mismatch');
+    const iv = fromB64(envelope.iv);
+    const ct = fromB64(envelope.ct);
+    const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, this.key, ct);
+    return JSON.parse(new TextDecoder().decode(plaintext));
+  },
+
+  /* A message body is "sealed" if it has alg+fp+iv+ct fields. Anything
+     else is treated as plaintext for back-compat with unencrypted peers. */
+  isSealed(content) {
+    return !!(content && content.alg === E2EE_ALG && content.fp && content.iv && content.ct);
+  }
+};
+
+function loadStoredPassphrase(roomId) {
+  try { return localStorage.getItem(LS_E2EE_PREFIX + roomId) || ''; } catch { return ''; }
+}
+function storePassphrase(roomId, passphrase) {
+  try {
+    if (passphrase) localStorage.setItem(LS_E2EE_PREFIX + roomId, passphrase);
+    else localStorage.removeItem(LS_E2EE_PREFIX + roomId);
+  } catch {}
+}
+
+async function applyE2eePassphrase(roomId, passphrase) {
+  if (!passphrase) { collabCrypto.clear(); return false; }
+  const ok = await collabCrypto.derive(passphrase, roomId);
+  return ok;
+}
+
+function renderE2eeStatus() {
+  const status = $('#ws-e2ee-status');
+  if (!status) return;
+  const dot = $('#tbar-sync-dot');
+  if (collabCrypto.enabled()) {
+    status.innerHTML = `Encrypted · key fingerprint <span style="font-family:var(--font-mono)">${collabCrypto.fingerprint}</span> — share this passphrase only over a trusted channel.`;
+    if (dot) dot.setAttribute('data-e2ee', '1');
+  } else {
+    status.textContent = 'Plaintext — to-device messages travel unencrypted through the homeserver.';
+    if (dot) dot.removeAttribute('data-e2ee');
+  }
+  const pass = $('#ws-e2ee-pass');
+  if (pass && matrix.activeRoomId) pass.value = loadStoredPassphrase(matrix.activeRoomId);
+  const labelEl = $('#tbar-sync-label');
+  if (labelEl && collabCrypto.enabled() && !labelEl.textContent.includes('🔒')) {
+    labelEl.textContent = '🔒 ' + labelEl.textContent;
+  }
+}
+
 const matrixCollab = {
   roomId: null,
   deviceId: null,
@@ -4327,12 +4481,33 @@ const matrixCollab = {
     const client = matrix.client;
     if (!client) return;
 
-    this.toDeviceListener = (event) => {
+    this.toDeviceListener = async (event) => {
       const type = event.getType();
       if (type !== COLLAB_EVENT_STATE && type !== COLLAB_EVENT_CURSOR && type !== COLLAB_EVENT_HELLO) return;
       const sender = event.getSender();
-      if (sender === matrix.userId && event.getContent()?.origin_device === this.deviceId) return;
-      const content = event.getContent() || {};
+      let content = event.getContent() || {};
+
+      // Unseal if encrypted. If a sealed envelope arrives while we have
+      // no key (or the wrong key), drop it quietly rather than leak a
+      // confusing state onto the editor.
+      if (collabCrypto.isSealed(content)) {
+        if (!collabCrypto.enabled()) {
+          console.warn('[e2ee] sealed message received but no passphrase set');
+          return;
+        }
+        try {
+          content = await collabCrypto.decrypt(content);
+        } catch (err) {
+          console.warn('[e2ee] decrypt failed', err.message);
+          return;
+        }
+      } else if (collabCrypto.enabled()) {
+        // We require encryption, peer sent plaintext — drop.
+        console.warn('[e2ee] rejected plaintext from', sender, '— room requires encryption');
+        return;
+      }
+
+      if (sender === matrix.userId && content.origin_device === this.deviceId) return;
       if (content.room_id && content.room_id !== this.roomId) return;
       if (type === COLLAB_EVENT_STATE) this.applyRemoteState(sender, content);
       else if (type === COLLAB_EVENT_CURSOR) this.applyRemoteCursor(sender, content);
@@ -4407,8 +4582,16 @@ const matrixCollab = {
   async sendToDeviceSafe(type, content) {
     const targets = this.peerTargets({ includeSelf: true });
     if (!targets.length || !matrix.client) return;
+    // Seal content if e2ee is on. The envelope itself is unencrypted
+    // metadata — it carries only the algorithm, IV, fingerprint, and
+    // ciphertext; no document content, no cursor offset.
+    let payload = content;
+    if (collabCrypto.enabled()) {
+      try { payload = await collabCrypto.encrypt(content); }
+      catch (err) { console.warn('[e2ee] encrypt failed', err); return; }
+    }
     try {
-      const map = buildToDeviceMap(targets, content);
+      const map = buildToDeviceMap(targets, payload);
       await matrix.client.sendToDevice(type, map);
     } catch (err) {
       // Older SDKs accept a nested plain object instead of Map
@@ -4416,7 +4599,7 @@ const matrixCollab = {
         const obj = {};
         for (const { userId, deviceId } of targets) {
           obj[userId] = obj[userId] || {};
-          obj[userId][deviceId || '*'] = content;
+          obj[userId][deviceId || '*'] = payload;
         }
         await matrix.client.sendToDevice(type, obj);
       } catch (err2) {
@@ -4452,13 +4635,18 @@ const matrixCollab = {
         origin_device: this.deviceId,
         ts: Date.now()
       };
+      let payload = snapshot;
+      if (collabCrypto.enabled()) {
+        try { payload = await collabCrypto.encrypt(snapshot); }
+        catch (err) { console.warn('[e2ee] encrypt failed in hello-reply', err); return; }
+      }
       const target = [{ userId: sender, deviceId: content.origin_device || '*' }];
       try {
-        const map = buildToDeviceMap(target, snapshot);
+        const map = buildToDeviceMap(target, payload);
         await matrix.client.sendToDevice(COLLAB_EVENT_STATE, map);
       } catch (err) {
         try {
-          const obj = { [sender]: { [content.origin_device || '*']: snapshot } };
+          const obj = { [sender]: { [content.origin_device || '*']: payload } };
           await matrix.client.sendToDevice(COLLAB_EVENT_STATE, obj);
         } catch {}
       }
@@ -5047,6 +5235,8 @@ async function matrixStart(session) {
 
 async function matrixLogout() {
   matrixCollab.detach();
+  collabCrypto.clear();
+  renderE2eeStatus();
   try { if (matrix.client) await matrix.client.logout(); } catch (e) { console.warn('[matrix] logout failed', e); }
   try { if (matrix.client) matrix.client.stopClient(); } catch {}
   matrix.client = null;
@@ -5075,7 +5265,7 @@ function refreshRooms() {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function selectWorkspaceRoom(roomId, { silent = false } = {}) {
+async function selectWorkspaceRoom(roomId, { silent = false } = {}) {
   if (!matrix.client) return;
   const room = matrix.client.getRoom(roomId);
   if (!room) return;
@@ -5087,8 +5277,15 @@ function selectWorkspaceRoom(roomId, { silent = false } = {}) {
     membership: m.membership
   }));
   try { localStorage.setItem(LS_MX_ROOM, roomId); } catch {}
+
+  // Restore any saved passphrase for this room before attaching collab
+  // so the first hello/state messages are already sealed.
+  const storedPass = loadStoredPassphrase(roomId);
+  await applyE2eePassphrase(roomId, storedPass);
+
   updateWorkspaceIndicator();
   renderWorkspaceModal();
+  renderE2eeStatus();
   matrixCollab.attach(roomId);
   if (!silent) showToast(`workspace: ${room.name || roomId}`);
 }
@@ -5219,6 +5416,36 @@ function wireWorkspace() {
   });
   $('#toggle-sample').addEventListener('change', e => setSampleData(e.target.checked));
   $('#toggle-sample-in').addEventListener('change', e => setSampleData(e.target.checked));
+
+  // E2EE passphrase controls
+  const passEl = $('#ws-e2ee-pass');
+  $('#ws-e2ee-save')?.addEventListener('click', async () => {
+    if (!matrix.activeRoomId) { showToast('pick a workspace room first'); return; }
+    const pass = passEl.value.trim();
+    if (!pass) { showToast('passphrase is empty — use Clear to disable'); return; }
+    storePassphrase(matrix.activeRoomId, pass);
+    const ok = await applyE2eePassphrase(matrix.activeRoomId, pass);
+    renderE2eeStatus();
+    if (ok) {
+      showToast('end-to-end encryption on · fp ' + collabCrypto.fingerprint);
+      // Re-hello so peers (or our other devices) notice the shift and
+      // respond with their latest state under the new key.
+      matrixCollab.sendHello?.().catch(() => {});
+    } else {
+      showToast('e2ee setup failed — see console');
+    }
+  });
+  $('#ws-e2ee-clear')?.addEventListener('click', async () => {
+    if (!matrix.activeRoomId) return;
+    storePassphrase(matrix.activeRoomId, '');
+    if (passEl) passEl.value = '';
+    collabCrypto.clear();
+    renderE2eeStatus();
+    showToast('encryption cleared · messages will be plaintext');
+  });
+  passEl?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') $('#ws-e2ee-save').click();
+  });
 }
 
 async function bootMatrixIfPossible() {
