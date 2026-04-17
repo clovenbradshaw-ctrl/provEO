@@ -11032,6 +11032,9 @@ function wireCellTuple() {
   const wrap = $('#src-viewer-table-wrap');
   if (wrap) {
     wrap.addEventListener('click', (e) => {
+      // A just-completed drag commits its own selection and sets this flag
+      // so the trailing click doesn't clobber it with a single-cell replace.
+      if (wrap._dragSuppressClick) { wrap._dragSuppressClick = false; return; }
       const td = e.target.closest('td');
       if (!td || td.classList.contains('rowno')) return;
       if (!wrap.contains(td)) return;
@@ -11039,11 +11042,12 @@ function wireCellTuple() {
       // instead of the tuple readout — different affordance, same input.
       const body = $('#src-viewer').querySelector('.src-viewer-body');
       if (body && body.classList.contains('is-selecting')) {
-        handleDrawerCellClick(td, e.shiftKey);
+        handleDrawerCellClick(td, e.shiftKey || e.ctrlKey || e.metaKey);
         return;
       }
       selectCellTuple(td);
     });
+    wireDrawerCellDrag(wrap);
   }
   const btn = $('#src-viewer-tuple-copy');
   if (btn) {
@@ -11087,7 +11091,7 @@ function renderPickerBarState() {
   const n = drawerState.selectedCells.length;
   if (!label) return;
   if (n === 0) {
-    label.textContent = 'Select text or click a cell to anchor';
+    label.textContent = 'Select text, click a cell, or drag / ⌘-click across cells';
     if (ops) ops.hidden = true;
     if (btn) btn.hidden = true;
   } else if (n === 1) {
@@ -11106,9 +11110,9 @@ function renderPickerBarState() {
 }
 
 /* In selection mode, a TD click adds/toggles a cell in the drawer's
-   selectedCells list. Shift-click appends; plain click starts a fresh
-   single-cell selection. */
-function handleDrawerCellClick(td, shift) {
+   selectedCells list. Shift/Ctrl/Cmd-click appends; plain click starts
+   a fresh single-cell selection. */
+function handleDrawerCellClick(td, additive) {
   const row = Number(td.dataset.row);
   const colIdx = Number(td.dataset.colIdx);
   if (!Number.isFinite(row) || !Number.isFinite(colIdx)) return;
@@ -11118,7 +11122,7 @@ function handleDrawerCellClick(td, shift) {
   const col = th ? th.textContent : '';
   const value = td.textContent;
   const entry = { row, col, colIdx, value };
-  if (shift) {
+  if (additive) {
     // Toggle: if this cell is already in the list, remove it
     const at = drawerState.selectedCells.findIndex(c => c.row === row && c.colIdx === colIdx);
     if (at >= 0) {
@@ -11136,6 +11140,127 @@ function handleDrawerCellClick(td, shift) {
     drawerState.derivedOp = null;
   }
   renderPickerBarState();
+}
+
+/* Drag-to-select over the CSV table while in drawer selection mode.
+   Mousedown on a TD starts a potential drag; only once the pointer
+   enters a different cell does the drag "activate" — a plain press-and-
+   release still routes through handleDrawerCellClick so click semantics
+   (incl. ctrl/cmd toggle) are preserved. Holding shift/ctrl/cmd while
+   dragging adds the new range to the existing selection; otherwise the
+   prior selection is replaced. */
+function wireDrawerCellDrag(wrap) {
+  let drag = null;
+
+  const inSelectingMode = () => {
+    const body = $('#src-viewer')?.querySelector('.src-viewer-body');
+    return !!(body && body.classList.contains('is-selecting'));
+  };
+  const cellFromEvent = (e) => {
+    const td = e.target.closest('td');
+    if (!td || td.classList.contains('rowno') || !wrap.contains(td)) return null;
+    const row = Number(td.dataset.row);
+    const colIdx = Number(td.dataset.colIdx);
+    if (!Number.isFinite(row) || !Number.isFinite(colIdx)) return null;
+    return { td, row, colIdx };
+  };
+  const rangeBounds = () => ({
+    minRow: Math.min(drag.startRow, drag.currentRow),
+    maxRow: Math.max(drag.startRow, drag.currentRow),
+    minCol: Math.min(drag.startCol, drag.currentCol),
+    maxCol: Math.max(drag.startCol, drag.currentCol),
+  });
+  const paintPreview = () => {
+    const { minRow, maxRow, minCol, maxCol } = rangeBounds();
+    const tbody = wrap.querySelector('tbody');
+    if (!tbody) return;
+    tbody.querySelectorAll('td').forEach(td => {
+      if (td.classList.contains('rowno')) return;
+      const r = Number(td.dataset.row);
+      const c = Number(td.dataset.colIdx);
+      const inRange = r >= minRow && r <= maxRow && c >= minCol && c <= maxCol;
+      const inSnapshot = drag.snapshot.has(`${r}:${c}`);
+      if (inRange || inSnapshot) td.classList.add('picked');
+      else td.classList.remove('picked');
+    });
+  };
+  const commitRange = () => {
+    const { minRow, maxRow, minCol, maxCol } = rangeBounds();
+    const existing = new Map();
+    for (const c of drawerState.selectedCells) existing.set(`${c.row}:${c.colIdx}`, c);
+    for (let r = minRow; r <= maxRow; r++) {
+      for (let ci = minCol; ci <= maxCol; ci++) {
+        const td = wrap.querySelector(`td[data-row="${r}"][data-col-idx="${ci}"]`);
+        if (!td) continue;
+        const th = wrap.querySelector(`thead th[data-col-idx="${ci}"]`);
+        const col = th ? th.textContent : '';
+        existing.set(`${r}:${ci}`, { row: r, col, colIdx: ci, value: td.textContent });
+      }
+    }
+    drawerState.selectedCells = Array.from(existing.values());
+    if (drawerState.selectedCells.length < 2) drawerState.derivedOp = null;
+    // Sync .picked to the final selection so preview artifacts don't linger.
+    const selKeys = new Set(drawerState.selectedCells.map(c => `${c.row}:${c.colIdx}`));
+    wrap.querySelectorAll('tbody td').forEach(td => {
+      if (td.classList.contains('rowno')) return;
+      const r = Number(td.dataset.row);
+      const c = Number(td.dataset.colIdx);
+      if (selKeys.has(`${r}:${c}`)) td.classList.add('picked');
+      else td.classList.remove('picked');
+    });
+    renderPickerBarState();
+  };
+
+  wrap.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    if (!inSelectingMode()) return;
+    const hit = cellFromEvent(e);
+    if (!hit) return;
+    drag = {
+      startRow: hit.row, startCol: hit.colIdx,
+      currentRow: hit.row, currentCol: hit.colIdx,
+      additive: e.shiftKey || e.ctrlKey || e.metaKey,
+      active: false,
+      snapshot: new Set(),
+    };
+  });
+
+  wrap.addEventListener('mousemove', (e) => {
+    if (!drag) return;
+    const hit = cellFromEvent(e);
+    if (!hit) return;
+    if (hit.row === drag.currentRow && hit.colIdx === drag.currentCol && drag.active) return;
+    drag.currentRow = hit.row;
+    drag.currentCol = hit.colIdx;
+    if (!drag.active && (hit.row !== drag.startRow || hit.colIdx !== drag.startCol)) {
+      drag.active = true;
+      // Suppress the browser's text selection across cells once we know
+      // the gesture is a drag — only then, so a simple click still lets
+      // the browser do its thing elsewhere.
+      e.preventDefault();
+      window.getSelection?.().removeAllRanges?.();
+      if (drag.additive) {
+        drag.snapshot = new Set(drawerState.selectedCells.map(c => `${c.row}:${c.colIdx}`));
+      } else {
+        wrap.querySelectorAll('td.picked').forEach(c => c.classList.remove('picked'));
+        drawerState.selectedCells = [];
+        drawerState.derivedOp = null;
+      }
+    }
+    if (drag.active) paintPreview();
+  });
+
+  // Listen on window so a drag that releases outside the table still
+  // commits cleanly.
+  window.addEventListener('mouseup', () => {
+    if (!drag) return;
+    const wasActive = drag.active;
+    if (wasActive) {
+      commitRange();
+      wrap._dragSuppressClick = true;
+    }
+    drag = null;
+  });
 }
 
 function hideSourceViewer() {
