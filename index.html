@@ -1131,12 +1131,80 @@
     display: flex;
     flex-direction: column;
     background: var(--color-background-primary);
+    position: relative;
   }
   /* Drawer mode: swap the provenance inspector for the anchor drawer. */
   .right-panel[data-mode="provenance"] .rp-drawer { display: none; }
   .right-panel[data-mode="sourcing"] .rp-empty,
   .right-panel[data-mode="sourcing"] .rp-content { display: none; }
   .right-panel[data-mode="sourcing"] .rp-drawer { display: flex; }
+
+  /* ---------- PANEL COLLAPSE / FOCUS MODE ---------- */
+  .right-panel.is-collapsed,
+  .sources.is-collapsed {
+    width: 30px;
+    min-width: 30px;
+  }
+  .right-panel.is-collapsed > *:not(.panel-expand),
+  .sources.is-collapsed > *:not(.panel-expand) { display: none !important; }
+  .panel-expand {
+    display: none;
+    width: 100%;
+    height: 100%;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 14px;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    color: var(--color-text-secondary);
+    font-size: 14px;
+    font-family: var(--font-mono);
+    line-height: 1;
+  }
+  .panel-expand:hover { color: var(--color-text-primary); background: var(--color-background-secondary); }
+  .right-panel.is-collapsed .panel-expand,
+  .sources.is-collapsed .panel-expand { display: flex; }
+  .panel-collapse-btn {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: var(--font-mono);
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .panel-collapse-btn:hover { color: var(--color-text-primary); background: var(--color-background-secondary); }
+  .spanel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .focus-toggle {
+    appearance: none;
+    background: transparent;
+    border: 0.5px solid var(--color-border-tertiary);
+    color: var(--color-text-secondary);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    padding: 3px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .focus-toggle:hover { color: var(--color-text-primary); border-color: var(--color-border-secondary); }
+  .focus-toggle.is-on {
+    color: var(--teal-text);
+    border-color: var(--teal-mid);
+    background: var(--teal-fill);
+  }
   .rp-drawer {
     flex-direction: column;
     flex: 1;
@@ -3849,6 +3917,10 @@
       <span id="boot-status" style="font-family: var(--font-mono); font-size: 10.5px; color: var(--color-text-secondary); margin-right: 4px;">booting…</span>
       <button id="stage1-badge" hidden title="DEF proposals awaiting review" style="font-family: var(--font-mono); font-size: 10.5px; color: var(--color-amber, #BA7517); margin-right: 6px; background: transparent; border: 1px solid currentColor; border-radius: 3px; padding: 2px 6px; cursor: pointer;">0 await review</button>
       <button id="ruleset-btn" title="Ruleset history" style="font-family: var(--font-mono); font-size: 10.5px; color: var(--color-text-secondary); margin-right: 6px; background: transparent; border: 0.5px solid var(--color-border-tertiary); border-radius: 3px; padding: 2px 6px; cursor: pointer;"><span id="ruleset-label">rs_v1</span></button>
+      <button id="focus-toggle" class="focus-toggle" type="button" title="Focus mode — collapse side panels (⌘.)" aria-pressed="false">
+        <span aria-hidden="true">◫</span>
+        <span>Focus</span>
+      </button>
       <div class="srcbadge"><div class="statdot statdot-green"></div>3 indexed</div>
       <button class="ws-btn" id="ws-btn" title="Workspace / Matrix">
         <span class="ws-dot" id="ws-dot"></span>
@@ -3861,8 +3933,12 @@
   <div class="body">
 
     <!-- ===== SOURCES ===== -->
-    <aside class="sources">
-      <div class="spanel-head">Sources</div>
+    <aside class="sources" id="sources-panel">
+      <button class="panel-expand" id="sources-expand" type="button" title="Expand sources">›</button>
+      <div class="spanel-head">
+        <span>Sources</span>
+        <button class="panel-collapse-btn" id="sources-collapse" type="button" title="Collapse sources">‹</button>
+      </div>
       <div class="slist" id="slist"></div>
       <div class="sadd-stack">
         <div class="sadd" id="sadd-btn">+ add source</div>
@@ -3963,7 +4039,12 @@
       </div>
 
       <aside class="right-panel" id="right-panel" data-mode="provenance">
+        <button class="panel-expand" id="right-panel-expand" type="button" title="Expand inspector">‹</button>
         <div class="rp-empty" id="rp-empty">
+          <div class="rphead" style="border-bottom:0;padding-bottom:0">
+            <span class="rphead-title" style="color:var(--color-text-secondary);font-size:11px;letter-spacing:0.08em;text-transform:uppercase">Inspector</span>
+            <button class="panel-collapse-btn rp-collapse-btn" type="button" title="Collapse inspector">›</button>
+          </div>
           <div class="rp-empty-hint" id="rp-empty-hint">
             <div class="rp-empty-inner">
               <div class="rp-empty-glyph">⊨</div>
@@ -3982,14 +4063,20 @@
         <div class="rp-content" id="rp-content">
           <div class="rphead">
             <span class="rphead-title" id="rp-type-label">Grounded</span>
-            <button class="rphead-close" id="rp-close">×</button>
+            <span style="display:flex;gap:4px;align-items:center">
+              <button class="panel-collapse-btn rp-collapse-btn" type="button" title="Collapse inspector">›</button>
+              <button class="rphead-close" id="rp-close">×</button>
+            </span>
           </div>
           <div class="rpbody" id="rp-body"></div>
         </div>
         <div class="rp-drawer" id="rp-drawer">
           <div class="rphead">
             <span class="rphead-title" id="drawer-title">Anchor evidence</span>
-            <button class="rphead-close" id="drawer-close">×</button>
+            <span style="display:flex;gap:4px;align-items:center">
+              <button class="panel-collapse-btn rp-collapse-btn" type="button" title="Collapse inspector">›</button>
+              <button class="rphead-close" id="drawer-close">×</button>
+            </span>
           </div>
           <div class="drawer-body" id="drawer-body"></div>
         </div>
@@ -5251,6 +5338,11 @@ function showClaim(id, opts = {}) {
 
   $('#rp-empty').style.display = 'none';
   $('#rp-content').classList.add('visible');
+  // If the writer has the inspector collapsed, clicking a claim should
+  // surface its provenance — silently expand on demand.
+  $('#right-panel')?.classList.remove('is-collapsed');
+  try { localStorage.setItem('proveo.layout.rightCollapsed', '0'); } catch {}
+  syncFocusToggleState?.();
 
   const typeLabels = {
     grounded: 'Grounded',
@@ -10188,18 +10280,121 @@ function positionCiteToolbar() {
   tb.style.top = (rect.top + window.scrollY) + 'px';
 }
 
-function wireSelectionToolbar() {
-  document.addEventListener('selectionchange', () => {
-    // only show in Write mode (the editable article)
-    const writeActive = $('#mode-write').classList.contains('active');
-    if (!writeActive) { $('#cite-toolbar').hidden = true; return; }
-    // Don't shadow the drawer with a toolbar — while sourcing, the
-    // toolbar is mode-inappropriate.
-    if (drawerState.active) { $('#cite-toolbar').hidden = true; return; }
-    positionCiteToolbar();
+/* Collapse / expand the side panels and a one-click Focus mode that hides
+   both at once. State persists per-panel in localStorage so a writer who
+   prefers a clean canvas keeps it across reloads. */
+const LAYOUT_KEYS = {
+  sources: 'proveo.layout.sourcesCollapsed',
+  right:   'proveo.layout.rightCollapsed',
+};
+function setPanelCollapsed(which, collapsed) {
+  const el = which === 'sources' ? $('#sources-panel') : $('#right-panel');
+  if (!el) return;
+  el.classList.toggle('is-collapsed', !!collapsed);
+  try { localStorage.setItem(LAYOUT_KEYS[which], collapsed ? '1' : '0'); } catch {}
+  syncFocusToggleState();
+}
+function syncFocusToggleState() {
+  const btn = $('#focus-toggle');
+  if (!btn) return;
+  const both = $('#sources-panel')?.classList.contains('is-collapsed')
+            && $('#right-panel')?.classList.contains('is-collapsed');
+  btn.classList.toggle('is-on', !!both);
+  btn.setAttribute('aria-pressed', both ? 'true' : 'false');
+}
+function wirePanelCollapse() {
+  // Restore persisted state.
+  try {
+    if (localStorage.getItem(LAYOUT_KEYS.sources) === '1') $('#sources-panel')?.classList.add('is-collapsed');
+    if (localStorage.getItem(LAYOUT_KEYS.right)   === '1') $('#right-panel')?.classList.add('is-collapsed');
+  } catch {}
+
+  $('#sources-collapse')?.addEventListener('click', () => setPanelCollapsed('sources', true));
+  $('#sources-expand')?.addEventListener('click',   () => setPanelCollapsed('sources', false));
+  document.querySelectorAll('.rp-collapse-btn').forEach(b => {
+    b.addEventListener('click', () => setPanelCollapsed('right', true));
   });
-  window.addEventListener('scroll', positionCiteToolbar, true);
-  window.addEventListener('resize', positionCiteToolbar);
+  $('#right-panel-expand')?.addEventListener('click', () => setPanelCollapsed('right', false));
+
+  $('#focus-toggle')?.addEventListener('click', () => {
+    const sourcesEl = $('#sources-panel');
+    const rightEl = $('#right-panel');
+    const both = sourcesEl?.classList.contains('is-collapsed')
+              && rightEl?.classList.contains('is-collapsed');
+    setPanelCollapsed('sources', !both);
+    setPanelCollapsed('right', !both);
+  });
+
+  // Keyboard shortcut: Cmd/Ctrl + . toggles Focus mode.
+  document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === '.') {
+      e.preventDefault();
+      $('#focus-toggle')?.click();
+    }
+  });
+
+  syncFocusToggleState();
+}
+
+function wireSelectionToolbar() {
+  // The cite-toolbar used to follow the selection on every selectionchange,
+  // which felt grabby while you were still dragging or typing. Now we hide
+  // aggressively on movement and only re-show after a stable selection
+  // (mouseup or shift+arrow keyup), with a short settle delay.
+  const tb = $('#cite-toolbar');
+  let showTimer = null;
+  const SETTLE_MS = 220;
+  const MIN_CHARS = 2;
+
+  function hide() {
+    if (showTimer) { clearTimeout(showTimer); showTimer = null; }
+    tb.hidden = true;
+  }
+  function maybeShow() {
+    if (showTimer) clearTimeout(showTimer);
+    showTimer = setTimeout(() => {
+      showTimer = null;
+      const writeActive = $('#mode-write').classList.contains('active');
+      if (!writeActive) { tb.hidden = true; return; }
+      if (drawerState.active) { tb.hidden = true; return; }
+      const info = getArticleSelectionRange();
+      if (!info || (info.text || '').trim().length < MIN_CHARS) { tb.hidden = true; return; }
+      positionCiteToolbar();
+    }, SETTLE_MS);
+  }
+
+  // Hide while the user is mid-action — typing, caret-only moves, dragging.
+  document.addEventListener('selectionchange', hide);
+  window.addEventListener('scroll', hide, true);
+  window.addEventListener('resize', hide);
+  document.addEventListener('keydown', (e) => {
+    // Esc dismisses; Cmd/Ctrl-shortcuts and pure typing should not surface
+    // the pill mid-stroke.
+    if (e.key === 'Escape') hide();
+  });
+
+  // Show only after an explicit selection gesture settles.
+  const body = $('#article-body');
+  if (body) {
+    body.addEventListener('mouseup', maybeShow);
+    body.addEventListener('keyup', (e) => {
+      // Shift+Arrow / Shift+Home/End extend the selection; Cmd/Ctrl+A selects
+      // the body. Otherwise typing is just typing — leave the pill hidden.
+      if (e.shiftKey && (e.key.startsWith('Arrow') || e.key === 'Home' || e.key === 'End')) {
+        maybeShow();
+      } else if ((e.metaKey || e.ctrlKey) && (e.key === 'a' || e.key === 'A')) {
+        maybeShow();
+      }
+    });
+  }
+  // Also catch double/triple-click selections, which release on mouseup
+  // outside of the editor body bounds in some layouts.
+  document.addEventListener('mouseup', (e) => {
+    if (tb.contains(e.target)) return;
+    const writeActive = $('#mode-write').classList.contains('active');
+    if (!writeActive) return;
+    maybeShow();
+  });
 
   $('#cite-btn').addEventListener('mousedown', (e) => {
     // prevent blur stealing the selection before we capture it
@@ -10209,7 +10404,7 @@ function wireSelectionToolbar() {
     const info = getArticleSelectionRange();
     if (!info) return;
     pendingSelection = info;
-    $('#cite-toolbar').hidden = true;
+    tb.hidden = true;
     openAnchorDrawer(info.text);
   });
 }
@@ -10333,6 +10528,12 @@ function setRightPanelMode(mode) {
   const panel = $('#right-panel');
   if (!panel) return;
   panel.dataset.mode = mode;
+  // Sourcing needs the drawer visible — uncollapse if Focus mode hid it.
+  if (mode === 'sourcing' && panel.classList.contains('is-collapsed')) {
+    panel.classList.remove('is-collapsed');
+    try { localStorage.setItem('proveo.layout.rightCollapsed', '0'); } catch {}
+    syncFocusToggleState?.();
+  }
 }
 
 function renderDrawer() {
@@ -16252,6 +16453,7 @@ async function init() {
   wireEditor();
   wireUploads();
   wireSelectionToolbar();
+  wirePanelCollapse();
   wireSourceViewer();
   wireAnchorDrawer();
   wireStage7Controls();
