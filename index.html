@@ -3899,6 +3899,117 @@
     opacity: 1;
     transform: translateX(-50%) translateY(-4px);
   }
+
+  /* ---------- EXPLORER MODES (Sources & Entities) ---------- */
+  .mode-panel.explorer.active { display: grid; grid-template-columns: 212px 1fr 340px; }
+  .explorer-filters {
+    background: var(--color-background-secondary);
+    border-right: 0.5px solid var(--color-border-tertiary);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow-y: auto;
+    min-width: 0;
+  }
+  .explorer-search {
+    font: 12px var(--font-sans);
+    padding: 6px 8px;
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: 3px;
+    background: var(--color-background-primary);
+    color: var(--color-text-primary);
+    outline: none;
+  }
+  .explorer-search:focus { border-color: var(--color-text-secondary); }
+  .explorer-filter-group { display: flex; flex-wrap: wrap; gap: 4px; }
+  .explorer-chip {
+    font: 10.5px var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 3px 8px;
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+  }
+  .explorer-chip.is-on {
+    background: var(--color-text-primary);
+    color: var(--color-background-primary);
+    border-color: var(--color-text-primary);
+  }
+  .explorer-list {
+    overflow-y: auto;
+    padding: 0;
+    background: var(--color-background-primary);
+    min-width: 0;
+  }
+  .explorer-row {
+    padding: 10px 16px;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .explorer-row:hover { background: var(--color-background-secondary); }
+  .explorer-row.selected { background: var(--color-background-tertiary); }
+  .explorer-row-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .explorer-row-name { font-size: 13px; color: var(--color-text-primary); line-height: 1.3; }
+  .explorer-row-meta {
+    font: 10.5px var(--font-mono);
+    color: var(--color-text-secondary);
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .explorer-empty {
+    padding: 40px 16px;
+    color: var(--color-text-tertiary);
+    font-size: 12px;
+    text-align: center;
+  }
+  .explorer-detail { display: flex; flex-direction: column; overflow: hidden; width: auto; min-width: 0; }
+  .explorer-detail .rp-content { display: none; padding: 14px 16px; overflow-y: auto; flex: 1; }
+  .explorer-detail[data-empty="false"] .rp-empty { display: none; }
+  .explorer-detail[data-empty="false"] .rp-content { display: block; }
+  .explorer-section { margin-bottom: 16px; }
+  .explorer-section-title {
+    font: 10.5px var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-secondary);
+    margin-bottom: 6px;
+  }
+  .explorer-kv {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: 4px 10px;
+    font-size: 12px;
+    margin: 0;
+  }
+  .explorer-kv dt { color: var(--color-text-secondary); }
+  .explorer-kv dd { margin: 0; color: var(--color-text-primary); word-break: break-word; }
+  .explorer-alias-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    padding: 3px 0;
+    font-size: 12px;
+  }
+  .explorer-alias-del {
+    background: transparent;
+    border: 0;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0 4px;
+  }
+  .explorer-alias-del:hover { color: var(--color-text-primary); }
+  body.explorer-active .sources { display: none; }
+  body.explorer-active .right-panel#right-panel { display: none; }
 </style>
 </head>
 <body>
@@ -3912,6 +4023,8 @@
       <button class="mtab active" data-mode="write">Write</button>
       <button class="mtab" data-mode="review">Review</button>
       <button class="mtab" data-mode="chat">Chat</button>
+      <button class="mtab" data-mode="source-explorer">Sources</button>
+      <button class="mtab" data-mode="entity-explorer">Entities</button>
     </div>
     <div class="topright">
       <span id="boot-status" style="font-family: var(--font-mono); font-size: 10.5px; color: var(--color-text-secondary); margin-right: 4px;">booting…</span>
@@ -4107,6 +4220,46 @@
       <aside class="chat-right">
         <div class="cr-head">Instruction set</div>
         <div class="cr-body" id="iset-body"></div>
+      </aside>
+    </section>
+
+    <!-- ===== SOURCE EXPLORER MODE ===== -->
+    <section class="mode-panel explorer" id="mode-source-explorer">
+      <aside class="explorer-filters">
+        <div class="spanel-head"><span>Filter sources</span></div>
+        <input class="explorer-search" id="src-explorer-q" type="text" placeholder="Search by name…" autocomplete="off">
+        <div class="explorer-filter-group" id="src-explorer-kind"></div>
+        <div class="explorer-filter-group" id="src-explorer-dest"></div>
+        <div class="explorer-filter-group" id="src-explorer-indexed"></div>
+      </aside>
+      <div class="explorer-list" id="src-explorer-list"></div>
+      <aside class="right-panel explorer-detail" id="src-explorer-detail" data-empty="true">
+        <div class="rp-empty">
+          <div class="rp-empty-hint"><div class="rp-empty-inner">
+            <div class="rp-empty-glyph">⊢</div>
+            <div class="rp-empty-text">Select a source to inspect its extraction, claims, and entities</div>
+          </div></div>
+        </div>
+        <div class="rp-content" id="src-explorer-detail-body"></div>
+      </aside>
+    </section>
+
+    <!-- ===== ENTITY EXPLORER MODE ===== -->
+    <section class="mode-panel explorer" id="mode-entity-explorer">
+      <aside class="explorer-filters">
+        <div class="spanel-head"><span>Filter entities</span></div>
+        <input class="explorer-search" id="ent-explorer-q" type="text" placeholder="Search canonical or aliases…" autocomplete="off">
+        <div class="explorer-filter-group" id="ent-explorer-type"></div>
+      </aside>
+      <div class="explorer-list" id="ent-explorer-list"></div>
+      <aside class="right-panel explorer-detail" id="ent-explorer-detail" data-empty="true">
+        <div class="rp-empty">
+          <div class="rp-empty-hint"><div class="rp-empty-inner">
+            <div class="rp-empty-glyph">⊨</div>
+            <div class="rp-empty-text">Select an entity to inspect its aliases, mentions, and loop activity</div>
+          </div></div>
+        </div>
+        <div class="rp-content" id="ent-explorer-detail-body"></div>
       </aside>
     </section>
 
@@ -6086,13 +6239,325 @@ function sendChatMessage() {
   $('#chat-msgs').scrollTop = $('#chat-msgs').scrollHeight;
 }
 
+/* ======================================================================
+   EXPLORER MODES — Source & Entity
+   ----------------------------------------------------------------------
+   Read-only browsers over fold-derived state (CLAIMS, D_VIEW, ENTITIES).
+   Both modes share a 3-column layout: filters | list | detail.
+   Re-renders on tab entry and after every installFoldResult().
+====================================================================== */
+
+let selectedSourceId = null;
+let selectedEntityId = null;
+const sourceExplorerFilters = { kind: 'all', destination: 'all', indexed: 'all', q: '' };
+const entityExplorerFilters = { type: 'all', q: '' };
+
+function claimsCitingSource(src) {
+  // Seed claims reference sources by filename (prov.src); newer DEF-linked
+  // claims reference by source_id. Match either form.
+  const keys = [src.id, src.name].filter(Boolean);
+  const out = [];
+  for (const [id, c] of Object.entries(CLAIMS || {})) {
+    const probe = JSON.stringify(c.prov || {});
+    if (keys.some(k => probe.includes(`"${k}"`))) out.push([id, c]);
+  }
+  return out;
+}
+
+function mentionsForEntity(entityId) {
+  const out = [];
+  for (const [obsId, d] of Object.entries(D_VIEW || {})) {
+    if (obsId === '__coref' || obsId === '__aliases') continue;
+    if (d && d.link && d.link.entity_id === entityId) out.push({ obsId, d });
+  }
+  return out;
+}
+
+function entityTypeCounts() {
+  const out = { all: 0 };
+  for (const e of Object.values(ENTITIES || {})) {
+    out.all++;
+    out[e.type] = (out[e.type] || 0) + 1;
+  }
+  return out;
+}
+
+/* ---- Source Explorer ---- */
+
+function renderSourceExplorer() {
+  if (!$('#mode-source-explorer')) return;
+  const all = allSources();
+  const { kind, destination, indexed, q } = sourceExplorerFilters;
+  const needle = q.trim().toLowerCase();
+
+  const filtered = all.filter(s => {
+    if (kind !== 'all' && s.kind !== kind) return false;
+    const dest = s.destination || (s.user_added ? 'local' : 'seed');
+    if (destination !== 'all' && dest !== destination) return false;
+    if (indexed === 'yes' && !s.indexed) return false;
+    if (indexed === 'no' && s.indexed) return false;
+    if (needle && !s.name.toLowerCase().includes(needle)) return false;
+    return true;
+  });
+
+  const kinds = ['all', 'csv', 'pdf', 'txt', 'img', 'video', 'audio', 'bin'];
+  $('#src-explorer-kind').innerHTML = kinds.map(k =>
+    `<button class="explorer-chip${k === kind ? ' is-on' : ''}" data-kind="${k}">${k}</button>`
+  ).join('');
+  const dests = ['all', 'seed', 'local', 'public', 'gated'];
+  $('#src-explorer-dest').innerHTML = dests.map(d =>
+    `<button class="explorer-chip${d === destination ? ' is-on' : ''}" data-dest="${d}">${d}</button>`
+  ).join('');
+  const idx = [['all','any'],['yes','indexed'],['no','pending']];
+  $('#src-explorer-indexed').innerHTML = idx.map(([v,l]) =>
+    `<button class="explorer-chip${v === indexed ? ' is-on' : ''}" data-indexed="${v}">${l}</button>`
+  ).join('');
+
+  $('#src-explorer-list').innerHTML = filtered.length ? filtered.map(s => {
+    const nClaims = claimsCitingSource(s).length;
+    const dest = s.destination || (s.user_added ? 'local' : 'seed');
+    const sel = s.id === selectedSourceId ? ' selected' : '';
+    const kindTag = ['csv','pdf','txt','img','video','audio','bin'].includes(s.kind) ? s.kind : 'txt';
+    return `<div class="explorer-row${sel}" data-src-id="${escapeHtml(s.id)}">
+      <div class="explorer-row-head">
+        <span class="stag stag-${escapeHtml(kindTag)}">${escapeHtml(s.kind.toUpperCase())}</span>
+        <span class="explorer-row-name">${escapeHtml(s.name)}</span>
+      </div>
+      <div class="explorer-row-meta">
+        <span>${escapeHtml(s.meta || '')}</span>
+        <span>${s.indexed ? 'indexed' : 'pending'}</span>
+        <span>${escapeHtml(dest)}</span>
+        <span>${nClaims} claim${nClaims === 1 ? '' : 's'}</span>
+      </div>
+    </div>`;
+  }).join('') : `<div class="explorer-empty">No sources match these filters.</div>`;
+
+  renderSourceExplorerDetail();
+  wireSourceExplorerEvents();
+}
+
+function renderSourceExplorerDetail() {
+  const panel = $('#src-explorer-detail');
+  if (!panel) return;
+  const s = allSources().find(x => x.id === selectedSourceId);
+  if (!s) { panel.dataset.empty = 'true'; return; }
+  panel.dataset.empty = 'false';
+
+  const citing = claimsCitingSource(s);
+  const body = $('#src-explorer-detail-body');
+  const destTag = s.destination || (s.user_added ? 'local' : 'seed');
+  body.innerHTML = `
+    <div class="rphead"><span class="rphead-title">${escapeHtml(s.name)}</span></div>
+    <div class="explorer-section">
+      <div class="explorer-section-title">Metadata</div>
+      <dl class="explorer-kv">
+        <dt>id</dt><dd style="font-family:var(--font-mono);font-size:10.5px">${escapeHtml(s.id)}</dd>
+        <dt>kind</dt><dd>${escapeHtml(s.kind)}</dd>
+        <dt>destination</dt><dd>${escapeHtml(destTag)}</dd>
+        <dt>indexed</dt><dd>${s.indexed ? 'yes' : 'no'}</dd>
+        <dt>size</dt><dd>${s.size != null ? s.size + ' B' : '—'}</dd>
+        <dt>mime</dt><dd>${escapeHtml(s.mime || '—')}</dd>
+        <dt>sha256</dt><dd style="font-family:var(--font-mono);font-size:10.5px">${escapeHtml(s.sha256 || '—')}</dd>
+        <dt>archive</dt><dd>${s.archive_url ? `<a href="${escapeHtml(s.archive_url)}" target="_blank" rel="noopener">open</a>` : '—'}</dd>
+        <dt>meta</dt><dd>${escapeHtml(s.meta || '—')}</dd>
+      </dl>
+    </div>
+    <div class="explorer-section">
+      <button class="btn-sm" id="src-explorer-open">Open viewer</button>
+    </div>
+    <div class="explorer-section">
+      <div class="explorer-section-title">Claims citing this source (${citing.length})</div>
+      ${citing.length ? citing.slice(0, 40).map(([id, c]) => {
+        const tone = c.type === 'grounded' ? 'amber'
+                   : c.type === 'conflict' ? 'red'
+                   : c.type === 'concur' ? 'teal'
+                   : 'blue';
+        return `<div class="qcard" style="margin-bottom:6px">
+          <div class="qcard-head"><span class="prov-tag prov-tag-${tone}">${escapeHtml(c.type)}</span></div>
+          <div class="qcard-text">${escapeHtml((c.text || '').slice(0, 140))}</div>
+        </div>`;
+      }).join('') : '<div style="font-size:12px;color:var(--color-text-secondary)">No claims cite this source yet.</div>'}
+    </div>
+  `;
+  const openBtn = $('#src-explorer-open');
+  if (openBtn) openBtn.addEventListener('click', () => showSourceViewer(s.id));
+}
+
+function wireSourceExplorerEvents() {
+  $$('#src-explorer-kind .explorer-chip').forEach(b => b.addEventListener('click', () => {
+    sourceExplorerFilters.kind = b.dataset.kind; renderSourceExplorer();
+  }));
+  $$('#src-explorer-dest .explorer-chip').forEach(b => b.addEventListener('click', () => {
+    sourceExplorerFilters.destination = b.dataset.dest; renderSourceExplorer();
+  }));
+  $$('#src-explorer-indexed .explorer-chip').forEach(b => b.addEventListener('click', () => {
+    sourceExplorerFilters.indexed = b.dataset.indexed; renderSourceExplorer();
+  }));
+  const q = $('#src-explorer-q');
+  if (q && !q.dataset.wired) {
+    q.value = sourceExplorerFilters.q;
+    q.addEventListener('input', () => { sourceExplorerFilters.q = q.value; renderSourceExplorer(); });
+    q.dataset.wired = '1';
+  }
+  $$('#src-explorer-list .explorer-row').forEach(row => row.addEventListener('click', () => {
+    selectedSourceId = row.dataset.srcId;
+    renderSourceExplorer();
+  }));
+}
+
+/* ---- Entity Explorer ---- */
+
+function renderEntityExplorer() {
+  if (!$('#mode-entity-explorer')) return;
+  const { type, q } = entityExplorerFilters;
+  const needle = q.trim().toLowerCase();
+  const counts = computeEntityLoopCounts();
+  const typeCounts = entityTypeCounts();
+
+  const entries = Object.entries(ENTITIES || {}).filter(([, e]) => {
+    if (type !== 'all' && e.type !== type) return false;
+    if (!needle) return true;
+    if ((e.canonical || '').toLowerCase().includes(needle)) return true;
+    return (e.aliases || []).some(a => a.toLowerCase().includes(needle));
+  }).sort((a, b) => (counts[b[0]]?.defs || 0) - (counts[a[0]]?.defs || 0));
+
+  const types = ['all', ...Object.keys(typeCounts).filter(k => k !== 'all').sort()];
+  $('#ent-explorer-type').innerHTML = types.map(t =>
+    `<button class="explorer-chip${t === type ? ' is-on' : ''}" data-type="${t}">${t} (${typeCounts[t] || 0})</button>`
+  ).join('');
+
+  $('#ent-explorer-list').innerHTML = entries.length ? entries.map(([id, e]) => {
+    const c = counts[id] || { defs: 0, confirms: 0, rejects: 0, reframes: 0 };
+    const sel = id === selectedEntityId ? ' selected' : '';
+    const aliasCount = (e.aliases || []).length;
+    return `<div class="explorer-row${sel}" data-ent-id="${escapeHtml(id)}">
+      <div class="explorer-row-head">
+        <span class="stag">${escapeHtml(e.type || '?')}</span>
+        <span class="explorer-row-name">${escapeHtml(e.canonical || id)}</span>
+      </div>
+      <div class="explorer-row-meta">
+        <span>${aliasCount} alias${aliasCount === 1 ? '' : 'es'}</span>
+        <span>${c.defs} DEF · ${c.confirms} ✓ · ${c.rejects} ✗ · ${c.reframes} ↻</span>
+      </div>
+    </div>`;
+  }).join('') : `<div class="explorer-empty">No entities match these filters.</div>`;
+
+  renderEntityExplorerDetail();
+  wireEntityExplorerEvents();
+}
+
+function renderEntityExplorerDetail() {
+  const panel = $('#ent-explorer-detail');
+  if (!panel) return;
+  const id = selectedEntityId;
+  const e = id ? (ENTITIES || {})[id] : null;
+  if (!e) { panel.dataset.empty = 'true'; return; }
+  panel.dataset.empty = 'false';
+
+  const c = computeEntityLoopCounts()[id] || { defs: 0, confirms: 0, rejects: 0, reframes: 0, defers: 0 };
+  const ms = mentionsForEntity(id);
+  const bySource = {};
+  for (const { d } of ms) {
+    const src = d.source_id || '—';
+    bySource[src] = (bySource[src] || 0) + 1;
+  }
+
+  const body = $('#ent-explorer-detail-body');
+  const aliases = e.aliases || [];
+  body.innerHTML = `
+    <div class="rphead"><span class="rphead-title">${escapeHtml(e.canonical || id)}</span></div>
+    <div class="explorer-section">
+      <div class="explorer-section-title">Identity</div>
+      <dl class="explorer-kv">
+        <dt>id</dt><dd style="font-family:var(--font-mono);font-size:10.5px">${escapeHtml(id)}</dd>
+        <dt>type</dt><dd>${escapeHtml(e.type || '—')}</dd>
+      </dl>
+    </div>
+    <div class="explorer-section">
+      <div class="explorer-section-title">Loop activity</div>
+      <dl class="explorer-kv">
+        <dt>DEFs</dt><dd>${c.defs}</dd>
+        <dt>confirms</dt><dd>${c.confirms}</dd>
+        <dt>rejects</dt><dd>${c.rejects}</dd>
+        <dt>reframes</dt><dd>${c.reframes}</dd>
+        <dt>defers</dt><dd>${c.defers || 0}</dd>
+      </dl>
+    </div>
+    <div class="explorer-section">
+      <div class="explorer-section-title">Aliases (${aliases.length})</div>
+      ${aliases.map(a => `
+        <div class="explorer-alias-row">
+          <span>${escapeHtml(a)}</span>
+          <button class="explorer-alias-del" data-alias="${escapeHtml(a)}" title="Remove alias">×</button>
+        </div>`).join('')}
+      <div style="display:flex;gap:4px;margin-top:6px">
+        <input class="explorer-search" id="ent-new-alias" type="text" placeholder="Add alias…" style="flex:1">
+        <button class="btn-sm" id="ent-add-alias">Add</button>
+      </div>
+    </div>
+    <div class="explorer-section">
+      <div class="explorer-section-title">Mentions (${ms.length}) by source</div>
+      ${Object.keys(bySource).length ? Object.entries(bySource).map(([src, n]) =>
+        `<div class="explorer-alias-row"><span>${escapeHtml(src)}</span><span style="margin-left:auto;font-family:var(--font-mono);font-size:10.5px">${n}</span></div>`
+      ).join('') : '<div style="font-size:12px;color:var(--color-text-secondary)">No DEF-link mentions yet.</div>'}
+    </div>
+  `;
+  const addBtn = $('#ent-add-alias');
+  const addInput = $('#ent-new-alias');
+  if (addBtn && addInput) {
+    addBtn.addEventListener('click', async () => {
+      const val = addInput.value.trim();
+      if (!val) return;
+      addBtn.disabled = true;
+      try {
+        await addEntityAlias(id, val);
+        showToast('alias added');
+      } catch (err) {
+        console.error('[entity-explorer] add alias failed', err);
+      } finally {
+        addBtn.disabled = false;
+      }
+    });
+  }
+  $$('.explorer-alias-del', body).forEach(btn => btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    try {
+      await removeEntityAlias(id, btn.dataset.alias);
+      showToast('alias removed');
+    } catch (err) {
+      console.error('[entity-explorer] remove alias failed', err);
+      btn.disabled = false;
+    }
+  }));
+}
+
+function wireEntityExplorerEvents() {
+  $$('#ent-explorer-type .explorer-chip').forEach(b => b.addEventListener('click', () => {
+    entityExplorerFilters.type = b.dataset.type; renderEntityExplorer();
+  }));
+  const q = $('#ent-explorer-q');
+  if (q && !q.dataset.wired) {
+    q.value = entityExplorerFilters.q;
+    q.addEventListener('input', () => { entityExplorerFilters.q = q.value; renderEntityExplorer(); });
+    q.dataset.wired = '1';
+  }
+  $$('#ent-explorer-list .explorer-row').forEach(row => row.addEventListener('click', () => {
+    selectedEntityId = row.dataset.entId;
+    renderEntityExplorer();
+  }));
+}
+
 /* ---- Mode switching ---- */
 function switchMode(mode) {
   $$('.mtab').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
   $$('.mode-panel').forEach(p => p.classList.toggle('active', p.id === 'mode-' + mode));
+  document.body.classList.toggle('explorer-active',
+    mode === 'source-explorer' || mode === 'entity-explorer');
 
   if (mode === 'review') renderReview();
   if (mode === 'chat') renderChat();
+  if (mode === 'source-explorer') renderSourceExplorer();
+  if (mode === 'entity-explorer') renderEntityExplorer();
 }
 
 /* ======================================================================
@@ -7458,6 +7923,9 @@ function installFoldResult(s) {
   // (and the next rewrite pass) stamp the correct version.
   if (s.ruleSetVersion) RULE_SET_VERSION = s.ruleSetVersion;
   refreshStage1Badge();
+  // Keep explorer views live when open; skip work otherwise.
+  if ($('#mode-source-explorer')?.classList.contains('active')) renderSourceExplorer();
+  if ($('#mode-entity-explorer')?.classList.contains('active')) renderEntityExplorer();
 }
 
 // Holds fold-derived state the rewrite engine needs between passes.
