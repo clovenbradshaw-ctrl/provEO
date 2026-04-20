@@ -4130,7 +4130,7 @@
         <div class="cite-modal-sub" id="src-viewer-sub"></div>
       </div>
       <div class="src-viewer-head-actions">
-        <button class="btn-sm" id="src-viewer-hl-toggle" aria-pressed="false">Highlight mode</button>
+        <button class="btn-sm" id="src-viewer-hl-toggle" aria-pressed="false" hidden>Highlight mode</button>
         <button class="rphead-close" id="src-viewer-close">×</button>
       </div>
     </div>
@@ -4145,7 +4145,7 @@
       <span class="src-viewer-tuple-spacer"></span>
       <button class="src-viewer-tuple-btn" id="src-viewer-tuple-copy" disabled>Copy JSON</button>
     </div>
-    <div class="src-viewer-hint">Tip: select text to <strong>＋ Save to clipboard</strong> or <strong>＋ Anchor evidence</strong> — either keeps its provenance.</div>
+    <div class="src-viewer-hint">Tip: select text to <strong>＋ Insert</strong> into your article or <strong>＋ Save to clipboard</strong> — either keeps its provenance.</div>
     <div class="src-viewer-picker" id="src-viewer-picker" hidden>
       <span class="src-viewer-picker-label" id="src-viewer-picker-label">Selection mode — pick your evidence</span>
       <div class="src-viewer-ops" id="src-viewer-ops" hidden>
@@ -4174,6 +4174,9 @@
 <div id="clip-select-pill" class="clip-select-pill" hidden>
   <button class="clip-select-btn clip-select-btn-primary" id="clip-select-anchor" type="button" hidden>
     <span class="plus">＋</span> Use as evidence
+  </button>
+  <button class="clip-select-btn" id="clip-select-insert" type="button">
+    <span class="plus">＋</span> Insert
   </button>
   <button class="clip-select-btn" id="clip-select-add" type="button">
     <span class="plus">＋</span> Save to clipboard
@@ -12470,9 +12473,13 @@ function wireEditor() {
     if (chain) {
       e.preventDefault();
       const next = provChainAppendHop(chain, { kind: 'paste', into: 'article' });
-      // Preserve the pasted text verbatim — the chain's text may differ
-      // if the user trimmed the selection before the copy fired.
-      const pasted = (dt.getData('text/plain') || next.text || '').trim();
+      // Prefer chain.text — it's the authoritative highlight. text/plain
+      // can diverge from it (e.g. Copy JSON writes the full record as
+      // plain so external paste gets the JSON; we still want the
+      // grounded span to carry the highlight, not the JSON blob).
+      const plain = (dt.getData('text/plain') || '').trim();
+      const chainText = (next.text || '').trim();
+      const pasted = chainText || plain;
       if (pasted) next.text = pasted;
       try {
         await provInsertGroundedFromChain(next);
@@ -13672,6 +13679,18 @@ async function showSourceViewer(id, opts = {}) {
   const scrollTo = opts.scrollTo || null;
   const selecting = !!opts.selecting;
   const modal = $('#src-viewer');
+  // Snapshot the article caret before we steal focus with the modal —
+  // the pill's "Insert" needs a target range to drop grounded text into.
+  try {
+    const body = $('#article-body');
+    const sel = window.getSelection?.();
+    if (body && sel && sel.rangeCount) {
+      const r = sel.getRangeAt(0);
+      if (body.contains(r.commonAncestorContainer)) {
+        modal._pendingArticleRange = r.cloneRange();
+      }
+    }
+  } catch {}
   modal._currentSrc = src;
   const body = modal.querySelector('.src-viewer-body');
   $('#src-viewer-title').textContent = src.name;
@@ -14293,7 +14312,7 @@ async function copySelectionToClipboard() {
   }
 }
 
-function selectCellTuple(td) {
+function selectCellTuple(td, { additive = false } = {}) {
   const tupleBar = $('#src-viewer-tuple');
   const wrap = $('#src-viewer-table-wrap');
   if (!tupleBar || !wrap || !tupleBar._headers || !tupleBar._src) return;
@@ -14302,7 +14321,15 @@ function selectCellTuple(td) {
   if (!Number.isFinite(row) || !Number.isFinite(colIdx)) return;
   const colName = tupleBar._headers[colIdx] ?? '';
   const value = td.textContent;
-  tupleBar._selection = [makeCellEntry(row, colName, colIdx, value)];
+  const existing = Array.isArray(tupleBar._selection) ? tupleBar._selection : [];
+  if (additive) {
+    const at = existing.findIndex(e => e.location?.row === row && e.location?.colIdx === colIdx);
+    if (at >= 0) existing.splice(at, 1);
+    else existing.push(makeCellEntry(row, colName, colIdx, value));
+    tupleBar._selection = existing;
+  } else {
+    tupleBar._selection = [makeCellEntry(row, colName, colIdx, value)];
+  }
   renderTupleSelection();
   dispatchSelectionEvent();
 }
@@ -14324,7 +14351,7 @@ function wireCellTuple() {
         handleDrawerCellClick(td, e.shiftKey || e.ctrlKey || e.metaKey);
         return;
       }
-      selectCellTuple(td);
+      selectCellTuple(td, { additive: e.shiftKey || e.ctrlKey || e.metaKey });
     });
     wireDrawerCellDrag(wrap);
   }
@@ -15963,16 +15990,22 @@ function clipCiteFormat(item) {
   if (p.sha256) bits.push('sha256 ' + p.sha256.slice(0, 12));
   return `"${item.text}" — ${bits.join(', ')}`;
 }
-async function clipCopyToSystem(text, chain) {
+async function clipCopyToSystem(text, chain, opts = {}) {
+  // `plainOverride` keeps text/plain distinct from the chain's text —
+  // e.g. Copy JSON writes the full record as plain so external paste
+  // gets the JSON, while in-app paste still picks up chain.text from
+  // the PROVEO MIME and materializes a grounded span.
+  const plainOverride = typeof opts.plainOverride === 'string' ? opts.plainOverride : null;
   // Path 1 — chain-aware write via the async Clipboard API. ClipboardItem
   // lets us carry plain, HTML fallback, and (browser permitting) the
   // custom proveo MIME type together.
   if (chain && typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
     try {
       const pkg = provPackage(chain);
+      const plain = plainOverride != null ? plainOverride : pkg.plain;
       const items = {
-        'text/plain': new Blob([pkg.plain], { type: 'text/plain' }),
-        'text/html':  new Blob([pkg.html],  { type: 'text/html'  }),
+        'text/plain': new Blob([plain],    { type: 'text/plain' }),
+        'text/html':  new Blob([pkg.html], { type: 'text/html'  }),
       };
       try { items[PROVEO_MIME] = new Blob([pkg.json], { type: PROVEO_MIME }); } catch {}
       await navigator.clipboard.write([new ClipboardItem(items)]);
@@ -15981,9 +16014,10 @@ async function clipCopyToSystem(text, chain) {
       // Chrome rejects non-standard MIME in some contexts; retry without it.
       try {
         const pkg = provPackage(chain);
+        const plain = plainOverride != null ? plainOverride : pkg.plain;
         await navigator.clipboard.write([new ClipboardItem({
-          'text/plain': new Blob([pkg.plain], { type: 'text/plain' }),
-          'text/html':  new Blob([pkg.html],  { type: 'text/html'  }),
+          'text/plain': new Blob([plain],    { type: 'text/plain' }),
+          'text/html':  new Blob([pkg.html], { type: 'text/html'  }),
         })]);
         return true;
       } catch {}
@@ -16005,7 +16039,12 @@ async function clipCopyToSystem(text, chain) {
       const sel = window.getSelection();
       const prior = sel.rangeCount ? sel.getRangeAt(0) : null;
       sel.removeAllRanges(); sel.addRange(r);
-      const once = (e) => { provWriteToClipboardEvent(e, chain); };
+      const once = (e) => {
+        provWriteToClipboardEvent(e, chain);
+        if (plainOverride != null) {
+          try { e.clipboardData.setData('text/plain', plainOverride); } catch {}
+        }
+      };
       host.addEventListener('copy', once, { once: true });
       const ok = document.execCommand('copy');
       host.remove();
@@ -16121,6 +16160,59 @@ function clipBuildProvenance(range) {
     if (primary.location?.col != null) p.col = primary.location.col;
   }
   return p;
+}
+// Insert the current source-viewer selection into #article-body as a
+// grounded claim span, carrying full provenance. Closes the viewer so
+// the user lands back in their editor at the freshly inserted text.
+async function clipInsertFromSelection() {
+  let chain = null;
+  const sel = window.getSelection?.();
+  if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+    const range = sel.getRangeAt(0);
+    const text = sel.toString().trim();
+    if (text) {
+      const prov = clipBuildProvenance(range);
+      if (prov) chain = provChainFromSource(prov, text);
+    }
+  }
+  if (!chain) {
+    // Selection may live in the HTML preview iframe — its window owns
+    // the range, so go through that surface's prov builder.
+    const iframe = activeHtmlIframe();
+    if (iframe) {
+      const win = iframe.contentWindow;
+      const isel = win && win.getSelection?.();
+      if (isel && !isel.isCollapsed && isel.rangeCount > 0) {
+        const text = isel.toString().trim();
+        const prov = clipBuildProvenanceForHtml();
+        if (text && prov) chain = provChainFromSource(prov, text);
+      }
+    }
+  }
+  if (!chain) { clipToast('Select text inside a source to insert it'); return; }
+  const next = provChainAppendHop(chain, { kind: 'paste', into: 'article' });
+  // Restore the article caret snapshotted when the viewer opened so the
+  // grounded span lands exactly where the user left off.
+  const body = $('#article-body');
+  const modal = $('#src-viewer');
+  const saved = modal && modal._pendingArticleRange;
+  if (body && saved) {
+    try {
+      const wsel = window.getSelection();
+      wsel.removeAllRanges();
+      wsel.addRange(saved);
+    } catch {}
+  }
+  clipHidePill();
+  hideSourceViewer();
+  try {
+    const claimId = await provInsertGroundedFromChain(next);
+    if (claimId) clipToast('Inserted with provenance');
+    else clipToast('Insert failed — open an article first');
+  } catch (err) {
+    console.warn('[proveo] pill insert failed', err);
+    clipToast('Insert failed');
+  }
 }
 function clipAddFromSelection() {
   const sel = window.getSelection?.();
@@ -16313,6 +16405,21 @@ function wireClipboard() {
     });
   }
 
+  const insertBtnEl = $('#clip-select-insert');
+  if (insertBtnEl) {
+    insertBtnEl.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (pendingSave) {
+        const sel = window.getSelection?.();
+        if (sel && (sel.rangeCount === 0 || sel.isCollapsed)) {
+          try { sel.removeAllRanges(); sel.addRange(pendingSave.range); } catch {}
+        }
+      }
+      pendingSave = null;
+      clipInsertFromSelection();
+    });
+  }
+
   // Caret in #article-body is lost the moment a drawer button takes focus,
   // so snapshot the range on mousedown for the Insert action (same pattern
   // the pill uses above) and restore it on click if the browser collapsed it.
@@ -16373,7 +16480,12 @@ function wireClipboard() {
       const ok = await clipCopyToSystem(cite, chain);
       clipToast(ok ? 'Copied with citation' : 'Copy failed');
     } else if (action === 'copy-json') {
-      const ok = await clipCopyToSystem(JSON.stringify(item, null, 2));
+      const json = JSON.stringify(item, null, 2);
+      // Attach the chain so an in-app paste materializes the highlight
+      // as a grounded span (not a raw-JSON blob). External pastes still
+      // receive the JSON via text/plain.
+      const chain = provChainFromSource(item.provenance || {}, item.text);
+      const ok = await clipCopyToSystem(json, chain, { plainOverride: json });
       clipToast(ok ? 'Copied JSON' : 'Copy failed');
     } else if (action === 'view') {
       const sid = item.provenance?.sourceId;
