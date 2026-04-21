@@ -15049,10 +15049,6 @@ function renderCitations() {
     const idx = list.indexOf(el);            // 0-based within this claim
     const occurrenceId = 'cite-occ-' + id + '-' + (idx + 1);
     el.id = el.id || occurrenceId;
-    // Pasted-with-provenance spans read as plain text — respect that and
-    // skip the visible badge so the prose stays uncluttered. The entry
-    // still appears in the footnotes so the provenance is discoverable.
-    if (el.classList.contains('g-paste')) continue;
     const sup = document.createElement('sup');
     sup.className = 'cite-badge';
     sup.setAttribute('contenteditable', 'false');
