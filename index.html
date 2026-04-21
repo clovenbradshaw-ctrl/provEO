@@ -2395,6 +2395,26 @@
   }
   .chat-bubble p { margin-bottom: 10px; }
   .chat-bubble p:last-child { margin-bottom: 0; }
+  .chat-pending {
+    font-style: italic;
+    color: var(--color-text-secondary);
+  }
+  .chat-citations {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 0.5px dashed var(--color-border-tertiary);
+    font-size: 11.5px;
+  }
+  .chat-citations-title {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    margin-bottom: 4px;
+  }
+  .chat-citation { margin-bottom: 2px; }
+  .chat-citation a { color: var(--color-text-primary); }
   .chat-meta-note {
     font-family: var(--font-sans);
     font-size: 11px;
@@ -5053,6 +5073,23 @@
         </div>
       </div>
       <div class="ws-section">
+        <div class="ws-section-title">Claude API</div>
+        <div class="ws-section-sub">Powers Chat answers grounded in your sources (with optional web search) and the per-claim Research button. The key is stored only in this browser's localStorage and sent directly to api.anthropic.com with <span style="font-family:var(--font-mono)">anthropic-dangerous-direct-browser-access</span>.</div>
+        <div class="ws-form-row">
+          <label for="claude-api-key">API key</label>
+          <input id="claude-api-key" class="ws-input" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="ws-form-row">
+          <label>Options</label>
+          <label class="ws-toggle"><input type="checkbox" id="claude-chat-web" checked> Let Chat use web_search to supplement the loaded sources</label>
+        </div>
+        <div class="ws-btn-row">
+          <button class="btn-sm btn-sm-primary" id="claude-api-save">Save key</button>
+          <button class="btn-sm" id="claude-api-clear">Clear</button>
+          <span id="claude-api-status" class="cite-pick-note"></span>
+        </div>
+      </div>
+      <div class="ws-section">
         <div class="ws-section-title">Offline / local only</div>
         <div class="ws-section-sub">Keep working without Matrix. Log and sources stay in this browser.</div>
         <label class="ws-toggle">
@@ -7022,26 +7059,221 @@ function renderChat() {
     : `<div class="iset-footer">No learned rules yet. Corrections you make in Review will appear here.</div>`);
 }
 
-function sendChatMessage() {
+let chatPending = false;
+
+async function sendChatMessage() {
+  if (chatPending) return;
   const input = $('#chat-input');
+  const sendBtn = $('#chat-send');
   const text = input.value.trim();
   if (!text) return;
+
   CHAT_HISTORY.push({ role: 'user', text });
-  // stub response — in a real build this is the fold applied to the question
-  CHAT_HISTORY.push({
-    role: 'system',
-    meta: 'LLM synthesis · grounded in fold state',
-    html: `Indexed sources don't yet answer that directly. The fold has ${
-      Object.values(CLAIMS).filter(c => c.type === 'grounded').length
-    } grounded claims and ${
-      Object.values(CLAIMS).filter(c => c.type === 'absent').length
-    } NUL events against the corpus as loaded. Would you like me to register this as a new query intent, so future ingested sources are scanned for it?`,
-    evidence: null
-  });
   input.value = '';
   input.style.height = 'auto';
+
+  if (!CLAUDE_API_KEY) {
+    CHAT_HISTORY.push({
+      role: 'system',
+      meta: 'no api key',
+      html: `Add your Claude API key in <strong>Workspace → Claude API</strong> to chat against the loaded sources. Until then, I can't answer.`,
+      evidence: null
+    });
+    renderChat();
+    $('#chat-msgs').scrollTop = $('#chat-msgs').scrollHeight;
+    return;
+  }
+
+  const pendingIdx = CHAT_HISTORY.push({
+    role: 'system',
+    meta: CLAUDE_CHAT_WEB ? 'claude · sources + web_search' : 'claude · sources',
+    html: `<span class="chat-pending">Thinking…</span>`,
+    evidence: null,
+    __pending: true
+  }) - 1;
   renderChat();
   $('#chat-msgs').scrollTop = $('#chat-msgs').scrollHeight;
+
+  chatPending = true;
+  if (sendBtn) sendBtn.disabled = true;
+
+  try {
+    const blocks = await gatherChatSourceBlocks();
+    const priorTurns = CHAT_HISTORY
+      .filter((m, i) => i !== pendingIdx && !m.__seed && !m.__pending)
+      .slice(-10)
+      .slice(0, -1); // exclude the just-pushed user message; we'll add it last
+    const result = await callChatAgent(CLAUDE_API_KEY, {
+      userText: text,
+      priorTurns,
+      sourceBlocks: blocks,
+      useWeb: !!CLAUDE_CHAT_WEB
+    });
+    CHAT_HISTORY[pendingIdx] = {
+      role: 'system',
+      meta: result.meta,
+      html: result.html,
+      evidence: null
+    };
+  } catch (err) {
+    CHAT_HISTORY[pendingIdx] = {
+      role: 'system',
+      meta: 'claude · error',
+      html: `Request failed: ${escapeHtml(err && err.message || String(err))}`,
+      evidence: null
+    };
+  } finally {
+    chatPending = false;
+    if (sendBtn) sendBtn.disabled = false;
+    renderChat();
+    $('#chat-msgs').scrollTop = $('#chat-msgs').scrollHeight;
+  }
+}
+
+async function gatherChatSourceBlocks() {
+  const list = allSources();
+  const TOTAL_CAP = 180000;   // ~45k tokens of raw corpus text
+  const PER_SOURCE_CAP = 40000;
+  const out = [];
+  let total = 0;
+  for (const s of list) {
+    let text = '';
+    try {
+      if (typeof SOURCE_SAMPLES !== 'undefined' && SOURCE_SAMPLES[s.id]) {
+        text = SOURCE_SAMPLES[s.id] || '';
+      } else {
+        text = (await ensureSourceText(s.id)) || '';
+      }
+    } catch { text = ''; }
+    text = String(text || '');
+    if (text.length > PER_SOURCE_CAP) text = text.slice(0, PER_SOURCE_CAP) + '\n…[truncated]';
+    if (total + text.length > TOTAL_CAP) {
+      const room = Math.max(0, TOTAL_CAP - total);
+      text = text.slice(0, room) + (room ? '\n…[truncated]' : '');
+    }
+    total += text.length;
+    out.push({ id: s.id, name: s.name, kind: s.kind, meta: s.meta || '', text });
+    if (total >= TOTAL_CAP) break;
+  }
+  return out;
+}
+
+async function callChatAgent(apiKey, { userText, priorTurns, sourceBlocks, useWeb }) {
+  const sourcesMd = sourceBlocks.length
+    ? sourceBlocks.map((b, i) =>
+        `### SOURCE ${i + 1}: ${b.name} (${b.kind}${b.meta ? ' · ' + b.meta : ''})\n${b.text || '(no text available)'}`
+      ).join('\n\n---\n\n')
+    : '(no sources are loaded in the workspace)';
+
+  const system = [
+    'You are PROVeo Chat, a research assistant answering questions about the LOCAL SOURCES the user has loaded into their browser.',
+    'Ground every factual claim in either a local source (quote the exact phrase and name the source) or a web_search result (the API attaches citations automatically — never fabricate them).',
+    'If the local sources do not answer the question, say so plainly before relying on the web.',
+    useWeb
+      ? 'You MAY call the web_search tool when the local sources are silent, outdated, or contradicted by public record. Prefer local sources when they are sufficient.'
+      : 'Do NOT call any tools. Answer from the local sources only; if they are silent, say so.',
+    'Be concise. Use short paragraphs and plain prose — no markdown headings.',
+    '',
+    '=== LOCAL SOURCES ===',
+    sourcesMd
+  ].join('\n');
+
+  const messages = [];
+  for (const t of priorTurns) {
+    if (!t) continue;
+    if (t.role === 'user') {
+      messages.push({ role: 'user', content: String(t.text || '') });
+    } else if (t.role === 'system') {
+      const plain = stripHtmlToText(t.html || '');
+      if (plain) messages.push({ role: 'assistant', content: plain });
+    }
+  }
+  messages.push({ role: 'user', content: userText });
+
+  const body = {
+    model: CLAUDE_API_MODEL,
+    max_tokens: 2048,
+    system,
+    messages
+  };
+  if (useWeb) {
+    body.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }];
+  }
+
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+  if (!resp.ok) {
+    let detail = '';
+    try {
+      const raw = await resp.text();
+      const asJson = (() => { try { return JSON.parse(raw); } catch { return null; } })();
+      detail = (asJson && asJson.error && asJson.error.message) ? asJson.error.message : raw.slice(0, 240);
+    } catch {}
+    throw new Error(`http ${resp.status}${detail ? ' — ' + detail : ''}`);
+  }
+  const data = await resp.json();
+  const textBlocks = Array.isArray(data.content)
+    ? data.content.filter(b => b && b.type === 'text')
+    : [];
+  const toolBlocks = Array.isArray(data.content)
+    ? data.content.filter(b => b && (b.type === 'server_tool_use' || b.type === 'web_search_tool_result'))
+    : [];
+  const joined = textBlocks.map(b => b.text || '').join('\n').trim();
+  if (!joined) throw new Error('claude returned no text content');
+
+  const citations = [];
+  const seenUrls = new Set();
+  for (const b of textBlocks) {
+    if (!Array.isArray(b.citations)) continue;
+    for (const c of b.citations) {
+      const url = c && (c.url || (c.source && c.source.url));
+      if (!url || seenUrls.has(url)) continue;
+      seenUrls.add(url);
+      citations.push({
+        url,
+        title: c.title || c.cited_text || url
+      });
+    }
+  }
+
+  const webQueries = toolBlocks
+    .filter(b => b.type === 'server_tool_use' && b.name === 'web_search')
+    .map(b => (b.input && b.input.query) ? String(b.input.query) : '')
+    .filter(Boolean);
+
+  let html = textToHtml(joined);
+  if (citations.length) {
+    html += `<div class="chat-citations"><div class="chat-citations-title">Web sources</div>` +
+      citations.map(c =>
+        `<div class="chat-citation">• <a href="${escapeHtml(c.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(c.title)}</a></div>`
+      ).join('') + `</div>`;
+  }
+
+  const metaBits = [`claude · ${sourceBlocks.length} source${sourceBlocks.length === 1 ? '' : 's'}`];
+  if (webQueries.length) metaBits.push(`${webQueries.length} web search${webQueries.length === 1 ? '' : 'es'}`);
+  else if (useWeb) metaBits.push('web search available');
+  return { meta: metaBits.join(' · '), html };
+}
+
+function textToHtml(text) {
+  const esc = escapeHtml(String(text || ''));
+  const paragraphs = esc.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+  if (!paragraphs.length) return '';
+  return paragraphs.map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
+}
+
+function stripHtmlToText(html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = String(html || '');
+  return (tmp.textContent || '').trim();
 }
 
 /* ======================================================================
@@ -11270,6 +11502,13 @@ function openUrlArchiveModal() {
 const LS_CLAUDE_API_KEY = 'nl.claudeApiKey.v1';
 let CLAUDE_API_KEY = (() => {
   try { return localStorage.getItem(LS_CLAUDE_API_KEY) || ''; } catch { return ''; }
+})();
+const LS_CLAUDE_CHAT_WEB = 'nl.claudeChatWeb.v1';
+let CLAUDE_CHAT_WEB = (() => {
+  try {
+    const v = localStorage.getItem(LS_CLAUDE_CHAT_WEB);
+    return v === null ? true : v === '1';
+  } catch { return true; }
 })();
 // Matches agents/proveo-research.yaml — keep these in sync.
 const CLAUDE_API_MODEL = 'claude-sonnet-4-6';
@@ -17466,6 +17705,38 @@ function saveProveoSettings() {
 function loadProveoSettingsIntoModal() {
   const radios = $$('input[name="upload-dest"]');
   radios.forEach(r => { r.checked = (r.value === UPLOAD_DEST_DEFAULT); });
+  const keyInput = $('#claude-api-key');
+  if (keyInput) keyInput.value = CLAUDE_API_KEY || '';
+  const webToggle = $('#claude-chat-web');
+  if (webToggle) webToggle.checked = !!CLAUDE_CHAT_WEB;
+  setClaudeApiStatus(CLAUDE_API_KEY ? 'Key set.' : '');
+}
+
+function setClaudeApiStatus(msg) {
+  const el = $('#claude-api-status');
+  if (el) el.textContent = msg || '';
+}
+
+function saveClaudeApiSettings() {
+  const keyInput = $('#claude-api-key');
+  const webToggle = $('#claude-chat-web');
+  const key = keyInput ? keyInput.value.trim() : '';
+  const web = webToggle ? !!webToggle.checked : true;
+  CLAUDE_API_KEY = key;
+  CLAUDE_CHAT_WEB = web;
+  try { localStorage.setItem(LS_CLAUDE_API_KEY, key); } catch {}
+  try { localStorage.setItem(LS_CLAUDE_CHAT_WEB, web ? '1' : '0'); } catch {}
+  setClaudeApiStatus(key ? 'Saved.' : 'Cleared.');
+  showToast(key ? 'claude api key saved' : 'claude api key cleared');
+}
+
+function clearClaudeApiKey() {
+  CLAUDE_API_KEY = '';
+  try { localStorage.removeItem(LS_CLAUDE_API_KEY); } catch {}
+  const keyInput = $('#claude-api-key');
+  if (keyInput) keyInput.value = '';
+  setClaudeApiStatus('Cleared.');
+  showToast('claude api key cleared');
 }
 
 /* Sends a source to the PROVeo webhook. Returns the parsed JSON response. */
@@ -18171,6 +18442,10 @@ function wireWorkspace() {
   $('#ws-close').addEventListener('click', closeWorkspaceModal);
   $('#ws-backdrop').addEventListener('click', closeWorkspaceModal);
   $('#proveo-save').addEventListener('click', saveProveoSettings);
+  const claudeSaveBtn = $('#claude-api-save');
+  if (claudeSaveBtn) claudeSaveBtn.addEventListener('click', saveClaudeApiSettings);
+  const claudeClearBtn = $('#claude-api-clear');
+  if (claudeClearBtn) claudeClearBtn.addEventListener('click', clearClaudeApiKey);
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !$('#ws-modal').hidden) closeWorkspaceModal();
   });
