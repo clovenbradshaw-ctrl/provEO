@@ -7687,11 +7687,11 @@ function renderChatControls() {
       <div class="chatctl-footer">${included} of ${total} included</div>
     </div>
     <div class="ws-section chatctl-section">
-      <div class="ws-section-title">Web search</div>
-      <div class="ws-section-sub">Billed separately by Anthropic at $10 / 1k searches.</div>
-      <label class="ws-toggle"><input type="checkbox" id="chatctl-web-on"${CLAUDE_CHAT_WEB ? ' checked' : ''}> Let Claude call web_search</label>
+      <div class="ws-section-title">Web tools</div>
+      <div class="ws-section-sub">web_search and web_fetch. Billed separately by Anthropic.</div>
+      <label class="ws-toggle"><input type="checkbox" id="chatctl-web-on"${CLAUDE_CHAT_WEB ? ' checked' : ''}> Let Claude call web tools (search + fetch)</label>
       <div class="ws-form-row">
-        <label for="chatctl-web-max">Max searches per reply</label>
+        <label for="chatctl-web-max">Max calls per reply</label>
         <input id="chatctl-web-max" class="ws-input chatctl-narrow" type="number" min="0" max="20" step="1" value="${CHAT_WEB_MAX}">
       </div>
       <details class="chatctl-adv">
@@ -7805,7 +7805,7 @@ async function runAssistantTurn(userText) {
   const webOn = !!CLAUDE_CHAT_WEB && CHAT_WEB_MAX > 0;
   const pendingIdx = CHAT_HISTORY.push({
     role: 'system',
-    meta: webOn ? 'claude · sources + web_search' : 'claude · sources',
+    meta: webOn ? 'claude · sources + web tools' : 'claude · sources',
     html: `<span class="chat-pending">Thinking…</span>`,
     evidence: null,
     __pending: true
@@ -7981,9 +7981,12 @@ async function callChatAgent(apiKey, opts) {
   const userPrefix = (typeof systemPrompt === 'string' && systemPrompt.trim())
     ? systemPrompt.trim()
     : CHAT_SYSTEM_PROMPT_DEFAULT;
-  const toolClause = useWeb
-    ? 'You MAY call the web_search tool when the local sources are silent, outdated, or contradicted by public record. Prefer local sources when they are sufficient.'
-    : 'Do NOT call any tools. Answer from the local sources only; if they are silent, say so.';
+  const hasUrl = /\bhttps?:\/\/\S+/i.test(String(userText || ''));
+  const toolClause = !useWeb
+    ? 'Do NOT call any tools. Answer from the local sources only; if they are silent, say so.'
+    : (hasUrl
+        ? 'The user message contains one or more URLs. Use the web_fetch tool to retrieve their content directly — do not refuse. Use web_search only when web_fetch cannot satisfy the request or a URL is incomplete. Prefer local sources when they are sufficient.'
+        : 'You MAY call web_search or web_fetch when the local sources are silent, outdated, or contradicted by public record. For a specific URL, prefer web_fetch over web_search. Prefer local sources when they are sufficient.');
 
   const system = [
     userPrefix,
@@ -8014,28 +8017,41 @@ async function callChatAgent(apiKey, opts) {
   };
   if (useWeb) {
     const max = Number.isFinite(webMaxUses) ? Math.max(1, Math.min(20, webMaxUses)) : 3;
-    const tool = { type: 'web_search_20260209', name: 'web_search', max_uses: max };
-    if (Array.isArray(allowedDomains) && allowedDomains.length) tool.allowed_domains = allowedDomains;
-    if (Array.isArray(blockedDomains) && blockedDomains.length) tool.blocked_domains = blockedDomains;
-    body.tools = [tool];
+    const webSearch = { type: 'web_search_20260209', name: 'web_search', max_uses: max };
+    const webFetch = { type: 'web_fetch_20260910', name: 'web_fetch', max_uses: max };
+    if (Array.isArray(allowedDomains) && allowedDomains.length) {
+      webSearch.allowed_domains = allowedDomains;
+      webFetch.allowed_domains = allowedDomains;
+    }
+    if (Array.isArray(blockedDomains) && blockedDomains.length) {
+      webSearch.blocked_domains = blockedDomains;
+      webFetch.blocked_domains = blockedDomains;
+    }
+    body.tools = [webSearch, webFetch];
   }
 
-  // Loop on `pause_turn` so server-tool turns (web_search) can resume.
-  // The model returns pause_turn when it used a server tool but needs
-  // another turn to produce final text; we echo the assistant content
-  // back and let it continue. Cap the loop so a pathological run can't
-  // spin forever.
+  // web_fetch is still beta-gated; web_search went GA at 20260209. Send
+  // the beta header only when web tools are enabled so requests without
+  // tools don't opt into the beta surface unnecessarily.
+  const headers = {
+    'x-api-key': apiKey,
+    'anthropic-version': '2023-06-01',
+    'anthropic-dangerous-direct-browser-access': 'true',
+    'content-type': 'application/json'
+  };
+  if (useWeb) headers['anthropic-beta'] = 'web-fetch-2026-09-10';
+
+  // Loop on `pause_turn` so server-tool turns (web_search / web_fetch)
+  // can resume. The model returns pause_turn when it used a server tool
+  // but needs another turn to produce final text; we echo the assistant
+  // content back and let it continue. Cap the loop so a pathological run
+  // can't spin forever.
   const allContent = [];
   let lastStopReason = null;
   for (let i = 0; i < 4; i++) {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-        'content-type': 'application/json'
-      },
+      headers,
       body: JSON.stringify(body)
     });
     if (!resp.ok) {
@@ -8056,11 +8072,15 @@ async function callChatAgent(apiKey, opts) {
   }
 
   const textBlocks = allContent.filter(b => b && b.type === 'text');
-  const toolBlocks = allContent.filter(b => b && (b.type === 'server_tool_use' || b.type === 'web_search_tool_result'));
+  const toolBlocks = allContent.filter(b => b && (
+    b.type === 'server_tool_use' ||
+    b.type === 'web_search_tool_result' ||
+    b.type === 'web_fetch_tool_result'
+  ));
   const joined = textBlocks.map(b => b.text || '').join('\n').trim();
   if (!joined) {
     const reason = lastStopReason ? ` (stop_reason: ${lastStopReason})` : '';
-    const toolHint = toolBlocks.length ? `; ${toolBlocks.length} tool block${toolBlocks.length === 1 ? '' : 's'} returned but no text — try disabling web search or raising max searches` : '';
+    const toolHint = toolBlocks.length ? `; ${toolBlocks.length} tool block${toolBlocks.length === 1 ? '' : 's'} returned but no text — try disabling web tools or raising max calls` : '';
     throw new Error(`claude returned no text content${reason}${toolHint}`);
   }
 
@@ -8083,6 +8103,10 @@ async function callChatAgent(apiKey, opts) {
     .filter(b => b.type === 'server_tool_use' && b.name === 'web_search')
     .map(b => (b.input && b.input.query) ? String(b.input.query) : '')
     .filter(Boolean);
+  const webFetches = toolBlocks
+    .filter(b => b.type === 'server_tool_use' && b.name === 'web_fetch')
+    .map(b => (b.input && b.input.url) ? String(b.input.url) : '')
+    .filter(Boolean);
 
   let html = renderMarkdown(joined);
   if (citations.length) {
@@ -8094,7 +8118,8 @@ async function callChatAgent(apiKey, opts) {
 
   const metaBits = [`claude · ${sourceBlocks.length} source${sourceBlocks.length === 1 ? '' : 's'}`];
   if (webQueries.length) metaBits.push(`${webQueries.length} web search${webQueries.length === 1 ? '' : 'es'}`);
-  else if (useWeb) metaBits.push('web search available');
+  if (webFetches.length) metaBits.push(`${webFetches.length} web fetch${webFetches.length === 1 ? '' : 'es'}`);
+  if (!webQueries.length && !webFetches.length && useWeb) metaBits.push('web tools available');
   return { meta: metaBits.join(' · '), html };
 }
 
@@ -12991,7 +13016,8 @@ const CLAUDE_API_MODEL = 'claude-sonnet-4-6';
 
 const CHAT_SYSTEM_PROMPT_DEFAULT = [
   "You are PROVeo Chat, a research assistant answering questions about the LOCAL SOURCES the user has loaded into their browser.",
-  "Ground every factual claim in either a local source (quote the exact phrase and name the source) or a web_search result (the API attaches citations automatically — never fabricate them).",
+  "Ground every factual claim in either a local source (quote the exact phrase and name the source) or a web tool result (the API attaches citations automatically — never fabricate them).",
+  "If the user includes a URL, use the web_fetch tool to retrieve it directly — do not refuse. Use web_search when the local sources are silent and no specific URL was given. Prefer local sources when they are sufficient.",
   "If the local sources do not answer the question, say so plainly before relying on the web.",
   "Be concise. Markdown is rendered — you may use headings (h1–h3), bold/italic, bullet and numbered lists, tables, block quotes, and inline or fenced code where they genuinely aid clarity. Prefer short paragraphs and plain prose when formatting wouldn't help."
 ].join('\n');
