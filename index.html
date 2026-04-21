@@ -2998,6 +2998,37 @@
     color: var(--color-text-primary);
     background: var(--color-background-primary);
   }
+  /* Text files get a wider modal so structured records don't wrap
+     mid-field, and a line-number gutter so wrapped continuations stay
+     visually attached to their source line. */
+  .src-viewer-body.is-txt { width: min(1060px, 94vw); }
+  .src-viewer-text.is-txt-lines {
+    padding: 14px 0 18px;
+    counter-reset: ln;
+  }
+  .src-viewer-text.is-txt-lines .txt-line {
+    display: block;
+    position: relative;
+    padding: 1px 24px 1px 64px;
+    counter-increment: ln;
+    min-height: 1.2em;
+  }
+  .src-viewer-text.is-txt-lines .txt-line::before {
+    content: counter(ln);
+    position: absolute;
+    left: 0;
+    top: 1px;
+    width: 48px;
+    padding-right: 10px;
+    text-align: right;
+    color: var(--color-text-tertiary);
+    font-variant-numeric: tabular-nums;
+    user-select: none;
+    border-right: 0.5px solid var(--color-border-tertiary);
+  }
+  .src-viewer-text.is-txt-lines .txt-line:hover::before {
+    color: var(--color-text-secondary);
+  }
   .src-viewer-media {
     flex: 1;
     overflow: auto;
@@ -14177,7 +14208,8 @@ async function showSourceViewer(id, opts = {}) {
   const tableFooter = $('#src-viewer-table-footer');
   const tupleBar = $('#src-viewer-tuple');
   // Reset to text view by default
-  body.classList.remove('is-table', 'is-pdf');
+  body.classList.remove('is-table', 'is-pdf', 'is-txt');
+  textEl.classList.remove('is-txt-lines');
   tableWrap.hidden = true;
   tableWrap.innerHTML = '';
   tableFooter.hidden = true;
@@ -14285,7 +14317,7 @@ async function showSourceViewer(id, opts = {}) {
         }
       } else {
         const text = await ensureSourceText(id);
-        textEl.textContent = text || '(empty file)';
+        renderPlainTextBody(textEl, body, text);
       }
     } else if (SOURCE_SAMPLES[id]) {
       // Built-in seed source with bundled made-up content — render it
@@ -14311,7 +14343,7 @@ async function showSourceViewer(id, opts = {}) {
           resetCellTuple();
         }
       } else {
-        textEl.textContent = text;
+        renderPlainTextBody(textEl, body, text);
       }
     } else {
       textEl.textContent = '(This is a built-in sample source — no raw text is stored. Upload your own file to view its contents.)';
@@ -14335,6 +14367,37 @@ async function showSourceViewer(id, opts = {}) {
     body.classList.remove('is-table', 'is-pdf');
     textEl.textContent = '(failed to load source: ' + (err && err.message || err) + ')';
   }
+}
+
+/* Render a plain-text source into the viewer with a line-number gutter.
+   Each physical line becomes its own <div>, so wrapped continuations stay
+   visually grouped under one line number. textContent across the children
+   reconstructs the original string exactly, which keeps selection-offset
+   math (captureHighlightForBench, quote scrollTo) working unchanged. */
+function renderPlainTextBody(textEl, body, text) {
+  const raw = text == null ? '' : String(text);
+  if (!raw) {
+    textEl.textContent = '(empty file)';
+    return;
+  }
+  body.classList.add('is-txt');
+  textEl.classList.add('is-txt-lines');
+  textEl.textContent = '';
+  const parts = raw.split('\n');
+  // A trailing newline in the source produces a phantom empty part after
+  // split — fold it back into the preceding line so we don't render a
+  // ghost numbered line after the last real record.
+  const trailingNewline = parts.length > 1 && parts[parts.length - 1] === '' && raw.endsWith('\n');
+  const count = trailingNewline ? parts.length - 1 : parts.length;
+  const frag = document.createDocumentFragment();
+  for (let i = 0; i < count; i++) {
+    const line = document.createElement('div');
+    line.className = 'txt-line';
+    const needsNewline = trailingNewline || i < count - 1;
+    line.textContent = parts[i] + (needsNewline ? '\n' : '');
+    frag.appendChild(line);
+  }
+  textEl.appendChild(frag);
 }
 
 /* Post-render scroll/highlight inside the source viewer. */
@@ -14365,6 +14428,9 @@ function applySourceViewerScrollTo(scrollTo, { body }) {
     const before = raw.slice(0, idx);
     const match  = raw.slice(idx, idx + needle.length);
     const after  = raw.slice(idx + needle.length);
+    // Replacing innerHTML flattens the line-gutter structure; drop the
+    // corresponding class so the gutter CSS doesn't linger on plain text.
+    textEl.classList.remove('is-txt-lines');
     textEl.innerHTML = `${escapeHtml(before)}<mark class="src-viewer-hit">${escapeHtml(match)}</mark>${escapeHtml(after)}`;
     const hit = textEl.querySelector('.src-viewer-hit');
     if (hit) {
