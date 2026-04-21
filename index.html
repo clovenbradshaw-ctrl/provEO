@@ -2395,6 +2395,125 @@
   }
   .chat-bubble p { margin-bottom: 10px; }
   .chat-bubble p:last-child { margin-bottom: 0; }
+  .chat-pending {
+    font-style: italic;
+    color: var(--color-text-secondary);
+  }
+  .chat-citations {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 0.5px dashed var(--color-border-tertiary);
+    font-size: 11.5px;
+  }
+  .chat-citations-title {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    margin-bottom: 4px;
+  }
+  .chat-citation { margin-bottom: 2px; }
+  .chat-citation a { color: var(--color-text-primary); }
+  .chatctl-section { padding: 10px 0 12px; border-bottom: 0.5px solid var(--color-border-tertiary); }
+  .chatctl-section:last-child { border-bottom: 0; }
+  .chatctl-textarea {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.45;
+    resize: vertical;
+    min-height: 80px;
+    max-height: 260px;
+    width: 100%;
+    padding: 6px 8px;
+  }
+  .chatctl-narrow { width: 80px; }
+  .chatctl-src-list {
+    max-height: 280px;
+    overflow-y: auto;
+    padding-right: 2px;
+  }
+  .chatctl-folder { margin-bottom: 6px; }
+  .chatctl-folder-head {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-secondary);
+    padding: 4px 0 2px;
+    border-bottom: 0.5px dashed var(--color-border-tertiary);
+    margin-bottom: 3px;
+  }
+  .chatctl-src-row {
+    align-items: flex-start;
+    gap: 6px;
+    font-size: 11.5px;
+    padding: 3px 2px;
+  }
+  .chatctl-src-name {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    word-break: break-word;
+  }
+  .chatctl-tags { display: inline-flex; gap: 3px; flex-wrap: wrap; }
+  .chatctl-footer {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-text-secondary);
+    margin-top: 6px;
+  }
+  .chatctl-empty {
+    font-size: 11.5px;
+    color: var(--color-text-secondary);
+    font-style: italic;
+  }
+  .chatctl-adv summary {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    padding: 4px 0;
+  }
+  .stag-tag {
+    background: var(--color-fill-subtle, rgba(0,0,0,0.06));
+    color: var(--color-text-secondary);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    letter-spacing: 0.02em;
+  }
+  .chat-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    padding: 6px 32px 0;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+  }
+  .chat-toolbar .btn-sm { padding: 3px 8px; }
+  .chat-msg-actions {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    display: none;
+    gap: 4px;
+  }
+  .chat-msg:hover .chat-msg-actions { display: flex; }
+  .chat-msg { position: relative; }
+  .chat-msg-save {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    padding: 2px 6px;
+    background: var(--color-bg-primary, #fff);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: 3px;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+  }
+  .chat-msg-save:hover { color: var(--color-text-primary); }
   .chat-meta-note {
     font-family: var(--font-sans);
     font-size: 11px;
@@ -2626,6 +2745,44 @@
   }
   .sitem:hover .sitem-del { opacity: 1; }
   .sitem-del:hover { color: var(--red-mid); }
+  .sitem-actions {
+    position: absolute;
+    top: 6px; right: 6px;
+    display: flex;
+    gap: 0;
+    align-items: center;
+  }
+  .sitem-edit {
+    font-size: 14px;
+    color: var(--color-text-tertiary);
+    padding: 0 4px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.12s, color 0.12s;
+    line-height: 1;
+  }
+  .sitem:hover .sitem-edit { opacity: 1; }
+  .sitem-edit:hover { color: var(--color-text-primary); }
+  .sitem-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    margin-top: 3px;
+    padding: 0 10px 2px;
+  }
+  .sgroup { margin-bottom: 4px; }
+  .sgroup-head {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-tertiary);
+    padding: 6px 10px 3px;
+    border-top: 0.5px dashed var(--color-border-tertiary);
+  }
+  .sgroup:first-child .sgroup-head { border-top: 0; }
   .source-empty {
     padding: 10px 12px;
     font-size: 11px;
@@ -4970,6 +5127,10 @@
     <!-- ===== CHAT MODE ===== -->
     <section class="mode-panel" id="mode-chat">
       <div class="chat-main">
+        <div class="chat-toolbar">
+          <button class="btn-sm" id="chat-save-thread" title="Turn this whole conversation into a new source">Save thread as source</button>
+          <button class="btn-sm" id="chat-clear" title="Clear the live chat (does not delete saved sources)">Clear chat</button>
+        </div>
         <div class="chat-msgs" id="chat-msgs"></div>
         <div class="chat-input-wrap">
           <textarea class="chat-textarea" id="chat-input" rows="1" placeholder="Ask about the sources…"></textarea>
@@ -4977,7 +5138,7 @@
         </div>
       </div>
       <aside class="chat-right">
-        <div class="cr-head">Instruction set</div>
+        <div class="cr-head">Chat controls</div>
         <div class="cr-body" id="iset-body"></div>
       </aside>
     </section>
@@ -4990,6 +5151,8 @@
         <div class="explorer-filter-group" id="src-explorer-kind"></div>
         <div class="explorer-filter-group" id="src-explorer-dest"></div>
         <div class="explorer-filter-group" id="src-explorer-indexed"></div>
+        <div class="explorer-filter-group" id="src-explorer-folder"></div>
+        <div class="explorer-filter-group" id="src-explorer-tag"></div>
       </aside>
       <div class="explorer-list" id="src-explorer-list"></div>
       <aside class="right-panel explorer-detail" id="src-explorer-detail" data-empty="true">
@@ -5207,6 +5370,32 @@
         <div class="ws-btn-row">
           <button class="btn-sm btn-sm-primary" id="proveo-save">Save settings</button>
           <span class="cite-pick-note">You'll be asked per-upload; this just sets the default.</span>
+        </div>
+      </div>
+      <div class="ws-section">
+        <div class="ws-section-title">Claude API</div>
+        <div class="ws-section-sub">Powers Chat answers grounded in your sources and the per-claim Research button. The key is stored only in this browser's localStorage and sent directly to api.anthropic.com with <span style="font-family:var(--font-mono)">anthropic-dangerous-direct-browser-access</span>. Web search, the system message, and per-source toggles live in the right-hand panel of the Chat tab.</div>
+        <div class="ws-form-row">
+          <label for="claude-api-key">API key</label>
+          <input id="claude-api-key" class="ws-input" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="ws-btn-row">
+          <button class="btn-sm btn-sm-primary" id="claude-api-save">Save key</button>
+          <button class="btn-sm" id="claude-api-clear">Clear</button>
+          <span id="claude-api-status" class="cite-pick-note"></span>
+        </div>
+      </div>
+      <div class="ws-section">
+        <div class="ws-section-title">Chat memory</div>
+        <div class="ws-section-sub">When a passphrase is set, your live chat is encrypted and persisted in this browser's localStorage so it survives reload. The passphrase never leaves this device. Leave blank to keep chat in memory only.</div>
+        <div class="ws-form-row">
+          <label for="chat-memory-pass">Passphrase</label>
+          <input id="chat-memory-pass" class="ws-input" type="password" placeholder="shared secret only you know" autocomplete="off">
+        </div>
+        <div class="ws-btn-row">
+          <button class="btn-sm btn-sm-primary" id="chat-memory-save">Enable memory</button>
+          <button class="btn-sm" id="chat-memory-clear">Disable &amp; wipe</button>
+          <span id="chat-memory-status" class="cite-pick-note"></span>
         </div>
       </div>
       <div class="ws-section">
@@ -5545,6 +5734,80 @@
       <span class="cite-pick-note">Archived snapshots are permanent on Archive.org. Approve the proposal in the review queue to bind it to the claim.</span>
       <button class="btn-sm" id="research-cancel">Close</button>
       <button class="btn-sm btn-sm-primary" id="research-run">Ask Claude</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SAVE CHAT AS SOURCE MODAL ===== -->
+<div id="chat-save-modal" class="cite-modal" hidden>
+  <div class="cite-modal-backdrop" id="chat-save-backdrop"></div>
+  <div class="cite-modal-body" style="width:min(560px,94vw);">
+    <div class="cite-modal-head">
+      <div>
+        <div class="cite-modal-title" id="chat-save-title">Save as source</div>
+        <div class="cite-modal-sub" id="chat-save-sub">Saved sources persist in this browser (OPFS) and show up in the Sources list and Chat context.</div>
+      </div>
+      <button class="rphead-close" id="chat-save-close">×</button>
+    </div>
+    <div class="ws-section">
+      <div class="ws-form-row">
+        <label for="chat-save-name">Title</label>
+        <input id="chat-save-name" class="ws-input" type="text" placeholder="e.g. Investigation thread 2026-04-21">
+      </div>
+      <div class="ws-form-row">
+        <label for="chat-save-folder">Folder</label>
+        <select id="chat-save-folder" class="ws-input"></select>
+      </div>
+      <div class="ws-form-row" id="chat-save-folder-new-row" hidden>
+        <label for="chat-save-folder-new">New folder name</label>
+        <input id="chat-save-folder-new" class="ws-input" type="text" placeholder="e.g. Investigations">
+      </div>
+      <div class="ws-form-row">
+        <label for="chat-save-tags">Tags (comma-separated)</label>
+        <input id="chat-save-tags" class="ws-input" type="text" placeholder="e.g. NDP, FY25">
+      </div>
+      <div class="ws-form-row" id="chat-save-include-q-row" hidden>
+        <label>Scope</label>
+        <label class="ws-toggle"><input type="checkbox" id="chat-save-include-q" checked> Include the question that prompted this answer</label>
+      </div>
+      <div id="chat-save-err" class="ws-err" hidden></div>
+    </div>
+    <div class="cite-modal-actions">
+      <span class="cite-pick-note" id="chat-save-count"></span>
+      <button class="btn-sm" id="chat-save-cancel">Cancel</button>
+      <button class="btn-sm btn-sm-primary" id="chat-save-confirm">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== EDIT SOURCE META MODAL ===== -->
+<div id="src-meta-modal" class="cite-modal" hidden>
+  <div class="cite-modal-backdrop" id="src-meta-backdrop"></div>
+  <div class="cite-modal-body" style="width:min(520px,94vw);">
+    <div class="cite-modal-head">
+      <div>
+        <div class="cite-modal-title">Source folder &amp; tags</div>
+        <div class="cite-modal-sub" id="src-meta-sub"></div>
+      </div>
+      <button class="rphead-close" id="src-meta-close">×</button>
+    </div>
+    <div class="ws-section">
+      <div class="ws-form-row">
+        <label for="src-meta-folder">Folder</label>
+        <select id="src-meta-folder" class="ws-input"></select>
+      </div>
+      <div class="ws-form-row" id="src-meta-folder-new-row" hidden>
+        <label for="src-meta-folder-new">New folder name</label>
+        <input id="src-meta-folder-new" class="ws-input" type="text">
+      </div>
+      <div class="ws-form-row">
+        <label for="src-meta-tags">Tags (comma-separated)</label>
+        <input id="src-meta-tags" class="ws-input" type="text" placeholder="e.g. Budget, FY25">
+      </div>
+    </div>
+    <div class="cite-modal-actions">
+      <button class="btn-sm" id="src-meta-cancel">Cancel</button>
+      <button class="btn-sm btn-sm-primary" id="src-meta-save">Save</button>
     </div>
   </div>
 </div>
@@ -6112,31 +6375,66 @@ function allSources() {
   const user = Object.values(USER_SOURCES);
   return SAMPLE_ON ? [...SOURCES, ...user] : user;
 }
-function renderSources() {
-  const list = allSources();
-  const items = list.map(s => {
-    const kindTag = ['csv','pdf','txt','img','video','audio','bin'].includes(s.kind) ? s.kind : 'txt';
-    const delBtn = s.user_added
-      ? `<button class="sitem-del" data-del-src="${s.id}" title="Remove source">×</button>`
-      : '';
-    const destTag = s.user_added
-      ? (s.destination === 'public'
-          ? `<span class="stag dest-public" title="${escapeHtml(s.archive_url || '')}">ARCHIVE</span>`
-          : s.destination === 'gated'
-            ? `<span class="stag dest-gated" title="${escapeHtml(s.matrix_room_id || '')}">MATRIX</span>`
-            : `<span class="stag dest-local">LOCAL</span>`)
-      : '';
-    return `
-      <div class="sitem${s.indexed ? '' : ' pending'}" data-src-id="${s.id || ''}" data-open-src="${s.id || ''}">
-        <div class="sitem-name">${escapeHtml(s.name)}</div>
-        <div class="sitem-meta">
-          <span class="stag stag-${kindTag}">${s.kind.toUpperCase()}</span>${destTag}${escapeHtml(s.meta || '')}
-        </div>
+function renderSourceItem(s) {
+  const kindTag = ['csv','pdf','txt','img','video','audio','bin','html'].includes(s.kind) ? s.kind : 'txt';
+  const delBtn = s.user_added
+    ? `<button class="sitem-del" data-del-src="${s.id}" title="Remove source">×</button>`
+    : '';
+  const destTag = s.user_added
+    ? (s.destination === 'public'
+        ? `<span class="stag dest-public" title="${escapeHtml(s.archive_url || '')}">ARCHIVE</span>`
+        : s.destination === 'gated'
+          ? `<span class="stag dest-gated" title="${escapeHtml(s.matrix_room_id || '')}">MATRIX</span>`
+          : `<span class="stag dest-local">LOCAL</span>`)
+    : '';
+  const tags = getSourceTags(s.id);
+  const tagsHtml = tags.length
+    ? `<span class="sitem-tags">${tags.map(t => `<span class="stag stag-tag">${escapeHtml(t)}</span>`).join('')}</span>`
+    : '';
+  return `
+    <div class="sitem${s.indexed ? '' : ' pending'}" data-src-id="${s.id || ''}" data-open-src="${s.id || ''}">
+      <div class="sitem-name">${escapeHtml(s.name)}</div>
+      <div class="sitem-meta">
+        <span class="stag stag-${kindTag}">${s.kind.toUpperCase()}</span>${destTag}${escapeHtml(s.meta || '')}
+      </div>
+      ${tagsHtml}
+      <div class="sitem-actions">
+        <button class="sitem-edit" data-edit-src="${s.id}" title="Edit folder &amp; tags">⋯</button>
         ${delBtn}
       </div>
-    `;
-  }).join('');
-  $('#slist').innerHTML = items || `<div class="source-empty">No sources yet.<br>Click "+ add source" or drop files here.</div>`;
+    </div>
+  `;
+}
+
+function renderSources() {
+  const list = allSources();
+
+  // Group by folder; unfiled first so the list reads top-to-bottom.
+  const byFolder = new Map();
+  byFolder.set('', []);
+  for (const s of list) {
+    const f = getSourceFolder(s.id) || '';
+    if (!byFolder.has(f)) byFolder.set(f, []);
+    byFolder.get(f).push(s);
+  }
+  const keys = [...byFolder.keys()].sort((a, b) => {
+    if (a === '' && b !== '') return -1;
+    if (a !== '' && b === '') return 1;
+    return a.localeCompare(b);
+  });
+
+  const sections = keys
+    .filter(f => (byFolder.get(f) || []).length)
+    .map(f => {
+      const label = f || 'Unfiled';
+      const rows = byFolder.get(f).map(renderSourceItem).join('');
+      return `<div class="sgroup">
+        <div class="sgroup-head">${escapeHtml(label)}</div>
+        ${rows}
+      </div>`;
+    }).join('');
+
+  $('#slist').innerHTML = sections || `<div class="source-empty">No sources yet.<br>Click "+ add source" or drop files here.</div>`;
 
   // update top-right indexed badges
   const indexed = list.filter(s => s.indexed).length;
@@ -6144,11 +6442,20 @@ function renderSources() {
   const badges = $$('.srcbadge');
   if (badges[0]) badges[0].innerHTML = `<div class="statdot statdot-green"></div>${indexed} indexed`;
 
-  // click to open source viewer (skipped on the × delete button via stopPropagation below)
+  // click to open source viewer (skipped on action buttons via stopPropagation)
   $$('[data-open-src]').forEach(el => {
-    el.addEventListener('click', () => {
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.sitem-actions')) return;
       const id = el.dataset.openSrc;
       if (id) showSourceViewer(id);
+    });
+  });
+
+  // edit meta handlers
+  $$('[data-edit-src]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openSourceMetaEditor(btn.dataset.editSrc);
     });
   });
 
@@ -7134,9 +7441,15 @@ function renderReview() {
 function renderChat() {
   const history = SAMPLE_ON ? CHAT_HISTORY : CHAT_HISTORY.filter(m => !m.__seed);
   $('#chat-msgs').innerHTML = history.map((m, i) => {
+    const origIdx = CHAT_HISTORY.indexOf(m);
+    const saveBtn = m.__pending
+      ? ''
+      : `<div class="chat-msg-actions"><button class="chat-msg-save" data-save-msg="${origIdx}" title="Save this message as a source">Save as source</button></div>`;
+
     if (m.role === 'user') {
       return `
         <div class="chat-msg chat-msg-user">
+          ${saveBtn}
           <div class="chat-avatar av-user">M</div>
           <div class="chat-bubble chat-bubble-user">${escapeHtml(m.text)}</div>
         </div>
@@ -7170,6 +7483,7 @@ function renderChat() {
 
     return `
       <div class="chat-msg">
+        ${saveBtn}
         <div class="chat-avatar av-sys">NL</div>
         <div class="chat-bubble">
           ${metaNote}
@@ -7189,41 +7503,803 @@ function renderChat() {
     });
   });
 
-  // instruction set (seeded with sample rules; hidden when sample data is off)
-  const rules = SAMPLE_ON ? ISET : [];
-  $('#iset-body').innerHTML = rules.map(r => `
-    <div class="iset-rule">
-      <div class="iset-rule-head">
-        <span class="iset-type stag ${r.color}">${r.type}</span>
-        <span class="iset-trigger">${r.trigger}</span>
-      </div>
-      <div class="iset-text">${escapeHtml(r.text)}</div>
-    </div>
-  `).join('') + (rules.length
-    ? `<div class="iset-footer">${rules.length} rules · 2 firings today · 1 candidate refinement pending review</div>`
-    : `<div class="iset-footer">No learned rules yet. Corrections you make in Review will appear here.</div>`);
+  $$('[data-save-msg]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const i = parseInt(btn.getAttribute('data-save-msg'), 10);
+      if (Number.isFinite(i)) openChatSaveModal({ mode: 'message', messageIndex: i });
+    });
+  });
+
+  renderChatControls();
 }
 
-function sendChatMessage() {
+/* Right-sidebar panel in Chat mode — system message, per-source include
+   toggles, and web-search knobs. Rerendered every time renderChat runs. */
+function renderChatControls() {
+  const host = $('#iset-body');
+  if (!host) return;
+  const sources = allSources();
+  const total = sources.length;
+  const included = sources.filter(s => isSourceIncluded(s.id)).length;
+
+  // Group sources by folder for the include list.
+  const byFolder = new Map();
+  for (const s of sources) {
+    const f = getSourceFolder(s.id) || '';
+    if (!byFolder.has(f)) byFolder.set(f, []);
+    byFolder.get(f).push(s);
+  }
+  const folderNames = [...byFolder.keys()].sort((a, b) => {
+    if (a === '' && b !== '') return 1;
+    if (a !== '' && b === '') return -1;
+    return a.localeCompare(b);
+  });
+
+  const sourcesHtml = folderNames.map(f => {
+    const list = byFolder.get(f);
+    const label = f || 'Unfiled';
+    const rows = list.map(s => {
+      const on = isSourceIncluded(s.id);
+      const kindTag = ['csv','pdf','txt','img','video','audio','bin','html'].includes(s.kind) ? s.kind : 'txt';
+      const tags = getSourceTags(s.id);
+      const tagsHtml = tags.length
+        ? `<span class="chatctl-tags">${tags.map(t => `<span class="stag stag-tag">${escapeHtml(t)}</span>`).join('')}</span>`
+        : '';
+      return `<label class="ws-toggle chatctl-src-row" title="${escapeHtml(s.name)}">
+        <input type="checkbox" data-chat-src="${escapeHtml(s.id)}"${on ? ' checked' : ''}>
+        <span class="chatctl-src-name">
+          <span class="stag stag-${kindTag}">${escapeHtml(s.kind.toUpperCase())}</span>
+          ${escapeHtml(s.name)}
+          ${tagsHtml}
+        </span>
+      </label>`;
+    }).join('');
+    return `<div class="chatctl-folder">
+      <div class="chatctl-folder-head">${escapeHtml(label)}</div>
+      ${rows}
+    </div>`;
+  }).join('') || `<div class="chatctl-empty">No sources loaded. Add sources in the left rail.</div>`;
+
+  host.innerHTML = `
+    <div class="ws-section chatctl-section">
+      <div class="ws-section-title">System message</div>
+      <div class="ws-section-sub">Sent to Claude before the sources. Your edits persist locally.</div>
+      <textarea id="chatctl-system" class="ws-input chatctl-textarea" rows="5" spellcheck="false">${escapeHtml(CHAT_SYSTEM_PROMPT)}</textarea>
+      <div class="ws-btn-row">
+        <button class="btn-sm" id="chatctl-system-reset">Reset to default</button>
+        <span id="chatctl-system-status" class="cite-pick-note"></span>
+      </div>
+    </div>
+    <div class="ws-section chatctl-section">
+      <div class="ws-section-title">Sources for this chat</div>
+      <div class="ws-section-sub">Only checked sources are sent as context.</div>
+      <div class="chatctl-src-list">${sourcesHtml}</div>
+      <div class="chatctl-footer">${included} of ${total} included</div>
+    </div>
+    <div class="ws-section chatctl-section">
+      <div class="ws-section-title">Web search</div>
+      <div class="ws-section-sub">Billed separately by Anthropic at $10 / 1k searches.</div>
+      <label class="ws-toggle"><input type="checkbox" id="chatctl-web-on"${CLAUDE_CHAT_WEB ? ' checked' : ''}> Let Claude call web_search</label>
+      <div class="ws-form-row">
+        <label for="chatctl-web-max">Max searches per reply</label>
+        <input id="chatctl-web-max" class="ws-input chatctl-narrow" type="number" min="0" max="20" step="1" value="${CHAT_WEB_MAX}">
+      </div>
+      <details class="chatctl-adv">
+        <summary>Advanced</summary>
+        <div class="ws-form-row">
+          <label for="chatctl-web-allow">Allowed domains</label>
+          <input id="chatctl-web-allow" class="ws-input" type="text" placeholder="docs.claude.com, sec.gov" value="${escapeHtml(CHAT_WEB_ALLOW)}">
+        </div>
+        <div class="ws-form-row">
+          <label for="chatctl-web-block">Blocked domains</label>
+          <input id="chatctl-web-block" class="ws-input" type="text" placeholder="pinterest.com" value="${escapeHtml(CHAT_WEB_BLOCK)}">
+        </div>
+      </details>
+    </div>
+  `;
+
+  const sys = $('#chatctl-system');
+  if (sys) {
+    sys.addEventListener('input', () => {
+      CHAT_SYSTEM_PROMPT = sys.value;
+      try { localStorage.setItem(LS_CHAT_SYSTEM, CHAT_SYSTEM_PROMPT); } catch {}
+      const status = $('#chatctl-system-status');
+      if (status) status.textContent = 'Saved.';
+    });
+  }
+  const resetBtn = $('#chatctl-system-reset');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      CHAT_SYSTEM_PROMPT = CHAT_SYSTEM_PROMPT_DEFAULT;
+      try { localStorage.setItem(LS_CHAT_SYSTEM, CHAT_SYSTEM_PROMPT); } catch {}
+      renderChatControls();
+    });
+  }
+  $$('input[data-chat-src]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const id = cb.getAttribute('data-chat-src');
+      if (cb.checked) delete CHAT_SOURCE_INCLUDE[id];
+      else CHAT_SOURCE_INCLUDE[id] = false;
+      saveChatSourceInclude();
+      const footer = host.querySelector('.chatctl-footer');
+      if (footer) {
+        const inc = allSources().filter(s => isSourceIncluded(s.id)).length;
+        footer.textContent = `${inc} of ${allSources().length} included`;
+      }
+    });
+  });
+  const webOn = $('#chatctl-web-on');
+  if (webOn) {
+    webOn.addEventListener('change', () => {
+      CLAUDE_CHAT_WEB = !!webOn.checked;
+      try { localStorage.setItem(LS_CLAUDE_CHAT_WEB, CLAUDE_CHAT_WEB ? '1' : '0'); } catch {}
+    });
+  }
+  const webMax = $('#chatctl-web-max');
+  if (webMax) {
+    webMax.addEventListener('change', () => {
+      const v = parseInt(webMax.value, 10);
+      CHAT_WEB_MAX = Number.isFinite(v) && v >= 0 && v <= 20 ? v : 3;
+      webMax.value = CHAT_WEB_MAX;
+      try { localStorage.setItem(LS_CHAT_WEB_MAX, String(CHAT_WEB_MAX)); } catch {}
+    });
+  }
+  const webAllow = $('#chatctl-web-allow');
+  if (webAllow) {
+    webAllow.addEventListener('change', () => {
+      CHAT_WEB_ALLOW = webAllow.value;
+      try { localStorage.setItem(LS_CHAT_WEB_ALLOW, CHAT_WEB_ALLOW); } catch {}
+    });
+  }
+  const webBlock = $('#chatctl-web-block');
+  if (webBlock) {
+    webBlock.addEventListener('change', () => {
+      CHAT_WEB_BLOCK = webBlock.value;
+      try { localStorage.setItem(LS_CHAT_WEB_BLOCK, CHAT_WEB_BLOCK); } catch {}
+    });
+  }
+}
+
+let chatPending = false;
+
+async function sendChatMessage() {
+  if (chatPending) return;
   const input = $('#chat-input');
+  const sendBtn = $('#chat-send');
   const text = input.value.trim();
   if (!text) return;
+
   CHAT_HISTORY.push({ role: 'user', text });
-  // stub response — in a real build this is the fold applied to the question
-  CHAT_HISTORY.push({
-    role: 'system',
-    meta: 'LLM synthesis · grounded in fold state',
-    html: `Indexed sources don't yet answer that directly. The fold has ${
-      Object.values(CLAIMS).filter(c => c.type === 'grounded').length
-    } grounded claims and ${
-      Object.values(CLAIMS).filter(c => c.type === 'absent').length
-    } NUL events against the corpus as loaded. Would you like me to register this as a new query intent, so future ingested sources are scanned for it?`,
-    evidence: null
-  });
   input.value = '';
   input.style.height = 'auto';
+
+  if (!CLAUDE_API_KEY) {
+    CHAT_HISTORY.push({
+      role: 'system',
+      meta: 'no api key',
+      html: `Add your Claude API key in <strong>Workspace → Claude API</strong> to chat against the loaded sources. Until then, I can't answer.`,
+      evidence: null
+    });
+    renderChat();
+    $('#chat-msgs').scrollTop = $('#chat-msgs').scrollHeight;
+    return;
+  }
+
+  const webOn = !!CLAUDE_CHAT_WEB && CHAT_WEB_MAX > 0;
+  const pendingIdx = CHAT_HISTORY.push({
+    role: 'system',
+    meta: webOn ? 'claude · sources + web_search' : 'claude · sources',
+    html: `<span class="chat-pending">Thinking…</span>`,
+    evidence: null,
+    __pending: true
+  }) - 1;
   renderChat();
   $('#chat-msgs').scrollTop = $('#chat-msgs').scrollHeight;
+
+  chatPending = true;
+  if (sendBtn) sendBtn.disabled = true;
+
+  try {
+    const blocks = await gatherChatSourceBlocks();
+    const priorTurns = CHAT_HISTORY
+      .filter((m, i) => i !== pendingIdx && !m.__seed && !m.__pending)
+      .slice(-10)
+      .slice(0, -1); // exclude the just-pushed user message; we'll add it last
+    const result = await callChatAgent(CLAUDE_API_KEY, {
+      userText: text,
+      priorTurns,
+      sourceBlocks: blocks,
+      useWeb: webOn,
+      systemPrompt: CHAT_SYSTEM_PROMPT,
+      webMaxUses: CHAT_WEB_MAX,
+      allowedDomains: splitDomains(CHAT_WEB_ALLOW),
+      blockedDomains: splitDomains(CHAT_WEB_BLOCK)
+    });
+    CHAT_HISTORY[pendingIdx] = {
+      role: 'system',
+      meta: result.meta,
+      html: result.html,
+      evidence: null
+    };
+  } catch (err) {
+    CHAT_HISTORY[pendingIdx] = {
+      role: 'system',
+      meta: 'claude · error',
+      html: `Request failed: ${escapeHtml(err && err.message || String(err))}`,
+      evidence: null
+    };
+  } finally {
+    chatPending = false;
+    if (sendBtn) sendBtn.disabled = false;
+    renderChat();
+    $('#chat-msgs').scrollTop = $('#chat-msgs').scrollHeight;
+    if (typeof syncChatMemory === 'function') syncChatMemory();
+  }
+}
+
+async function gatherChatSourceBlocks() {
+  const list = allSources().filter(s => isSourceIncluded(s.id));
+  const TOTAL_CAP = 180000;   // ~45k tokens of raw corpus text
+  const PER_SOURCE_CAP = 40000;
+  const out = [];
+  let total = 0;
+  for (const s of list) {
+    let text = '';
+    try {
+      if (typeof SOURCE_SAMPLES !== 'undefined' && SOURCE_SAMPLES[s.id]) {
+        text = SOURCE_SAMPLES[s.id] || '';
+      } else {
+        text = (await ensureSourceText(s.id)) || '';
+      }
+    } catch { text = ''; }
+    text = String(text || '');
+    if (text.length > PER_SOURCE_CAP) text = text.slice(0, PER_SOURCE_CAP) + '\n…[truncated]';
+    if (total + text.length > TOTAL_CAP) {
+      const room = Math.max(0, TOTAL_CAP - total);
+      text = text.slice(0, room) + (room ? '\n…[truncated]' : '');
+    }
+    total += text.length;
+    out.push({ id: s.id, name: s.name, kind: s.kind, meta: s.meta || '', text });
+    if (total >= TOTAL_CAP) break;
+  }
+  return out;
+}
+
+async function callChatAgent(apiKey, opts) {
+  const {
+    userText,
+    priorTurns,
+    sourceBlocks,
+    useWeb,
+    systemPrompt,
+    webMaxUses,
+    allowedDomains,
+    blockedDomains
+  } = opts || {};
+
+  const totalSources = Array.isArray(allSources()) ? allSources().length : 0;
+  const sourcesMd = sourceBlocks.length
+    ? sourceBlocks.map((b, i) =>
+        `### SOURCE ${i + 1}: ${b.name} (${b.kind}${b.meta ? ' · ' + b.meta : ''})\n${b.text || '(no text available)'}`
+      ).join('\n\n---\n\n')
+    : (totalSources === 0
+        ? '(no sources are loaded in the workspace)'
+        : '(all sources are excluded for this chat — the user has un-toggled every source in the Chat panel)');
+
+  const userPrefix = (typeof systemPrompt === 'string' && systemPrompt.trim())
+    ? systemPrompt.trim()
+    : CHAT_SYSTEM_PROMPT_DEFAULT;
+  const toolClause = useWeb
+    ? 'You MAY call the web_search tool when the local sources are silent, outdated, or contradicted by public record. Prefer local sources when they are sufficient.'
+    : 'Do NOT call any tools. Answer from the local sources only; if they are silent, say so.';
+
+  const system = [
+    userPrefix,
+    '',
+    toolClause,
+    '',
+    '=== LOCAL SOURCES ===',
+    sourcesMd
+  ].join('\n');
+
+  const messages = [];
+  for (const t of priorTurns) {
+    if (!t) continue;
+    if (t.role === 'user') {
+      messages.push({ role: 'user', content: String(t.text || '') });
+    } else if (t.role === 'system') {
+      const plain = stripHtmlToText(t.html || '');
+      if (plain) messages.push({ role: 'assistant', content: plain });
+    }
+  }
+  messages.push({ role: 'user', content: userText });
+
+  const body = {
+    model: CLAUDE_API_MODEL,
+    max_tokens: 2048,
+    system,
+    messages
+  };
+  if (useWeb) {
+    const max = Number.isFinite(webMaxUses) ? Math.max(1, Math.min(20, webMaxUses)) : 3;
+    const tool = { type: 'web_search_20260209', name: 'web_search', max_uses: max };
+    if (Array.isArray(allowedDomains) && allowedDomains.length) tool.allowed_domains = allowedDomains;
+    if (Array.isArray(blockedDomains) && blockedDomains.length) tool.blocked_domains = blockedDomains;
+    body.tools = [tool];
+  }
+
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+  if (!resp.ok) {
+    let detail = '';
+    try {
+      const raw = await resp.text();
+      const asJson = (() => { try { return JSON.parse(raw); } catch { return null; } })();
+      detail = (asJson && asJson.error && asJson.error.message) ? asJson.error.message : raw.slice(0, 240);
+    } catch {}
+    throw new Error(`http ${resp.status}${detail ? ' — ' + detail : ''}`);
+  }
+  const data = await resp.json();
+  const textBlocks = Array.isArray(data.content)
+    ? data.content.filter(b => b && b.type === 'text')
+    : [];
+  const toolBlocks = Array.isArray(data.content)
+    ? data.content.filter(b => b && (b.type === 'server_tool_use' || b.type === 'web_search_tool_result'))
+    : [];
+  const joined = textBlocks.map(b => b.text || '').join('\n').trim();
+  if (!joined) throw new Error('claude returned no text content');
+
+  const citations = [];
+  const seenUrls = new Set();
+  for (const b of textBlocks) {
+    if (!Array.isArray(b.citations)) continue;
+    for (const c of b.citations) {
+      const url = c && (c.url || (c.source && c.source.url));
+      if (!url || seenUrls.has(url)) continue;
+      seenUrls.add(url);
+      citations.push({
+        url,
+        title: c.title || c.cited_text || url
+      });
+    }
+  }
+
+  const webQueries = toolBlocks
+    .filter(b => b.type === 'server_tool_use' && b.name === 'web_search')
+    .map(b => (b.input && b.input.query) ? String(b.input.query) : '')
+    .filter(Boolean);
+
+  let html = textToHtml(joined);
+  if (citations.length) {
+    html += `<div class="chat-citations"><div class="chat-citations-title">Web sources</div>` +
+      citations.map(c =>
+        `<div class="chat-citation">• <a href="${escapeHtml(c.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(c.title)}</a></div>`
+      ).join('') + `</div>`;
+  }
+
+  const metaBits = [`claude · ${sourceBlocks.length} source${sourceBlocks.length === 1 ? '' : 's'}`];
+  if (webQueries.length) metaBits.push(`${webQueries.length} web search${webQueries.length === 1 ? '' : 'es'}`);
+  else if (useWeb) metaBits.push('web search available');
+  return { meta: metaBits.join(' · '), html };
+}
+
+function textToHtml(text) {
+  const esc = escapeHtml(String(text || ''));
+  const paragraphs = esc.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+  if (!paragraphs.length) return '';
+  return paragraphs.map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
+}
+
+function stripHtmlToText(html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = String(html || '');
+  return (tmp.textContent || '').trim();
+}
+
+/* ---------- SAVE CHAT AS SOURCE ----------
+   chatThreadToText serializes messages into a plain-text source body.
+   saveChatAsSource writes through the same pipeline as uploads (storage
+   + SRC event + refold) so the chat-as-source is a first-class source. */
+
+function chatThreadToText(messages, { title }) {
+  const lines = [];
+  if (title) lines.push(`# ${title}`, '');
+  for (const m of messages) {
+    if (!m || m.__pending) continue;
+    if (m.role === 'user') {
+      lines.push('## User', String(m.text || ''), '');
+    } else if (m.role === 'system') {
+      const meta = m.meta ? ` (meta: ${m.meta})` : '';
+      const body = stripHtmlToText(m.html || '');
+      if (!body) continue;
+      lines.push(`## Claude${meta}`, body, '');
+    }
+  }
+  return lines.join('\n').trim() + '\n';
+}
+
+async function saveChatAsSource({ text, name, folder, tags }) {
+  const id = 's_' + ulid().slice(-10);
+  const size = new Blob([text], { type: 'text/plain' }).size;
+  const lines = (text.match(/\n/g) || []).length + 1;
+  const meta = `${humanSize(size)} · ${lines} lines`;
+  await storage.saveSource(id, text);
+  SOURCE_TEXT[id] = text;
+  setSourceMeta(id, { folder: folder || null, tags: tags || [] });
+  await appendEventAndRefold({
+    op: 'SRC',
+    site: `source:${id}`,
+    resolution: 'Figure',
+    payload: {
+      id,
+      name: name || 'chat-snapshot.txt',
+      kind: 'txt',
+      meta,
+      mime: 'text/plain',
+      size,
+      lines,
+      has_text: true,
+      has_blob: false,
+      destination: 'local',
+      archive_url: null,
+      archive_identifier: null,
+      matrix_mxc: null,
+      matrix_room_id: null,
+      sha256: null,
+      chat_origin: true
+    },
+    author: 'human'
+  });
+  return id;
+}
+
+let chatSaveCtx = null; // { mode, messages, suggestedTitle, includeQuestion? }
+
+function openChatSaveModal(opts) {
+  const { mode, messageIndex } = opts || {};
+  const modal = $('#chat-save-modal');
+  if (!modal) return;
+
+  let messages = [];
+  let suggestedTitle = '';
+  let includeQuestionRow = false;
+  if (mode === 'thread') {
+    messages = CHAT_HISTORY.filter(m => !m.__pending);
+    if (!messages.length) {
+      showToast('no chat to save yet');
+      return;
+    }
+    const firstUser = messages.find(m => m.role === 'user');
+    suggestedTitle = firstUser
+      ? `Chat — ${firstUser.text.slice(0, 50)}`
+      : `Chat ${new Date().toISOString().slice(0, 10)}`;
+    $('#chat-save-title').textContent = 'Save chat thread as source';
+  } else if (mode === 'message') {
+    const msg = CHAT_HISTORY[messageIndex];
+    if (!msg) return;
+    if (msg.role === 'user') {
+      messages = [msg];
+      suggestedTitle = `Note — ${msg.text.slice(0, 50)}`;
+    } else {
+      const prior = CHAT_HISTORY.slice(0, messageIndex).reverse().find(m => m.role === 'user');
+      messages = prior ? [prior, msg] : [msg];
+      const seed = prior ? prior.text : stripHtmlToText(msg.html).slice(0, 50);
+      suggestedTitle = `Answer — ${seed.slice(0, 50)}`;
+      includeQuestionRow = !!prior;
+    }
+    $('#chat-save-title').textContent = 'Save message as source';
+  } else {
+    return;
+  }
+
+  chatSaveCtx = { mode, messages, messageIndex, includeQuestionAvailable: includeQuestionRow };
+
+  const nameInput = $('#chat-save-name');
+  if (nameInput) nameInput.value = suggestedTitle;
+  const tagsInput = $('#chat-save-tags');
+  if (tagsInput) tagsInput.value = '';
+
+  const folderSel = $('#chat-save-folder');
+  populateFolderSelect(folderSel, null);
+  const newRow = $('#chat-save-folder-new-row');
+  if (newRow) newRow.hidden = true;
+  const newInput = $('#chat-save-folder-new');
+  if (newInput) newInput.value = '';
+
+  const incRow = $('#chat-save-include-q-row');
+  if (incRow) incRow.hidden = !includeQuestionRow;
+  const incCb = $('#chat-save-include-q');
+  if (incCb) incCb.checked = true;
+
+  const err = $('#chat-save-err');
+  if (err) { err.hidden = true; err.textContent = ''; }
+  const count = $('#chat-save-count');
+  if (count) count.textContent = `${messages.length} message${messages.length === 1 ? '' : 's'}`;
+  modal.hidden = false;
+  if (nameInput) nameInput.focus();
+}
+
+function closeChatSaveModal() {
+  const modal = $('#chat-save-modal');
+  if (modal) modal.hidden = true;
+  chatSaveCtx = null;
+}
+
+function populateFolderSelect(sel, current) {
+  if (!sel) return;
+  const folders = listFolders();
+  const opts = ['<option value="">(Unfiled)</option>']
+    .concat(folders.map(f => `<option value="${escapeHtml(f)}"${current === f ? ' selected' : ''}>${escapeHtml(f)}</option>`))
+    .concat(['<option value="__new__">+ New folder…</option>']);
+  sel.innerHTML = opts.join('');
+}
+
+function wireChatSaveModal() {
+  const modal = $('#chat-save-modal');
+  if (!modal || modal.dataset.wired === '1') return;
+  modal.dataset.wired = '1';
+  $('#chat-save-close').addEventListener('click', closeChatSaveModal);
+  $('#chat-save-backdrop').addEventListener('click', closeChatSaveModal);
+  $('#chat-save-cancel').addEventListener('click', closeChatSaveModal);
+
+  const folderSel = $('#chat-save-folder');
+  if (folderSel) {
+    folderSel.addEventListener('change', () => {
+      const isNew = folderSel.value === '__new__';
+      const row = $('#chat-save-folder-new-row');
+      if (row) row.hidden = !isNew;
+      if (isNew) {
+        const newInput = $('#chat-save-folder-new');
+        if (newInput) newInput.focus();
+      }
+    });
+  }
+
+  $('#chat-save-confirm').addEventListener('click', async () => {
+    if (!chatSaveCtx) return;
+    const btn = $('#chat-save-confirm');
+    const err = $('#chat-save-err');
+    const clearErr = () => { if (err) { err.hidden = true; err.textContent = ''; } };
+    const showErr = (msg) => { if (err) { err.hidden = false; err.textContent = msg; } };
+    clearErr();
+
+    const name = ($('#chat-save-name')?.value || '').trim();
+    if (!name) return showErr('title is required');
+    const rawFolder = $('#chat-save-folder')?.value || '';
+    const folder = rawFolder === '__new__'
+      ? ($('#chat-save-folder-new')?.value || '').trim()
+      : rawFolder;
+    const tags = ($('#chat-save-tags')?.value || '')
+      .split(',').map(t => t.trim()).filter(Boolean);
+
+    let messages = chatSaveCtx.messages.slice();
+    if (chatSaveCtx.includeQuestionAvailable) {
+      const includeQ = !!$('#chat-save-include-q')?.checked;
+      if (!includeQ) {
+        messages = messages.filter(m => m.role !== 'user');
+      }
+    }
+
+    const text = chatThreadToText(messages, { title: name });
+    if (!text.trim()) return showErr('nothing to save');
+
+    if (btn) btn.disabled = true;
+    try {
+      const fileName = name.replace(/[^a-z0-9-_ ]+/gi, '').slice(0, 60) + '.txt';
+      await saveChatAsSource({ text, name: fileName || 'chat-snapshot.txt', folder, tags });
+      showToast('saved to sources');
+      closeChatSaveModal();
+      if (typeof renderSources === 'function') renderSources();
+      if (typeof renderChatControls === 'function') renderChatControls();
+    } catch (e) {
+      showErr('failed to save: ' + (e && e.message || e));
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
+}
+
+/* ---------- CHAT MEMORY (encrypted, per-device) ----------
+   When a user sets a passphrase, CHAT_HISTORY is serialized, encrypted
+   with AES-GCM (key derived via PBKDF2 from the passphrase), and written
+   to localStorage under LS_CHAT_MEMORY. The passphrase never leaves the
+   device — only ciphertext is persisted. On page load, restoreChatMemory
+   is called; if the passphrase is set, it decrypts and rehydrates the
+   history before the Chat tab first renders. */
+
+const LS_CHAT_MEMORY = 'nl.chatMemory.v1';
+const LS_CHAT_MEMORY_PASS = 'nl.chatMemoryPass.v1';
+const CHAT_MEMORY_PBKDF2_ITERS = 200000;
+
+let chatMemoryKeyCache = null;
+
+function getChatMemoryPass() {
+  try { return localStorage.getItem(LS_CHAT_MEMORY_PASS) || ''; } catch { return ''; }
+}
+
+async function deriveChatMemoryKey(passphrase) {
+  const enc = new TextEncoder();
+  const material = await crypto.subtle.importKey(
+    'raw', enc.encode(passphrase), { name: 'PBKDF2' }, false, ['deriveBits']
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: enc.encode('proveo-chat-memory:v1'), iterations: CHAT_MEMORY_PBKDF2_ITERS, hash: 'SHA-256' },
+    material, 256
+  );
+  return crypto.subtle.importKey('raw', bits, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+}
+
+async function ensureChatMemoryKey() {
+  if (chatMemoryKeyCache) return chatMemoryKeyCache;
+  const pass = getChatMemoryPass();
+  if (!pass) return null;
+  try {
+    chatMemoryKeyCache = await deriveChatMemoryKey(pass);
+    return chatMemoryKeyCache;
+  } catch (e) {
+    console.warn('[chat-memory] key derivation failed', e);
+    return null;
+  }
+}
+
+let chatMemorySyncPending = null;
+function syncChatMemory() {
+  // Debounce: collapse multiple rapid calls into one write.
+  if (chatMemorySyncPending) clearTimeout(chatMemorySyncPending);
+  chatMemorySyncPending = setTimeout(async () => {
+    chatMemorySyncPending = null;
+    const key = await ensureChatMemoryKey();
+    if (!key) return;
+    try {
+      const snapshot = CHAT_HISTORY
+        .filter(m => !m.__seed && !m.__pending)
+        .map(m => ({ role: m.role, text: m.text, html: m.html, meta: m.meta }));
+      const plaintext = new TextEncoder().encode(JSON.stringify(snapshot));
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintext);
+      const payload = { v: 1, iv: toB64(iv), ct: toB64(ct), ts: Date.now() };
+      localStorage.setItem(LS_CHAT_MEMORY, JSON.stringify(payload));
+      updateChatMemoryStatus('Saved.');
+    } catch (e) {
+      console.warn('[chat-memory] sync failed', e);
+      updateChatMemoryStatus('Error: ' + (e && e.message || e));
+    }
+  }, 400);
+}
+
+async function restoreChatMemory() {
+  const pass = getChatMemoryPass();
+  if (!pass) return;
+  let payload = null;
+  try {
+    const raw = localStorage.getItem(LS_CHAT_MEMORY);
+    if (!raw) return;
+    payload = JSON.parse(raw);
+  } catch { return; }
+  if (!payload || !payload.iv || !payload.ct) return;
+  try {
+    const key = await ensureChatMemoryKey();
+    if (!key) return;
+    const iv = fromB64(payload.iv);
+    const ct = fromB64(payload.ct);
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+    const snap = JSON.parse(new TextDecoder().decode(plain));
+    if (Array.isArray(snap)) {
+      // Preserve the __seed demo messages at the top, then append restored.
+      const seeds = CHAT_HISTORY.filter(m => m.__seed);
+      CHAT_HISTORY.length = 0;
+      for (const s of seeds) CHAT_HISTORY.push(s);
+      for (const m of snap) CHAT_HISTORY.push(m);
+    }
+  } catch (e) {
+    console.warn('[chat-memory] restore failed (wrong passphrase?)', e);
+    updateChatMemoryStatus('Decrypt failed — passphrase mismatch.');
+  }
+}
+
+function updateChatMemoryStatus(msg) {
+  const el = $('#chat-memory-status');
+  if (!el) return;
+  el.textContent = msg || '';
+}
+
+function wireChatMemoryControls() {
+  const saveBtn = $('#chat-memory-save');
+  const clearBtn = $('#chat-memory-clear');
+  if (!saveBtn || !clearBtn) return;
+  saveBtn.addEventListener('click', async () => {
+    const input = $('#chat-memory-pass');
+    const pass = (input?.value || '').trim();
+    if (!pass) { updateChatMemoryStatus('Passphrase required.'); return; }
+    try {
+      localStorage.setItem(LS_CHAT_MEMORY_PASS, pass);
+      chatMemoryKeyCache = null;
+      await ensureChatMemoryKey();
+      syncChatMemory();
+      updateChatMemoryStatus('Enabled.');
+      showToast('chat memory enabled');
+    } catch (e) {
+      updateChatMemoryStatus('Error: ' + (e && e.message || e));
+    }
+  });
+  clearBtn.addEventListener('click', () => {
+    try {
+      localStorage.removeItem(LS_CHAT_MEMORY_PASS);
+      localStorage.removeItem(LS_CHAT_MEMORY);
+    } catch {}
+    chatMemoryKeyCache = null;
+    const input = $('#chat-memory-pass');
+    if (input) input.value = '';
+    updateChatMemoryStatus('Disabled.');
+    showToast('chat memory wiped');
+  });
+}
+
+/* ---------- EDIT SOURCE META (folder + tags) ---------- */
+
+let srcMetaCtx = null; // { sourceId }
+
+function openSourceMetaEditor(sourceId) {
+  const src = allSources().find(s => s.id === sourceId);
+  if (!src) return;
+  srcMetaCtx = { sourceId };
+  const modal = $('#src-meta-modal');
+  if (!modal) return;
+  $('#src-meta-sub').textContent = src.name;
+  populateFolderSelect($('#src-meta-folder'), getSourceFolder(sourceId));
+  const newRow = $('#src-meta-folder-new-row');
+  if (newRow) newRow.hidden = true;
+  const newInput = $('#src-meta-folder-new');
+  if (newInput) newInput.value = '';
+  const tagsInput = $('#src-meta-tags');
+  if (tagsInput) tagsInput.value = getSourceTags(sourceId).join(', ');
+  modal.hidden = false;
+}
+
+function closeSourceMetaEditor() {
+  const modal = $('#src-meta-modal');
+  if (modal) modal.hidden = true;
+  srcMetaCtx = null;
+}
+
+function wireSourceMetaModal() {
+  const modal = $('#src-meta-modal');
+  if (!modal || modal.dataset.wired === '1') return;
+  modal.dataset.wired = '1';
+  $('#src-meta-close').addEventListener('click', closeSourceMetaEditor);
+  $('#src-meta-backdrop').addEventListener('click', closeSourceMetaEditor);
+  $('#src-meta-cancel').addEventListener('click', closeSourceMetaEditor);
+  const folderSel = $('#src-meta-folder');
+  if (folderSel) {
+    folderSel.addEventListener('change', () => {
+      const isNew = folderSel.value === '__new__';
+      const row = $('#src-meta-folder-new-row');
+      if (row) row.hidden = !isNew;
+      if (isNew) $('#src-meta-folder-new')?.focus();
+    });
+  }
+  $('#src-meta-save').addEventListener('click', () => {
+    if (!srcMetaCtx) return;
+    const rawFolder = $('#src-meta-folder')?.value || '';
+    const folder = rawFolder === '__new__'
+      ? ($('#src-meta-folder-new')?.value || '').trim()
+      : rawFolder;
+    const tags = ($('#src-meta-tags')?.value || '')
+      .split(',').map(t => t.trim()).filter(Boolean);
+    setSourceMeta(srcMetaCtx.sourceId, { folder: folder || null, tags });
+    closeSourceMetaEditor();
+    if (typeof renderSources === 'function') renderSources();
+    if (typeof renderChatControls === 'function') renderChatControls();
+    if (typeof renderSourceExplorer === 'function') renderSourceExplorer();
+  });
 }
 
 /* ======================================================================
@@ -7236,7 +8312,7 @@ function sendChatMessage() {
 
 let selectedSourceId = null;
 let selectedEntityId = null;
-const sourceExplorerFilters = { kind: 'all', destination: 'all', indexed: 'all', q: '' };
+const sourceExplorerFilters = { kind: 'all', destination: 'all', indexed: 'all', folder: 'all', tag: 'all', q: '' };
 const entityExplorerFilters = { type: 'all', q: '' };
 
 function claimsCitingSource(src) {
@@ -7274,7 +8350,7 @@ function entityTypeCounts() {
 function renderSourceExplorer() {
   if (!$('#mode-source-explorer')) return;
   const all = allSources();
-  const { kind, destination, indexed, q } = sourceExplorerFilters;
+  const { kind, destination, indexed, folder, tag, q } = sourceExplorerFilters;
   const needle = q.trim().toLowerCase();
 
   const filtered = all.filter(s => {
@@ -7283,6 +8359,11 @@ function renderSourceExplorer() {
     if (destination !== 'all' && dest !== destination) return false;
     if (indexed === 'yes' && !s.indexed) return false;
     if (indexed === 'no' && s.indexed) return false;
+    if (folder !== 'all') {
+      const f = getSourceFolder(s.id);
+      if (folder === '__unfiled__' ? f : f !== folder) return false;
+    }
+    if (tag !== 'all' && !getSourceTags(s.id).includes(tag)) return false;
     if (needle && !s.name.toLowerCase().includes(needle)) return false;
     return true;
   });
@@ -7299,6 +8380,21 @@ function renderSourceExplorer() {
   $('#src-explorer-indexed').innerHTML = idx.map(([v,l]) =>
     `<button class="explorer-chip${v === indexed ? ' is-on' : ''}" data-indexed="${v}">${l}</button>`
   ).join('');
+  const folders = ['all', '__unfiled__', ...listFolders()];
+  $('#src-explorer-folder').innerHTML = folders.map(f => {
+    const label = f === 'all' ? 'all folders' : f === '__unfiled__' ? 'unfiled' : f;
+    return `<button class="explorer-chip${f === folder ? ' is-on' : ''}" data-folder="${escapeHtml(f)}">${escapeHtml(label)}</button>`;
+  }).join('');
+  const tags = ['all', ...listTags()];
+  const tagEl = $('#src-explorer-tag');
+  if (tagEl) {
+    tagEl.innerHTML = tags.length > 1
+      ? tags.map(t => {
+          const label = t === 'all' ? 'all tags' : t;
+          return `<button class="explorer-chip${t === tag ? ' is-on' : ''}" data-tag="${escapeHtml(t)}">${escapeHtml(label)}</button>`;
+        }).join('')
+      : '';
+  }
 
   $('#src-explorer-list').innerHTML = filtered.length ? filtered.map(s => {
     const nClaims = claimsCitingSource(s).length;
@@ -7350,6 +8446,14 @@ function renderSourceExplorerDetail() {
       </dl>
     </div>
     <div class="explorer-section">
+      <div class="explorer-section-title">Folder &amp; tags</div>
+      <div style="font-size:12px; margin-bottom:6px;">
+        <div><strong>Folder:</strong> ${escapeHtml(getSourceFolder(s.id) || '(unfiled)')}</div>
+        <div style="margin-top:4px;"><strong>Tags:</strong> ${getSourceTags(s.id).map(t => `<span class="stag stag-tag">${escapeHtml(t)}</span>`).join(' ') || '—'}</div>
+      </div>
+      <button class="btn-sm" id="src-explorer-edit-meta">Edit folder &amp; tags</button>
+    </div>
+    <div class="explorer-section">
       <button class="btn-sm" id="src-explorer-open">Open viewer</button>
     </div>
     <div class="explorer-section">
@@ -7368,6 +8472,8 @@ function renderSourceExplorerDetail() {
   `;
   const openBtn = $('#src-explorer-open');
   if (openBtn) openBtn.addEventListener('click', () => showSourceViewer(s.id));
+  const editMetaBtn = $('#src-explorer-edit-meta');
+  if (editMetaBtn) editMetaBtn.addEventListener('click', () => openSourceMetaEditor(s.id));
 }
 
 function wireSourceExplorerEvents() {
@@ -7379,6 +8485,12 @@ function wireSourceExplorerEvents() {
   }));
   $$('#src-explorer-indexed .explorer-chip').forEach(b => b.addEventListener('click', () => {
     sourceExplorerFilters.indexed = b.dataset.indexed; renderSourceExplorer();
+  }));
+  $$('#src-explorer-folder .explorer-chip').forEach(b => b.addEventListener('click', () => {
+    sourceExplorerFilters.folder = b.dataset.folder; renderSourceExplorer();
+  }));
+  $$('#src-explorer-tag .explorer-chip').forEach(b => b.addEventListener('click', () => {
+    sourceExplorerFilters.tag = b.dataset.tag; renderSourceExplorer();
   }));
   const q = $('#src-explorer-q');
   if (q && !q.dataset.wired) {
@@ -11453,8 +12565,111 @@ const LS_CLAUDE_API_KEY = 'nl.claudeApiKey.v1';
 let CLAUDE_API_KEY = (() => {
   try { return localStorage.getItem(LS_CLAUDE_API_KEY) || ''; } catch { return ''; }
 })();
+const LS_CLAUDE_CHAT_WEB = 'nl.claudeChatWeb.v1';
+let CLAUDE_CHAT_WEB = (() => {
+  try {
+    const v = localStorage.getItem(LS_CLAUDE_CHAT_WEB);
+    return v === null ? true : v === '1';
+  } catch { return true; }
+})();
 // Matches agents/proveo-research.yaml — keep these in sync.
 const CLAUDE_API_MODEL = 'claude-sonnet-4-6';
+
+/* ---------- CHAT CONTROL STATE (system prompt, per-source include, web knobs) ---------- */
+
+const CHAT_SYSTEM_PROMPT_DEFAULT = [
+  "You are PROVeo Chat, a research assistant answering questions about the LOCAL SOURCES the user has loaded into their browser.",
+  "Ground every factual claim in either a local source (quote the exact phrase and name the source) or a web_search result (the API attaches citations automatically — never fabricate them).",
+  "If the local sources do not answer the question, say so plainly before relying on the web.",
+  "Be concise. Use short paragraphs and plain prose — no markdown headings."
+].join('\n');
+
+const LS_CHAT_SYSTEM = 'nl.chatSystem.v1';
+let CHAT_SYSTEM_PROMPT = (() => {
+  try { return localStorage.getItem(LS_CHAT_SYSTEM) || CHAT_SYSTEM_PROMPT_DEFAULT; }
+  catch { return CHAT_SYSTEM_PROMPT_DEFAULT; }
+})();
+
+const LS_CHAT_SOURCES = 'nl.chatSources.v1';
+let CHAT_SOURCE_INCLUDE = (() => {
+  try {
+    const v = localStorage.getItem(LS_CHAT_SOURCES);
+    return v ? JSON.parse(v) : {};
+  } catch { return {}; }
+})();
+function saveChatSourceInclude() {
+  try { localStorage.setItem(LS_CHAT_SOURCES, JSON.stringify(CHAT_SOURCE_INCLUDE)); } catch {}
+}
+function isSourceIncluded(id) {
+  return CHAT_SOURCE_INCLUDE[id] !== false; // default-on
+}
+
+const LS_CHAT_WEB_MAX = 'nl.chatWebMax.v1';
+let CHAT_WEB_MAX = (() => {
+  try {
+    const v = parseInt(localStorage.getItem(LS_CHAT_WEB_MAX) || '', 10);
+    return Number.isFinite(v) && v >= 0 && v <= 20 ? v : 3;
+  } catch { return 3; }
+})();
+
+const LS_CHAT_WEB_ALLOW = 'nl.chatWebAllow.v1';
+let CHAT_WEB_ALLOW = (() => {
+  try { return localStorage.getItem(LS_CHAT_WEB_ALLOW) || ''; } catch { return ''; }
+})();
+
+const LS_CHAT_WEB_BLOCK = 'nl.chatWebBlock.v1';
+let CHAT_WEB_BLOCK = (() => {
+  try { return localStorage.getItem(LS_CHAT_WEB_BLOCK) || ''; } catch { return ''; }
+})();
+
+function splitDomains(raw) {
+  return String(raw || '')
+    .split(/[,\s]+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+/* ---------- SOURCE FOLDERS + TAGS (localStorage overlay) ---------- */
+
+const LS_SOURCE_META = 'nl.sourceMeta.v1';
+let SOURCE_META = (() => {
+  try { return JSON.parse(localStorage.getItem(LS_SOURCE_META) || '{}') || {}; }
+  catch { return {}; }
+})();
+function saveSourceMeta() {
+  try { localStorage.setItem(LS_SOURCE_META, JSON.stringify(SOURCE_META)); } catch {}
+}
+function getSourceFolder(id) {
+  const m = SOURCE_META[id];
+  return (m && typeof m.folder === 'string' && m.folder) ? m.folder : null;
+}
+function getSourceTags(id) {
+  const m = SOURCE_META[id];
+  return (m && Array.isArray(m.tags)) ? m.tags.slice() : [];
+}
+function setSourceMeta(id, patch) {
+  const cur = SOURCE_META[id] || {};
+  const next = Object.assign({}, cur, patch);
+  if (next.folder === '' || next.folder == null) next.folder = null;
+  if (!Array.isArray(next.tags)) next.tags = [];
+  next.tags = [...new Set(next.tags.map(t => String(t).trim()).filter(Boolean))];
+  SOURCE_META[id] = next;
+  saveSourceMeta();
+}
+function listFolders() {
+  const seen = new Set();
+  for (const m of Object.values(SOURCE_META)) {
+    if (m && typeof m.folder === 'string' && m.folder) seen.add(m.folder);
+  }
+  return [...seen].sort((a, b) => a.localeCompare(b));
+}
+function listTags() {
+  const seen = new Set();
+  for (const m of Object.values(SOURCE_META)) {
+    if (m && Array.isArray(m.tags)) m.tags.forEach(t => t && seen.add(t));
+  }
+  return [...seen].sort((a, b) => a.localeCompare(b));
+}
 
 let researchState = {
   open: false,
@@ -18203,6 +19418,35 @@ function saveProveoSettings() {
 function loadProveoSettingsIntoModal() {
   const radios = $$('input[name="upload-dest"]');
   radios.forEach(r => { r.checked = (r.value === UPLOAD_DEST_DEFAULT); });
+  const keyInput = $('#claude-api-key');
+  if (keyInput) keyInput.value = CLAUDE_API_KEY || '';
+  setClaudeApiStatus(CLAUDE_API_KEY ? 'Key set.' : '');
+  const memPass = $('#chat-memory-pass');
+  if (memPass) memPass.value = getChatMemoryPass();
+  updateChatMemoryStatus(getChatMemoryPass() ? 'Enabled.' : '');
+}
+
+function setClaudeApiStatus(msg) {
+  const el = $('#claude-api-status');
+  if (el) el.textContent = msg || '';
+}
+
+function saveClaudeApiSettings() {
+  const keyInput = $('#claude-api-key');
+  const key = keyInput ? keyInput.value.trim() : '';
+  CLAUDE_API_KEY = key;
+  try { localStorage.setItem(LS_CLAUDE_API_KEY, key); } catch {}
+  setClaudeApiStatus(key ? 'Saved.' : 'Cleared.');
+  showToast(key ? 'claude api key saved' : 'claude api key cleared');
+}
+
+function clearClaudeApiKey() {
+  CLAUDE_API_KEY = '';
+  try { localStorage.removeItem(LS_CLAUDE_API_KEY); } catch {}
+  const keyInput = $('#claude-api-key');
+  if (keyInput) keyInput.value = '';
+  setClaudeApiStatus('Cleared.');
+  showToast('claude api key cleared');
 }
 
 /* Sends a source to the PROVeo webhook. Returns the parsed JSON response. */
@@ -18908,6 +20152,11 @@ function wireWorkspace() {
   $('#ws-close').addEventListener('click', closeWorkspaceModal);
   $('#ws-backdrop').addEventListener('click', closeWorkspaceModal);
   $('#proveo-save').addEventListener('click', saveProveoSettings);
+  const claudeSaveBtn = $('#claude-api-save');
+  if (claudeSaveBtn) claudeSaveBtn.addEventListener('click', saveClaudeApiSettings);
+  const claudeClearBtn = $('#claude-api-clear');
+  if (claudeClearBtn) claudeClearBtn.addEventListener('click', clearClaudeApiKey);
+  wireChatMemoryControls();
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !$('#ws-modal').hidden) closeWorkspaceModal();
   });
@@ -20496,6 +21745,11 @@ async function init() {
   wireWorkspace();
   wireInviteLanding();
   updateWorkspaceIndicator();
+  // Restore encrypted chat memory if a passphrase has been set on this
+  // device. Non-blocking: if decryption fails, the chat just starts empty.
+  restoreChatMemory()
+    .catch(err => console.warn('[chat-memory] restore error', err))
+    .finally(() => { if (typeof renderChat === 'function') renderChat(); });
   // Try to resume a stored Matrix session in the background — don't block boot.
   bootMatrixIfPossible()
     .catch(err => console.warn('[matrix] boot error', err))
@@ -20518,6 +21772,21 @@ async function init() {
     e.target.style.height = 'auto';
     e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
   });
+  const saveThreadBtn = $('#chat-save-thread');
+  if (saveThreadBtn) {
+    saveThreadBtn.addEventListener('click', () => openChatSaveModal({ mode: 'thread' }));
+  }
+  const clearBtn = $('#chat-clear');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      if (!confirm('Clear the live chat? Saved sources are not affected.')) return;
+      CHAT_HISTORY.length = 0;
+      if (typeof syncChatMemory === 'function') syncChatMemory();
+      renderChat();
+    });
+  }
+  wireChatSaveModal();
+  wireSourceMetaModal();
 
   const tier = storage.available ? 'OPFS' : 'in-memory only';
   const tierColor = storage.available ? 'var(--teal-mid)' : 'var(--red-mid)';
