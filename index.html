@@ -2220,6 +2220,7 @@
     gap: 6px;
     margin-bottom: 7px;
   }
+  .qcard-head .research-btn { margin-left: auto; }
   .qcard-text {
     font-size: 12.5px;
     line-height: 1.5;
@@ -3890,6 +3891,208 @@
     color: var(--teal-text);
   }
 
+  /* ---------- CLAUDE WEB RESEARCH ---------- */
+  .research-btn {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 0.5px solid var(--color-border-secondary);
+    background: var(--color-background-primary);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: border-color 0.12s, color 0.12s, background 0.12s;
+  }
+  .research-btn:hover {
+    border-color: var(--color-text-primary);
+    color: var(--color-text-primary);
+  }
+  .research-btn[disabled] { opacity: 0.55; cursor: default; }
+  .research-btn .research-glyph {
+    font-family: var(--font-serif);
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .research-claim-box {
+    padding: 10px 22px;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    background: var(--color-background-secondary);
+    font-family: var(--font-serif);
+    font-size: 13px;
+    color: var(--color-text-primary);
+  }
+  .research-claim-box .rcb-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-text-secondary);
+    margin-bottom: 4px;
+  }
+
+  .research-status {
+    padding: 8px 22px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+  }
+  .research-status.is-err {
+    color: var(--red-text);
+    background: var(--red-fill);
+  }
+  .research-status.is-ok {
+    color: var(--teal-text);
+    background: var(--teal-fill);
+  }
+
+  .research-results {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 22px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .research-card {
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    padding: 12px 14px;
+    background: var(--color-background-primary);
+    transition: border-color 0.12s;
+  }
+  .research-card:hover { border-color: var(--color-border-secondary); }
+  .research-card.archived { border-color: var(--teal-mid); background: var(--teal-fill); }
+  .research-card.dismissed { opacity: 0.55; }
+  .research-card-title {
+    font-family: var(--font-serif);
+    font-size: 13.5px;
+    color: var(--color-text-primary);
+    margin-bottom: 4px;
+    line-height: 1.35;
+  }
+  .research-card-url {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--blue-text);
+    margin-bottom: 6px;
+    word-break: break-all;
+    line-height: 1.35;
+  }
+  .research-card-url a { color: inherit; text-decoration: underline; }
+  .research-card-excerpt {
+    font-family: var(--font-serif);
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--color-text-primary);
+    padding: 8px 10px;
+    border-left: 2px solid var(--amber-mid);
+    background: var(--color-background-secondary);
+    border-radius: 2px;
+    margin-bottom: 6px;
+    font-style: italic;
+  }
+  .research-card-rationale {
+    font-family: var(--font-sans);
+    font-size: 11.5px;
+    color: var(--color-text-secondary);
+    line-height: 1.4;
+    margin-bottom: 8px;
+  }
+  .research-card-meta {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-text-tertiary);
+    margin-bottom: 8px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .research-card-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .research-card .rc-archive-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: var(--teal-fill);
+    color: var(--teal-text);
+    border: 0.5px solid var(--teal-mid);
+    text-decoration: none;
+  }
+  .research-empty {
+    color: var(--color-text-secondary);
+    font-size: 12px;
+    padding: 24px 14px;
+    text-align: center;
+    font-family: var(--font-sans);
+  }
+
+  /* Corroboration strip inside the claim detail panel */
+  .corrob-section { margin-top: 14px; }
+  .corrob-item {
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    background: var(--color-background-primary);
+  }
+  .corrob-item-title {
+    font-family: var(--font-serif);
+    font-size: 12.5px;
+    margin-bottom: 4px;
+    line-height: 1.35;
+  }
+  .corrob-item-excerpt {
+    font-family: var(--font-serif);
+    font-size: 12px;
+    line-height: 1.5;
+    padding: 6px 8px;
+    border-left: 2px solid var(--amber-mid);
+    background: var(--color-background-secondary);
+    margin: 6px 0;
+    font-style: italic;
+  }
+  .corrob-item-links {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .corrob-chip {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    border: 0.5px solid var(--color-border-tertiary);
+    text-decoration: none;
+    color: var(--color-text-primary);
+    background: var(--color-background-secondary);
+  }
+  .corrob-chip.live { color: var(--blue-text); border-color: var(--blue-mid); }
+  .corrob-chip.archive { color: var(--teal-text); border-color: var(--teal-mid); background: var(--teal-fill); }
+  .corrob-chip:hover { filter: brightness(0.96); }
+  .corrob-pending-count {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--amber-text);
+    background: var(--amber-fill);
+    border: 0.5px solid var(--amber-mid);
+    border-radius: 999px;
+    padding: 2px 8px;
+    display: inline-block;
+    margin-top: 4px;
+  }
+
   /* scrollbar taming */
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -5072,6 +5275,51 @@
   </div>
 </div>
 
+<!-- ===== CLAUDE WEB RESEARCH MODAL =====
+     Wired to Claude via a pluggable webhook (CLAUDE_SEARCH_URL). Each
+     returned candidate gets archived through the existing PROVeo page
+     proxy → archive.org pipeline, then emitted as a DEF web_evidence
+     proposal awaiting human ⊨EVA. Nothing silently attaches to a claim. -->
+<div id="research-modal" class="cite-modal" hidden>
+  <div class="cite-modal-backdrop" id="research-backdrop"></div>
+  <div class="cite-modal-body" style="width:min(820px,94vw); max-height:86vh;">
+    <div class="cite-modal-head">
+      <div>
+        <div class="cite-modal-title">Claude web research</div>
+        <div class="cite-modal-sub">Claude proposes corroborating evidence from the live web. Each candidate is snapshotted to Archive.org before it enters the review queue — you approve before it binds to the claim.</div>
+      </div>
+      <button class="rphead-close" id="research-close">×</button>
+    </div>
+    <div class="research-claim-box" id="research-claim-box" hidden>
+      <div class="rcb-label">Claim under research</div>
+      <div id="research-claim-text"></div>
+    </div>
+    <div class="ws-section">
+      <div class="ws-form-row">
+        <label for="research-query">Research query</label>
+        <input id="research-query" class="ws-input" type="text" placeholder="What should Claude look for on the web?">
+      </div>
+      <div class="ws-form-row" id="research-endpoint-row">
+        <label for="research-endpoint">Claude search endpoint (optional)</label>
+        <input id="research-endpoint" class="ws-input" type="url" placeholder="https://… webhook that returns {results:[…]}">
+      </div>
+      <div class="ws-form-row">
+        <label>Options</label>
+        <label class="ws-toggle"><input type="checkbox" id="research-demo" checked> Use built-in demo results when no endpoint is reachable</label>
+        <label class="ws-toggle"><input type="checkbox" id="research-auto-archive"> Auto-archive every returned candidate (otherwise archive per-candidate)</label>
+      </div>
+      <div id="research-err" class="ws-err" hidden></div>
+    </div>
+    <div id="research-status" class="research-status" hidden></div>
+    <div class="research-results" id="research-results"></div>
+    <div class="cite-modal-actions">
+      <span class="cite-pick-note">Archived snapshots are permanent on Archive.org. Approve the proposal in the review queue to bind it to the claim.</span>
+      <button class="btn-sm" id="research-cancel">Close</button>
+      <button class="btn-sm btn-sm-primary" id="research-run">Ask Claude</button>
+    </div>
+  </div>
+</div>
+
 <!-- Matrix client SDK (loaded from CDN, exposes window.matrixcs).
      Loaded lazily so the app still works offline; checks for window.matrixcs before use. -->
 <script src="https://cdn.jsdelivr.net/npm/matrix-js-sdk@34.11.0/lib/browser-matrix.min.js" crossorigin="anonymous" referrerpolicy="no-referrer" onerror="this.onerror=null;console.warn('[matrix] jsdelivr failed, trying unpkg');var s=document.createElement('script');s.src='https://unpkg.com/matrix-js-sdk@34.11.0/lib/browser-matrix.min.js';s.crossOrigin='anonymous';s.referrerPolicy='no-referrer';s.onerror=function(){console.warn('[matrix] SDK failed to load — Matrix features will be unavailable')};document.head.appendChild(s)"></script>
@@ -5846,6 +6094,45 @@ function shortProvValue(p) {
   return '';
 }
 
+// Render the "Corroborating evidence" section of the claim detail panel.
+// Combines approved corroborations (attached via CORROBORATE events) with
+// a pending-count banner for web-evidence proposals that are still sitting
+// in the review queue. Each approved corroboration shows the live URL,
+// the archive.org snapshot, and the model excerpt — so the reader can
+// trace every step, not just land on a live URL that may rot.
+function renderClaimCorroborations(claim, claimId) {
+  const items = Array.isArray(claim.corroborations) ? claim.corroborations : [];
+  const pendingCount = (LAST_FOLD_STATE.webEvidencePendingByClaim || {})[claimId] || 0;
+  if (!items.length && !pendingCount) return '';
+  let html = '<div class="corrob-section">';
+  html += `<div class="prov-label">Corroborating evidence${items.length ? ` · ${items.length}` : ''}</div>`;
+  if (!items.length) {
+    html += `<div style="font-size:11.5px; color:var(--color-text-secondary); margin-top:4px;">No approved corroborations yet.</div>`;
+  }
+  for (const cor of items) {
+    const live = cor.source_url || '';
+    const arc  = cor.archive_url || '';
+    const conf = typeof cor.confidence === 'number' ? cor.confidence.toFixed(2) : null;
+    html += `
+      <div class="corrob-item">
+        <div class="corrob-item-title">${escapeHtml(cor.title || live || '(untitled)')}</div>
+        ${cor.excerpt ? `<div class="corrob-item-excerpt">${escapeHtml(cor.excerpt)}</div>` : ''}
+        ${cor.rationale ? `<div style="font-size:11px; color:var(--color-text-secondary); margin:4px 0;">${escapeHtml(cor.rationale)}</div>` : ''}
+        <div class="corrob-item-links">
+          ${live ? `<a class="corrob-chip live" href="${escapeHtml(live)}" target="_blank" rel="noopener">live ↗</a>` : ''}
+          ${arc  ? `<a class="corrob-chip archive" href="${escapeHtml(arc)}" target="_blank" rel="noopener">archive.org ↗</a>` : ''}
+          ${conf ? `<span class="corrob-chip">claude ${escapeHtml(conf)}</span>` : ''}
+          ${cor.agent ? `<span class="corrob-chip" style="color:var(--color-text-secondary)">${escapeHtml(cor.agent)}</span>` : ''}
+        </div>
+      </div>`;
+  }
+  if (pendingCount) {
+    html += `<div class="corrob-pending-count">${pendingCount} web-evidence proposal${pendingCount === 1 ? '' : 's'} awaiting review</div>`;
+  }
+  html += '</div>';
+  return html;
+}
+
 function showClaim(id, opts = {}) {
   // If we're in link mode, a click on a claim span becomes the LINK
   // target instead of opening the panel — claim/claim selection drives
@@ -5954,19 +6241,32 @@ function showClaim(id, opts = {}) {
   }
 
   if (provPath.length === 0) {
+    body += renderClaimCorroborations(claim, id);
+  }
+
+  if (provPath.length === 0) {
     // Grounded claims also offer relationship verbs: Contrast with…, Concur
     // with…. Both enter link mode; clicking another claim emits a LINK.
     const relVerbs = claim.type === 'grounded' ? `
       <button class="qa" data-linkmode="conflict" data-id="${id}">Contrast with…</button>
       <button class="qa" data-linkmode="concur"   data-id="${id}">Concur with…</button>
     ` : '';
+    const researchBtn = `<button class="qa" data-research-claim="${id}" title="Ask Claude to search the web for corroborating evidence and snapshot it to Archive.org"><span style="font-family:var(--font-serif)">🔍</span> Research with Claude</button>`;
     body += `
       <div class="divider"></div>
-      <div class="prov-actions">${verbHtml(claim, id)}${relVerbs}</div>
+      <div class="prov-actions">${verbHtml(claim, id)}${relVerbs}${researchBtn}</div>
     `;
   }
 
   $('#rp-body').innerHTML = body;
+
+  // wire up research buttons in the claim detail panel.
+  $$('[data-research-claim]', $('#rp-body')).forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openResearchModalForClaim(btn.dataset.researchClaim);
+    });
+  });
 
   // wire verb buttons in the provenance panel — same dispatch as the
   // review queue, just with a different render context.
@@ -6482,13 +6782,22 @@ function renderReview() {
     const summary = provSummary(c);
     const locator = provLocator(c);
 
+    const corrobCount = Array.isArray(c.corroborations) ? c.corroborations.length : 0;
+    const pendingCount = (LAST_FOLD_STATE.webEvidencePendingByClaim || {})[id] || 0;
+    const corrobLine = (corrobCount || pendingCount)
+      ? `<div class="qcard-source" style="margin-top:2px;">${corrobCount ? `${corrobCount} corroboration${corrobCount === 1 ? '' : 's'}` : ''}${corrobCount && pendingCount ? ' · ' : ''}${pendingCount ? `<span style="color:var(--amber-text)">${pendingCount} pending</span>` : ''}</div>`
+      : '';
+    const researchBtn = `<button class="research-btn" data-research-claim="${id}" title="Ask Claude to search the web for corroborating evidence and snapshot it to Archive.org"><span class="research-glyph">🔍</span> Research</button>`;
+
     return `
       <div class="qcard${selected}" data-id="${id}">
         <div class="qcard-head">
           <span class="prov-tag ${tagMap[c.type]}">${label}</span>
+          ${researchBtn}
         </div>
         <div class="qcard-text">"${escapeHtml(c.text)}" · ${escapeHtml(summary)}</div>
         <div class="qcard-source">${escapeHtml(locator)}</div>
+        ${corrobLine}
         <div class="qcard-actions">${verbHtml(c, id)}</div>
       </div>
     `;
@@ -6500,6 +6809,13 @@ function renderReview() {
       await dispatchVerb(btn.dataset.id, btn.dataset.action);
       renderReview();
       renderCounts();
+    });
+  });
+
+  $$('[data-research-claim]', $('#qlist')).forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openResearchModalForClaim(btn.dataset.researchClaim);
     });
   });
 
@@ -8285,7 +8601,8 @@ function installFoldResult(s) {
     pendingConsistencyEvas: s.pendingConsistencyEvas || [],
     staleCounts: s.staleCounts || { boundary: 0, type: 0, link: 0 },
     staleSources: Array.isArray(s.staleSources) ? s.staleSources : [],
-    promptProposals: Array.isArray(s.promptProposals) ? s.promptProposals : []
+    promptProposals: Array.isArray(s.promptProposals) ? s.promptProposals : [],
+    webEvidencePendingByClaim: s.webEvidencePendingByClaim || {}
   };
   // Adopt the fold's authoritative rule_set_version so subsequent DEFs
   // (and the next rewrite pass) stamp the correct version.
@@ -8305,7 +8622,8 @@ let LAST_FOLD_STATE = {
   pendingConsistencyEvas: [],
   staleCounts: { boundary: 0, type: 0, link: 0 },
   staleSources: [],
-  promptProposals: []
+  promptProposals: [],
+  webEvidencePendingByClaim: {}
 };
 
 // After a refold, drain any system-consistency EVAs the fold detected
@@ -8723,7 +9041,41 @@ self.addEventListener('message', (ev) => {
         pendingReview.push({ kind: 'alias', event_id: evt.id, ts: evt.ts, payload: p });
         continue;
       }
+      // web_evidence: Claude proposes a URL + excerpt + archive.org
+      // snapshot as corroboration for a specific claim. Goes into the
+      // pending review queue; only a human ⊨EVA confirm binds it.
+      if (p.subtype === 'web_evidence') {
+        (D.__web_evidence = D.__web_evidence || []).push({ event_id: evt.id, ts: evt.ts, payload: p });
+        pendingReview.push({ kind: 'web_evidence', event_id: evt.id, ts: evt.ts, payload: p });
+        continue;
+      }
       // Unknown subtype — skip silently; the log is forward-compatible.
+      continue;
+    }
+
+    // CORROBORATE — append an approved web-evidence corroboration onto
+    // an existing claim. Emitted only after a human EVA-confirm on the
+    // upstream DEF(web_evidence) proposal. Does NOT replace the claim's
+    // primary provenance; it's an additive supporting-evidence array.
+    if (evt.op === 'CORROBORATE' && evt.site && evt.site.startsWith('claim:')) {
+      const cid = evt.site.slice('claim:'.length);
+      const c = claims[cid];
+      const cor = evt.payload && evt.payload.corroboration;
+      if (c && cor) {
+        (c.corroborations = c.corroborations || []).push({
+          proposal_id: cor.proposal_id || null,
+          source_id: cor.source_id || null,
+          source_url: cor.source_url || null,
+          archive_url: cor.archive_url || null,
+          title: cor.title || null,
+          excerpt: cor.excerpt || '',
+          rationale: cor.rationale || '',
+          confidence: typeof cor.confidence === 'number' ? cor.confidence : null,
+          agent: cor.agent || null,
+          added_at: evt.ts || null,
+          approved_by: (evt.payload && evt.payload.approved_by) || null
+        });
+      }
       continue;
     }
 
@@ -9091,14 +9443,37 @@ self.addEventListener('message', (ev) => {
     }
   })();
 
+  // Hide proposals that have already received any human verdict so the
+  // queue stays shallow. Web-evidence proposals in particular vanish
+  // once the reporter clicks Confirm or Reject.
+  const filteredPendingReview = [];
+  for (const row of pendingReview) {
+    const eid = row && row.event_id;
+    const pressure = eid && evaPressure[eid];
+    if (pressure && pressure.count && pressure.count > 0) continue;
+    filteredPendingReview.push(row);
+  }
+
+  // Per-claim counts of pending web-evidence proposals, so the claim
+  // detail panel can surface "3 web-evidence proposals pending" even
+  // when the Stage 7 modal isn't open.
+  const webEvidencePendingByClaim = {};
+  for (const row of filteredPendingReview) {
+    if (row.kind !== 'web_evidence') continue;
+    const cid = row.payload && row.payload.claim_id;
+    if (!cid) continue;
+    webEvidencePendingByClaim[cid] = (webEvidencePendingByClaim[cid] || 0) + 1;
+  }
+
   self.postMessage({
     type: 'state',
     claims, sources, G, M, S, mentions, entityIndex,
-    D, pendingReview, amberMentions, defCounts,
+    D, pendingReview: filteredPendingReview, amberMentions, defCounts,
     evaPressure, recEvents, alreadyRewritten: Array.from(alreadyRewritten),
     ruleSetVersion, pendingConsistencyEvas,
     staleCounts, staleSources: Array.from(staleSources),
-    promptProposals
+    promptProposals,
+    webEvidencePendingByClaim
   });
 });
 `;
@@ -9143,7 +9518,8 @@ async function fold() {
           pendingConsistencyEvas: ev.data.pendingConsistencyEvas || [],
           staleCounts: ev.data.staleCounts || { boundary: 0, type: 0, link: 0 },
           staleSources: Array.isArray(ev.data.staleSources) ? ev.data.staleSources : [],
-          promptProposals: Array.isArray(ev.data.promptProposals) ? ev.data.promptProposals : []
+          promptProposals: Array.isArray(ev.data.promptProposals) ? ev.data.promptProposals : [],
+          webEvidencePendingByClaim: ev.data.webEvidencePendingByClaim || {}
         });
       }
     };
@@ -9236,6 +9612,41 @@ function renderStage7Queue() {
   for (const r of rows) {
     const p = r.payload || {};
     const kind = r.kind;
+    // Web-evidence proposals carry a richer shape: claim_id + result +
+    // archive snapshot. Render them as a dedicated card so the reporter
+    // can see excerpt, source URL, and the archive.org pass-through
+    // without leaving the queue.
+    if (kind === 'web_evidence') {
+      const result = p.result || {};
+      const archive = p.archive || {};
+      const claim = (typeof CLAIMS !== 'undefined' && CLAIMS[p.claim_id]) ? CLAIMS[p.claim_id] : null;
+      const claimText = (claim && claim.text) || p.claim_text || p.claim_id;
+      const conf = typeof result.confidence === 'number' ? result.confidence.toFixed(2) : '—';
+      const srcUrl = result.source_url || '';
+      const archUrl = archive.archive_url || '';
+      parts.push(`
+        <div class="s7-row" data-event-id="${escapeHtmlSafe(r.event_id)}" data-kind="web_evidence" data-claim-id="${escapeHtmlSafe(p.claim_id || '')}" style="border:0.5px solid var(--color-border-tertiary); border-radius:4px; padding:10px 12px;">
+          <div style="font-family:var(--font-mono); font-size:10px; color:var(--color-text-secondary); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:4px;">Web evidence · Claude proposal</div>
+          <div style="font-size:13px; margin-bottom:3px;">For claim: <em>"${escapeHtmlSafe(claimText)}"</em></div>
+          <div style="font-family:var(--font-serif); font-size:13.5px; margin:6px 0 2px;">${escapeHtmlSafe(result.title || '(untitled)')}</div>
+          <div style="font-family:var(--font-mono); font-size:10.5px; color:var(--blue-text); margin-bottom:4px; word-break:break-all;">
+            <a href="${escapeHtmlSafe(srcUrl)}" target="_blank" rel="noopener">${escapeHtmlSafe(srcUrl)}</a>
+          </div>
+          ${result.excerpt ? `<div style="font-family:var(--font-serif); font-size:12.5px; font-style:italic; padding:6px 10px; border-left:2px solid var(--amber-mid); background:var(--color-background-secondary); margin:6px 0; border-radius:2px;">${escapeHtmlSafe(result.excerpt)}</div>` : ''}
+          ${result.rationale ? `<div style="font-size:11.5px; color:var(--color-text-secondary); margin:6px 0;"><strong>Rationale:</strong> ${escapeHtmlSafe(result.rationale)}</div>` : ''}
+          <div style="display:flex; gap:8px; flex-wrap:wrap; margin:6px 0;">
+            ${archUrl ? `<a class="corrob-chip archive" href="${escapeHtmlSafe(archUrl)}" target="_blank" rel="noopener">archive.org ↗</a>` : ''}
+            ${srcUrl ? `<a class="corrob-chip live" href="${escapeHtmlSafe(srcUrl)}" target="_blank" rel="noopener">live source ↗</a>` : ''}
+          </div>
+          <div style="font-family:var(--font-mono); font-size:10.5px; color:var(--color-text-tertiary);">claude confidence ${conf} · agent ${escapeHtmlSafe(p.agent || 'model')} · ${escapeHtmlSafe(p.rule_set_version || '')}</div>
+          <div style="display:flex; gap:6px; margin-top:8px;">
+            <button class="btn-sm btn-sm-primary" data-verdict="confirm">Confirm &amp; bind to claim</button>
+            <button class="btn-sm" data-verdict="reject">Reject</button>
+            <button class="btn-sm" data-verdict="defer">Defer</button>
+          </div>
+        </div>`);
+      continue;
+    }
     const eid = kind === 'alias' ? p.candidate_canonical_id : p.entity_id;
     const label = kind === 'alias'
       ? `Alias proposal: <strong>${escapeHtmlSafe(p.surface)}</strong> → ${escapeHtmlSafe(eid || 'null')}`
@@ -9321,6 +9732,22 @@ function renderStage7Entity() {
   return parts.join('');
 }
 
+// Locate a web-evidence proposal by the DEF event id. Walks the D_VIEW
+// projection rather than the raw log so we stay consistent with what
+// the reporter actually saw. Falls back to re-reading the append log
+// if the projection has been trimmed (e.g. after a workspace reset).
+function findWebEvidenceProposalById(eventId) {
+  const arr = (D_VIEW && D_VIEW.__web_evidence) || [];
+  for (const row of arr) {
+    if (row && row.event_id === eventId) return row;
+  }
+  const pending = Array.isArray(PENDING_REVIEW) ? PENDING_REVIEW : [];
+  for (const row of pending) {
+    if (row && row.event_id === eventId && row.kind === 'web_evidence') return row;
+  }
+  return null;
+}
+
 // Helper for 7a. Walks D_VIEW + LAST_FOLD_STATE.evaPressure and sums
 // per-entity DEF/EVA counts. Reframes / confirms / rejects come off
 // the pressure buckets; DEF count comes from link DEFs keyed by entity.
@@ -9360,15 +9787,55 @@ function wireStage7BodyClicks() {
       const eventId = row.dataset.eventId;
       const kind    = row.dataset.kind;
       const verdict = verdictBtn.dataset.verdict;
-      const site    = kind === 'alias'
+      const site    = (kind === 'alias' || kind === 'web_evidence')
         ? 'proposal:' + eventId
         : 'claim:';
       try {
         await emitDirectEva({ targetEvent: eventId, targetSite: site, verdict, agent: 'human:reporter' });
+        // For confirmed web-evidence proposals, also emit a CORROBORATE
+        // event that appends the approved snapshot to the target claim.
+        // Rejection just records the EVA — the proposal falls out of the
+        // queue on the next fold.
+        if (kind === 'web_evidence' && verdict === 'confirm') {
+          const claimId = row.dataset.claimId;
+          const proposal = findWebEvidenceProposalById(eventId);
+          if (claimId && proposal) {
+            const p = proposal.payload || {};
+            const result = p.result || {};
+            const archive = p.archive || {};
+            await appendEvent({
+              op: 'CORROBORATE',
+              site: 'claim:' + claimId,
+              resolution: 'Figure',
+              payload: {
+                claim_id: claimId,
+                approved_by: 'human:reporter',
+                approved_via_proposal: eventId,
+                corroboration: {
+                  proposal_id: p.proposal_id || eventId,
+                  source_id: archive.source_id || null,
+                  source_url: result.source_url || null,
+                  archive_url: archive.archive_url || null,
+                  title: result.title || null,
+                  excerpt: result.excerpt || '',
+                  rationale: result.rationale || '',
+                  confidence: typeof result.confidence === 'number' ? result.confidence : null,
+                  agent: p.agent || 'model:claude'
+                }
+              },
+              author: 'human'
+            });
+          }
+        }
         installFoldResult(await fold());
         if (await drainConsistencyEvas() > 0) installFoldResult(await fold());
         await runRewriteEngine();
         stage7SetTab('queue');
+        // Refresh downstream surfaces so approved corroborations appear
+        // on the claim detail panel and review-queue card immediately.
+        if (typeof renderCounts === 'function') renderCounts();
+        if (typeof renderReview === 'function' && document.getElementById('mode-review')?.classList.contains('active')) renderReview();
+        if (typeof showClaim === 'function' && selectedClaimId) showClaim(selectedClaimId);
       } catch (err) {
         console.error('[stage7] EVA emit failed', err);
       }
@@ -10661,6 +11128,387 @@ function openUrlArchiveModal() {
   $('#urlarc-confirm').addEventListener('click', onConfirm);
   $('#urlarc-url').addEventListener('keydown', onKey);
   document.addEventListener('keydown', onEsc);
+}
+
+/* ======================================================================
+   CLAUDE WEB RESEARCH — evidence-finding with mandatory archive + review
+   ----------------------------------------------------------------------
+   Goal: Claude (or any configured search endpoint) returns corroborating
+   evidence candidates for a claim. Each candidate URL is FIRST fetched
+   through the PROVeo page proxy and snapshotted to Archive.org, so the
+   article cites all the way through to the archived source rather than
+   citing a live URL that may rot.
+
+   Discipline: every archived candidate enters the append-only log as a
+   DEF(subtype=web_evidence) proposal. It only binds to the claim after
+   a human ⊨EVA confirm in the Stage 7 queue — matching the loop rules
+   in build.md (no skipped ⊨EVA → no ideology).
+====================================================================== */
+
+const LS_CLAUDE_SEARCH_URL = 'nl.claudeSearchUrl.v1';
+let CLAUDE_SEARCH_URL = (() => {
+  try { return localStorage.getItem(LS_CLAUDE_SEARCH_URL) || ''; } catch { return ''; }
+})();
+
+let researchState = {
+  open: false,
+  claimId: null,
+  claimText: '',
+  results: [],
+  cardStates: {},      // candidate_id -> 'idle'|'archiving'|'archived'|'dismissed'|'error'
+  proposalByCard: {}   // candidate_id -> proposal event id after archive completes
+};
+
+function setResearchStatus(msg, kind) {
+  const el = document.getElementById('research-status');
+  if (!el) return;
+  el.classList.remove('is-err', 'is-ok');
+  if (kind === 'err') el.classList.add('is-err');
+  else if (kind === 'ok') el.classList.add('is-ok');
+  if (!msg) { el.hidden = true; el.textContent = ''; return; }
+  el.hidden = false;
+  el.textContent = msg;
+}
+
+function openResearchModalForClaim(claimId) {
+  const claim = (typeof CLAIMS !== 'undefined' && CLAIMS[claimId]) ? CLAIMS[claimId] : null;
+  if (!claim) { showToast('Claim not found'); return; }
+  researchState = {
+    open: true,
+    claimId,
+    claimText: claim.text || '',
+    results: [],
+    cardStates: {},
+    proposalByCard: {}
+  };
+  const modal = document.getElementById('research-modal');
+  if (!modal) return;
+  const box = document.getElementById('research-claim-box');
+  const txt = document.getElementById('research-claim-text');
+  if (box && txt) {
+    box.hidden = false;
+    txt.textContent = '"' + (claim.text || '') + '"';
+  }
+  const query = document.getElementById('research-query');
+  if (query) query.value = defaultResearchQuery(claim);
+  const endpointInput = document.getElementById('research-endpoint');
+  if (endpointInput) endpointInput.value = CLAUDE_SEARCH_URL || '';
+  const err = document.getElementById('research-err');
+  if (err) { err.hidden = true; err.textContent = ''; }
+  const results = document.getElementById('research-results');
+  if (results) results.innerHTML = '<div class="research-empty">Enter a query and click Ask Claude to begin. Claude will propose candidate pages; each one gets snapshotted to Archive.org before it enters the review queue.</div>';
+  setResearchStatus('', null);
+  modal.hidden = false;
+}
+
+function defaultResearchQuery(claim) {
+  if (!claim) return '';
+  const text = (claim.text || '').trim();
+  const locators = [];
+  const prov = claim.prov || {};
+  if (prov.src) locators.push(prov.src.replace(/\.[a-z0-9]+$/i, ''));
+  if (prov.highlight) locators.push(prov.highlight.slice(0, 80));
+  const base = text.length > 140 ? text.slice(0, 140) + '…' : text;
+  return [base, ...locators].filter(Boolean).join(' · ');
+}
+
+function closeResearchModal() {
+  const modal = document.getElementById('research-modal');
+  if (modal) modal.hidden = true;
+  researchState.open = false;
+}
+
+/* Call the configured webhook. Expected response:
+   { results: [
+       { url, title, excerpt, rationale, confidence? }
+     ] }
+   Accepts n8n-style wrapped payloads too (data/body). */
+async function callClaudeSearchEndpoint(endpoint, { query, claimText, claimId }) {
+  const resp = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      query,
+      claim_text: claimText,
+      claim_id: claimId,
+      agent: 'claude',
+      model_hint: 'claude-opus-4-7'
+    })
+  });
+  if (!resp.ok) throw new Error(`search endpoint http ${resp.status}`);
+  const raw = await resp.text();
+  let parsed = null;
+  try { parsed = JSON.parse(raw); } catch { throw new Error('search endpoint did not return JSON'); }
+  const peek = Array.isArray(parsed) ? parsed[0] : parsed;
+  const bag = (peek && typeof peek === 'object' && Array.isArray(peek.results)) ? peek
+            : (peek && typeof peek === 'object' && peek.data && Array.isArray(peek.data.results)) ? peek.data
+            : (peek && typeof peek === 'object' && peek.body && typeof peek.body === 'string') ? JSON.parse(peek.body)
+            : null;
+  if (!bag || !Array.isArray(bag.results)) throw new Error('search endpoint response missing results[]');
+  return bag.results;
+}
+
+/* Deterministic demo mock: generate plausible-looking candidates based on
+   the query so the whole review/archive flow works without any external
+   endpoint. Uses well-known, already-indexed archive.org pages so the
+   archive step actually succeeds against a real URL. */
+function demoSearchResults({ query, claimText }) {
+  const base = (claimText || query || '').slice(0, 140);
+  const seeds = [
+    {
+      url: 'https://en.wikipedia.org/wiki/Public%E2%80%93private_partnership',
+      title: 'Public–private partnership — Wikipedia',
+      excerpt: 'A public–private partnership (PPP, 3P, or P3) is a long-term arrangement between a government and private sector institutions. Funding and delivery of services are shared between the partners.',
+      rationale: `Establishes the institutional backdrop against which the claim sits: ${base}`,
+      confidence: 0.78
+    },
+    {
+      url: 'https://en.wikipedia.org/wiki/Business_improvement_district',
+      title: 'Business improvement district — Wikipedia',
+      excerpt: 'A business improvement district (BID) is a defined area within which businesses pay an additional tax or fee in order to fund projects within the district\'s boundaries.',
+      rationale: `Downtown partnerships referenced by the claim typically operate as BIDs; useful corroborating framing.`,
+      confidence: 0.71
+    },
+    {
+      url: 'https://en.wikipedia.org/wiki/Private_security_industry',
+      title: 'Private security industry — Wikipedia',
+      excerpt: 'The private security industry comprises private security companies that provide armed and unarmed security services and expertise to private and public clients.',
+      rationale: `Contextualizes the contracted-security portion of the claim.`,
+      confidence: 0.62
+    }
+  ];
+  return seeds;
+}
+
+function hashString(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
+
+function renderResearchResults() {
+  const wrap = document.getElementById('research-results');
+  if (!wrap) return;
+  if (!researchState.results.length) {
+    wrap.innerHTML = '<div class="research-empty">No candidates yet.</div>';
+    return;
+  }
+  const parts = [];
+  for (const r of researchState.results) {
+    const id = r._cardId;
+    const state = researchState.cardStates[id] || 'idle';
+    const proposalId = researchState.proposalByCard[id];
+    const excerpt = (r.excerpt || '').trim();
+    const rationale = (r.rationale || '').trim();
+    const url = r.url || '';
+    const title = r.title || url || '(untitled)';
+    const conf = (typeof r.confidence === 'number') ? r.confidence.toFixed(2) : null;
+    let cls = 'research-card';
+    if (state === 'archived') cls += ' archived';
+    else if (state === 'dismissed') cls += ' dismissed';
+    const actions = [];
+    if (state === 'archived') {
+      const archiveUrl = r._archive && r._archive.archive_url;
+      if (archiveUrl) {
+        actions.push(`<a class="rc-archive-chip" href="${escapeHtmlSafe(archiveUrl)}" target="_blank" rel="noopener">archive.org ↗</a>`);
+      }
+      actions.push(`<span class="research-btn" style="cursor:default;">✓ queued for review</span>`);
+    } else if (state === 'archiving') {
+      actions.push(`<button class="btn-sm" disabled>Archiving…</button>`);
+    } else if (state === 'dismissed') {
+      actions.push(`<button class="btn-sm" data-rc-id="${escapeHtmlSafe(id)}" data-rc-act="restore">Restore</button>`);
+    } else {
+      actions.push(`<button class="btn-sm btn-sm-primary" data-rc-id="${escapeHtmlSafe(id)}" data-rc-act="archive">Archive & propose</button>`);
+      actions.push(`<button class="btn-sm" data-rc-id="${escapeHtmlSafe(id)}" data-rc-act="dismiss">Dismiss</button>`);
+    }
+    parts.push(`
+      <div class="${cls}" data-rc-id="${escapeHtmlSafe(id)}">
+        <div class="research-card-title">${escapeHtmlSafe(title)}</div>
+        <div class="research-card-url"><a href="${escapeHtmlSafe(url)}" target="_blank" rel="noopener">${escapeHtmlSafe(url)}</a></div>
+        ${excerpt ? `<div class="research-card-excerpt">${escapeHtmlSafe(excerpt)}</div>` : ''}
+        ${rationale ? `<div class="research-card-rationale"><strong>Why this supports the claim:</strong> ${escapeHtmlSafe(rationale)}</div>` : ''}
+        <div class="research-card-meta">
+          ${conf ? `<span>claude confidence ${escapeHtmlSafe(conf)}</span>` : ''}
+          ${state === 'archived' && proposalId ? `<span>proposal ${escapeHtmlSafe(proposalId.slice(-10))}</span>` : ''}
+        </div>
+        <div class="research-card-actions">${actions.join(' ')}</div>
+      </div>
+    `);
+  }
+  wrap.innerHTML = parts.join('');
+  wireResearchCardButtons();
+}
+
+function wireResearchCardButtons() {
+  const wrap = document.getElementById('research-results');
+  if (!wrap) return;
+  wrap.querySelectorAll('[data-rc-act]').forEach(btn => {
+    btn.addEventListener('click', async (ev) => {
+      ev.stopPropagation();
+      const id = btn.dataset.rcId;
+      const act = btn.dataset.rcAct;
+      const result = researchState.results.find(r => r._cardId === id);
+      if (!result) return;
+      if (act === 'dismiss') {
+        researchState.cardStates[id] = 'dismissed';
+        renderResearchResults();
+      } else if (act === 'restore') {
+        researchState.cardStates[id] = 'idle';
+        renderResearchResults();
+      } else if (act === 'archive') {
+        await archiveResearchCandidate(result);
+      }
+    });
+  });
+}
+
+async function archiveResearchCandidate(result) {
+  const id = result._cardId;
+  researchState.cardStates[id] = 'archiving';
+  renderResearchResults();
+  setResearchStatus(`Archiving ${result.url} via PROVeo → Archive.org…`, null);
+  try {
+    const normalized = normalizeUrl(result.url);
+    if (!normalized) throw new Error('invalid url');
+    const archiveRes = await handleUrlArchive(normalized, { stripScripts: true, addBanner: true }, (msg) => {
+      setResearchStatus(`[${result.url}] ${msg}`, null);
+    });
+    // handleUrlArchive emits a SRC event with archive_url; find its id.
+    const archive = archiveRes && archiveRes.proveo && archiveRes.proveo.archive ? archiveRes.proveo.archive : null;
+    const archiveUrl = archive && archive.url ? archive.url : null;
+    // Locate the SRC event we just emitted so we can reference source_id.
+    const events = await storage.readAll();
+    let sourceId = null, sha256 = null, capturedAt = null;
+    for (let i = events.length - 1; i >= 0; i--) {
+      try {
+        const e = JSON.parse(events[i]);
+        if (e.op === 'SRC' && e.payload && e.payload.archive_url === archiveUrl) {
+          sourceId = e.payload.id;
+          sha256 = e.payload.sha256 || null;
+          capturedAt = e.payload.captured_at || e.ts;
+          break;
+        }
+      } catch {}
+    }
+    // Emit a DEF web_evidence proposal into the append-only log.
+    const proposalId = 'we_' + ulid().slice(-10);
+    const proposalEvent = await appendEventAndRefold({
+      op: 'DEF',
+      site: `proposal:${proposalId}`,
+      resolution: 'Figure',
+      payload: {
+        subtype: 'web_evidence',
+        proposal_id: proposalId,
+        claim_id: researchState.claimId,
+        claim_text: researchState.claimText,
+        query: (document.getElementById('research-query') || {}).value || '',
+        result: {
+          title: result.title || null,
+          source_url: normalized,
+          excerpt: result.excerpt || '',
+          rationale: result.rationale || '',
+          confidence: typeof result.confidence === 'number' ? result.confidence : null
+        },
+        archive: {
+          source_id: sourceId,
+          archive_url: archiveUrl,
+          captured_at: capturedAt,
+          sha256
+        },
+        agent: 'model:claude-opus-4-7',
+        rule_set_version: (typeof RULE_SET_VERSION === 'string' ? RULE_SET_VERSION : null)
+      },
+      author: 'model'
+    });
+    result._archive = { archive_url: archiveUrl, source_id: sourceId };
+    researchState.cardStates[id] = 'archived';
+    researchState.proposalByCard[id] = (proposalEvent && proposalEvent.id) || proposalId;
+    setResearchStatus(`Archived + queued for review — ${archiveUrl || '(no archive url returned)'}`, 'ok');
+    // Refresh review surfaces that watch pending proposals.
+    if (typeof refreshStage1Badge === 'function') refreshStage1Badge();
+    if (typeof renderReview === 'function' && document.getElementById('mode-review')?.classList.contains('active')) renderReview();
+    if (typeof showClaim === 'function' && researchState.claimId && selectedClaimId === researchState.claimId) {
+      showClaim(researchState.claimId);
+    }
+  } catch (err) {
+    console.error('[research] archive failed', err);
+    researchState.cardStates[id] = 'error';
+    setResearchStatus(`Archive failed: ${err.message || err}`, 'err');
+  }
+  renderResearchResults();
+}
+
+async function runClaudeResearch() {
+  const queryEl = document.getElementById('research-query');
+  const endpointEl = document.getElementById('research-endpoint');
+  const demoEl = document.getElementById('research-demo');
+  const autoEl = document.getElementById('research-auto-archive');
+  const errEl = document.getElementById('research-err');
+  const query = (queryEl && queryEl.value || '').trim();
+  if (!query) {
+    if (errEl) { errEl.hidden = false; errEl.textContent = 'Enter a query first.'; }
+    return;
+  }
+  if (errEl) { errEl.hidden = true; errEl.textContent = ''; }
+  const endpoint = (endpointEl && endpointEl.value || '').trim();
+  if (endpoint && endpoint !== CLAUDE_SEARCH_URL) {
+    CLAUDE_SEARCH_URL = endpoint;
+    try { localStorage.setItem(LS_CLAUDE_SEARCH_URL, endpoint); } catch {}
+  }
+  const allowDemo = !!(demoEl && demoEl.checked);
+  setResearchStatus('Querying Claude for evidence…', null);
+  researchState.results = [];
+  researchState.cardStates = {};
+  researchState.proposalByCard = {};
+  renderResearchResults();
+
+  let results = null;
+  let usedDemo = false;
+  try {
+    if (!endpoint) throw new Error('no endpoint configured');
+    results = await callClaudeSearchEndpoint(endpoint, {
+      query, claimText: researchState.claimText, claimId: researchState.claimId
+    });
+  } catch (err) {
+    if (allowDemo) {
+      results = demoSearchResults({ query, claimText: researchState.claimText });
+      usedDemo = true;
+    } else {
+      setResearchStatus(`Claude search failed: ${err.message || err}`, 'err');
+      return;
+    }
+  }
+  if (!Array.isArray(results) || !results.length) {
+    setResearchStatus(usedDemo ? 'Demo returned no results.' : 'Claude returned no results.', 'err');
+    return;
+  }
+  // Tag each result with a stable client-side id so state survives re-render.
+  for (const r of results) {
+    r._cardId = 'rc_' + hashString((r.url || '') + '|' + (r.title || '') + '|' + Math.random());
+  }
+  researchState.results = results;
+  setResearchStatus(
+    `${results.length} candidate${results.length === 1 ? '' : 's'} returned${usedDemo ? ' (demo mode)' : ''}. Archive the ones worth reviewing.`,
+    'ok'
+  );
+  renderResearchResults();
+  if (autoEl && autoEl.checked) {
+    for (const r of results) { await archiveResearchCandidate(r); }
+  }
+}
+
+function wireResearchModal() {
+  const close = document.getElementById('research-close');
+  const cancel = document.getElementById('research-cancel');
+  const backdrop = document.getElementById('research-backdrop');
+  const run = document.getElementById('research-run');
+  if (close) close.addEventListener('click', closeResearchModal);
+  if (cancel) cancel.addEventListener('click', closeResearchModal);
+  if (backdrop) backdrop.addEventListener('click', closeResearchModal);
+  if (run) run.addEventListener('click', runClaudeResearch);
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && researchState.open) closeResearchModal();
+  });
 }
 
 function wireUploads() {
@@ -18194,6 +19042,7 @@ async function init() {
   wireSourceViewer();
   wireAnchorDrawer();
   wireStage7Controls();
+  wireResearchModal();
   loadEvidenceBench();
   renderEvidenceBench();
   wireEvidenceDnd();
