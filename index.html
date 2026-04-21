@@ -2980,12 +2980,41 @@
     background: var(--color-background-primary);
     border: 0.5px solid var(--color-border-tertiary);
     border-radius: var(--border-radius-lg);
-    width: min(780px, 92vw);
-    max-height: 90vh;
+    width: min(1400px, 96vw);
+    max-height: 92vh;
     display: flex;
     flex-direction: column;
     box-shadow: 0 12px 48px rgba(26,25,21,0.22);
     overflow: hidden;
+  }
+  /* 3-pane grid holds rail | main | outline. Each aside collapses to 0
+     when the modal decides to hide it; main pane absorbs the space. */
+  .src-viewer-grid {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr) 240px;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .src-viewer-grid.no-rail    { grid-template-columns: 0 minmax(0, 1fr) 240px; }
+  .src-viewer-grid.no-outline { grid-template-columns: 220px minmax(0, 1fr) 0; }
+  .src-viewer-grid.no-rail.no-outline { grid-template-columns: 0 minmax(0, 1fr) 0; }
+  .src-viewer-main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .src-viewer-chrome { flex-shrink: 0; }
+  /* Narrow viewports — auto-collapse outline first, then rail. */
+  @media (max-width: 1100px) {
+    .src-viewer-grid { grid-template-columns: 200px minmax(0, 1fr) 0; }
+    .src-viewer-grid #src-viewer-outline { display: none; }
+  }
+  @media (max-width: 880px) {
+    .src-viewer-grid { grid-template-columns: 0 minmax(0, 1fr) 0; }
+    .src-viewer-grid #src-viewer-rail { display: none; }
   }
   .src-viewer-text {
     flex: 1;
@@ -2998,10 +3027,9 @@
     color: var(--color-text-primary);
     background: var(--color-background-primary);
   }
-  /* Text files get a wider modal so structured records don't wrap
-     mid-field, and a line-number gutter so wrapped continuations stay
+  /* Text files get a line-number gutter so wrapped continuations stay
      visually attached to their source line. */
-  .src-viewer-body.is-txt { width: min(1060px, 94vw); }
+  .src-viewer-body.is-txt { width: min(1400px, 96vw); }
   .src-viewer-text.is-txt-lines {
     padding: 14px 0 18px;
     counter-reset: ln;
@@ -3028,6 +3056,276 @@
   }
   .src-viewer-text.is-txt-lines .txt-line:hover::before {
     color: var(--color-text-secondary);
+  }
+  .src-viewer-text.is-txt-lines .txt-line.pulse-target::before {
+    color: var(--amber-text);
+    font-weight: 600;
+  }
+  /* ---- Rail (internal source list) ---- */
+  .src-viewer-rail {
+    background: var(--color-background-secondary);
+    border-right: 0.5px solid var(--color-border-tertiary);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .src-viewer-side-head {
+    padding: 11px 12px 9px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    flex-shrink: 0;
+  }
+  .src-viewer-side-toggle {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    font-size: 14px;
+    line-height: 1;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    padding: 0 4px;
+  }
+  .src-viewer-side-toggle:hover { color: var(--color-text-primary); }
+  .src-viewer-rail-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 8px 12px;
+  }
+  .src-viewer-rail-item {
+    padding: 7px 9px;
+    margin-bottom: 3px;
+    border: 0.5px solid transparent;
+    border-radius: var(--border-radius-md);
+    background: var(--color-background-primary);
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+  .src-viewer-rail-item:hover { border-color: var(--color-border-tertiary); }
+  .src-viewer-rail-item.selected {
+    border-color: var(--color-text-primary);
+    background: var(--color-background-primary);
+  }
+  .src-viewer-rail-item-name {
+    font-weight: 500;
+    color: var(--color-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .src-viewer-rail-item-meta {
+    font-size: 10px;
+    color: var(--color-text-secondary);
+    margin-top: 3px;
+    display: flex;
+    gap: 5px;
+    align-items: center;
+  }
+  .src-viewer-rail-item-kind {
+    font-size: 9px;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: var(--color-background-tertiary);
+    color: var(--color-text-secondary);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .src-viewer-rail.is-disabled { pointer-events: none; opacity: 0.5; }
+  /* ---- Outline (TOC) ---- */
+  .src-viewer-outline {
+    background: var(--color-background-secondary);
+    border-left: 0.5px solid var(--color-border-tertiary);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .src-viewer-outline-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px 6px 12px;
+  }
+  .src-viewer-outline-item {
+    padding: 5px 10px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    border-radius: var(--border-radius-md);
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .src-viewer-outline-item:hover {
+    background: var(--color-background-primary);
+    color: var(--color-text-primary);
+  }
+  .src-viewer-outline-item[data-depth="1"] { padding-left: 20px; }
+  .src-viewer-outline-item[data-depth="2"] { padding-left: 30px; }
+  .src-viewer-outline-item[data-depth="3"] { padding-left: 40px; }
+  .src-viewer-outline-item-meta {
+    font-size: 9.5px;
+    color: var(--color-text-tertiary);
+    margin-left: 8px;
+  }
+  .src-viewer-outline-empty {
+    padding: 14px 12px;
+    font-family: var(--font-sans);
+    font-size: 11.5px;
+    color: var(--color-text-tertiary);
+    line-height: 1.5;
+    font-style: italic;
+  }
+  .src-viewer-outline-item .method-badge {
+    font-size: 9px;
+    padding: 0 4px;
+    margin-left: 6px;
+    border-radius: 2px;
+    vertical-align: baseline;
+  }
+  /* ---- Header chrome: crumbs + chips + nav buttons ---- */
+  .src-viewer-head-main { flex: 1; min-width: 0; }
+  .src-viewer-crumbs {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    font-family: var(--font-sans);
+    margin-top: 3px;
+  }
+  .src-viewer-crumbs b {
+    color: var(--color-text-primary);
+    font-weight: 500;
+  }
+  .src-viewer-chips {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+  .src-viewer-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 8px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: 999px;
+    color: var(--color-text-secondary);
+    background: var(--color-background-primary);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  a.src-viewer-chip:hover {
+    color: var(--teal-text);
+    border-color: var(--teal-mid);
+  }
+  .src-viewer-chip.kind { color: var(--color-text-primary); font-weight: 500; }
+  .src-viewer-chip.dest-public { color: var(--teal-text); border-color: var(--teal-mid); background: var(--teal-fill); }
+  .src-viewer-chip.dest-gated  { color: var(--amber-text); border-color: var(--amber-mid); background: var(--amber-fill); }
+  .src-viewer-chip.dest-local  { color: var(--color-text-tertiary); }
+  .src-viewer-head-actions { gap: 6px; }
+  .src-viewer-nav-btn {
+    appearance: none;
+    border: 0.5px solid var(--color-border-secondary);
+    background: var(--color-background-primary);
+    color: var(--color-text-primary);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 3px 8px;
+    border-radius: var(--border-radius-md);
+    cursor: pointer;
+    line-height: 1;
+  }
+  .src-viewer-nav-btn:hover:not(:disabled) { background: var(--color-background-tertiary); }
+  .src-viewer-nav-btn:disabled { opacity: 0.35; cursor: default; }
+  /* ---- Find bar + goto bar ---- */
+  .src-viewer-findbar,
+  .src-viewer-gotobar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 16px;
+    background: var(--color-background-secondary);
+    border-top: 0.5px solid var(--color-border-tertiary);
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+  }
+  .src-viewer-findbar-label {
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-tertiary);
+  }
+  .src-viewer-find-input {
+    flex: 1;
+    min-width: 0;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 5px 9px;
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    background: var(--color-background-primary);
+    color: var(--color-text-primary);
+    outline: none;
+  }
+  .src-viewer-find-input:focus { border-color: var(--color-text-primary); }
+  .src-viewer-find-input:disabled {
+    opacity: 0.5;
+    background: var(--color-background-tertiary);
+    color: var(--color-text-tertiary);
+  }
+  .src-viewer-find-count {
+    font-variant-numeric: tabular-nums;
+    font-size: 10.5px;
+    color: var(--color-text-tertiary);
+    min-width: 48px;
+    text-align: right;
+  }
+  mark.src-viewer-find-hit {
+    background: var(--amber-fill);
+    color: var(--amber-text);
+    padding: 0 1px;
+    border-radius: 2px;
+  }
+  mark.src-viewer-find-hit.is-current {
+    box-shadow: inset 0 -2px 0 var(--amber-mid);
+    outline: 1px solid var(--amber-mid);
+  }
+  .src-viewer-table-wrap td.src-viewer-find-hit-cell {
+    background: var(--amber-fill) !important;
+    color: var(--amber-text) !important;
+    outline: 1px solid var(--amber-mid);
+    outline-offset: -1px;
+  }
+  .src-viewer-table-wrap td.src-viewer-find-hit-cell.is-current {
+    box-shadow: inset 0 0 0 2px var(--amber-mid);
+  }
+  /* ---- Clickable gutter (txt) ---- */
+  .src-viewer-text.is-txt-lines .txt-line-gutter {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 58px;
+    cursor: pointer;
+    z-index: 1;
+  }
+  .src-viewer-text.is-txt-lines .txt-line.is-range-anchor::before {
+    color: var(--amber-text);
+    font-weight: 600;
+    background: var(--amber-fill);
   }
   .src-viewer-media {
     flex: 1;
@@ -3158,7 +3456,7 @@
   .src-viewer-tuple-btn:not(:disabled):hover { background: var(--color-background-tertiary); }
 
   /* ---------- PDF VIEW (rendered original + audited extraction) ---------- */
-  .src-viewer-body.is-pdf { width: min(1240px, 96vw); }
+  .src-viewer-body.is-pdf { width: min(1400px, 96vw); }
   .src-viewer-pdf-wrap {
     flex: 1;
     overflow: auto;
@@ -3283,7 +3581,7 @@
   }
 
   /* ---------- CSV / TSV TABLE VIEW (spreadsheet-style) ---------- */
-  .src-viewer-body.is-table { width: min(1180px, 96vw); }
+  .src-viewer-body.is-table { width: min(1400px, 96vw); }
   .src-viewer-table-wrap {
     flex: 1;
     overflow: auto;
@@ -4308,21 +4606,60 @@
 <div id="src-viewer" class="cite-modal" hidden>
   <div class="cite-modal-backdrop" id="src-viewer-backdrop"></div>
   <div class="src-viewer-body">
-    <div class="cite-modal-head">
-      <div>
-        <div class="cite-modal-title" id="src-viewer-title">Source</div>
-        <div class="cite-modal-sub" id="src-viewer-sub"></div>
+    <div class="src-viewer-chrome">
+      <div class="cite-modal-head">
+        <div class="src-viewer-head-main">
+          <div class="cite-modal-title" id="src-viewer-title">Source</div>
+          <div class="src-viewer-crumbs" id="src-viewer-crumbs"></div>
+          <div class="src-viewer-chips" id="src-viewer-chips"></div>
+          <div class="cite-modal-sub" id="src-viewer-sub" hidden></div>
+        </div>
+        <div class="src-viewer-head-actions">
+          <button class="src-viewer-nav-btn" id="src-viewer-prev" type="button" title="Previous source (←)" aria-label="Previous source">◂</button>
+          <button class="src-viewer-nav-btn" id="src-viewer-next" type="button" title="Next source (→)" aria-label="Next source">▸</button>
+          <button class="btn-sm" id="src-viewer-find-open" type="button" title="Find in document (⌘F)">Find</button>
+          <button class="btn-sm" id="src-viewer-hl-toggle" aria-pressed="false" hidden>Highlight mode</button>
+          <button class="rphead-close" id="src-viewer-close">×</button>
+        </div>
       </div>
-      <div class="src-viewer-head-actions">
-        <button class="btn-sm" id="src-viewer-hl-toggle" aria-pressed="false" hidden>Highlight mode</button>
-        <button class="rphead-close" id="src-viewer-close">×</button>
+      <div class="src-viewer-findbar" id="src-viewer-findbar" hidden>
+        <span class="src-viewer-findbar-label">Find</span>
+        <input type="text" class="src-viewer-find-input" id="src-viewer-find-input" placeholder="Find in document…" autocomplete="off" spellcheck="false">
+        <span class="src-viewer-find-count" id="src-viewer-find-count">0 / 0</span>
+        <button class="src-viewer-nav-btn" id="src-viewer-find-prev" type="button" title="Previous match (⇧⌘G)">◂</button>
+        <button class="src-viewer-nav-btn" id="src-viewer-find-next" type="button" title="Next match (⌘G)">▸</button>
+        <button class="src-viewer-nav-btn" id="src-viewer-find-close" type="button" title="Close (Esc)">×</button>
+      </div>
+      <div class="src-viewer-gotobar" id="src-viewer-gotobar" hidden>
+        <span class="src-viewer-findbar-label">Go to line</span>
+        <input type="number" min="1" class="src-viewer-find-input" id="src-viewer-goto-input" placeholder="Line number" autocomplete="off">
+        <button class="src-viewer-nav-btn" id="src-viewer-goto-go" type="button">Go</button>
+        <button class="src-viewer-nav-btn" id="src-viewer-goto-close" type="button" title="Close (Esc)">×</button>
       </div>
     </div>
-    <div class="src-viewer-text" id="src-viewer-text"></div>
-    <div class="src-viewer-pdf-wrap" id="src-viewer-pdf-wrap" hidden></div>
-    <div class="src-viewer-media" id="src-viewer-media" hidden></div>
-    <div class="src-viewer-table-wrap" id="src-viewer-table-wrap" hidden></div>
-    <div class="src-viewer-table-footer" id="src-viewer-table-footer" hidden></div>
+    <div class="src-viewer-grid" id="src-viewer-grid">
+      <aside class="src-viewer-rail" id="src-viewer-rail" hidden>
+        <div class="src-viewer-side-head">
+          <span>Sources</span>
+          <button class="src-viewer-side-toggle" id="src-viewer-rail-toggle" type="button" title="Hide rail">‹</button>
+        </div>
+        <div class="src-viewer-rail-list" id="src-viewer-rail-list"></div>
+      </aside>
+      <section class="src-viewer-main">
+        <div class="src-viewer-text" id="src-viewer-text"></div>
+        <div class="src-viewer-pdf-wrap" id="src-viewer-pdf-wrap" hidden></div>
+        <div class="src-viewer-media" id="src-viewer-media" hidden></div>
+        <div class="src-viewer-table-wrap" id="src-viewer-table-wrap" hidden></div>
+        <div class="src-viewer-table-footer" id="src-viewer-table-footer" hidden></div>
+      </section>
+      <aside class="src-viewer-outline" id="src-viewer-outline" hidden>
+        <div class="src-viewer-side-head">
+          <span id="src-viewer-outline-title">Outline</span>
+          <button class="src-viewer-side-toggle" id="src-viewer-outline-toggle" type="button" title="Hide outline">›</button>
+        </div>
+        <div class="src-viewer-outline-list" id="src-viewer-outline-list"></div>
+      </aside>
+    </div>
     <div class="src-viewer-tuple is-empty" id="src-viewer-tuple" hidden>
       <span class="src-viewer-tuple-label">tuple</span>
       <span class="src-viewer-tuple-readable" id="src-viewer-tuple-readable">Click a cell to pull through its tuple.</span>
@@ -14165,6 +14502,573 @@ function revokeSrcViewerMedia() {
   }
 }
 
+/* Populate the viewer's breadcrumb + metadata chips. Keeps #src-viewer-sub
+   in the DOM (hidden) in case any other code path reads its text. */
+function renderSourceViewerHeader(src, kindLabel) {
+  const crumbs = $('#src-viewer-crumbs');
+  if (crumbs) crumbs.innerHTML = `Sources › <b>${escapeHtml(src.name)}</b>`;
+  const chipsEl = $('#src-viewer-chips');
+  if (!chipsEl) return;
+  const chips = [];
+  chips.push(`<span class="src-viewer-chip kind">${escapeHtml(kindLabel)}</span>`);
+  if (src.meta) chips.push(`<span class="src-viewer-chip">${escapeHtml(src.meta)}</span>`);
+  if (typeof src.size === 'number' && src.size > 0) {
+    chips.push(`<span class="src-viewer-chip">${escapeHtml(humanSize(src.size))}</span>`);
+  }
+  if (src.destination) {
+    chips.push(`<span class="src-viewer-chip dest-${escapeHtml(src.destination)}">${escapeHtml(src.destination)}</span>`);
+  }
+  if (src.sha256) {
+    chips.push(`<span class="src-viewer-chip" title="${escapeHtml(src.sha256)}">sha ${escapeHtml(src.sha256.slice(0, 8))}</span>`);
+  }
+  if (src.archive_url) {
+    chips.push(`<a class="src-viewer-chip" href="${escapeHtml(src.archive_url)}" target="_blank" rel="noopener">archive.org ↗</a>`);
+  }
+  if (src.matrix_mxc) {
+    chips.push(`<span class="src-viewer-chip" title="${escapeHtml(src.matrix_mxc)}">matrix</span>`);
+  }
+  chipsEl.innerHTML = chips.join('');
+  const sub = $('#src-viewer-sub');
+  if (sub) sub.hidden = true;
+}
+
+/* Render the in-modal source rail. Shows all sources; the active one has
+   .selected. A source swap happens in-place via showSourceViewer(id). */
+function renderSourceViewerRail(activeId) {
+  const rail = $('#src-viewer-rail');
+  const list = $('#src-viewer-rail-list');
+  if (!rail || !list) return;
+  const sources = allSources();
+  if (!sources.length) {
+    rail.hidden = true;
+    const grid = $('#src-viewer-grid');
+    if (grid) grid.classList.add('no-rail');
+    return;
+  }
+  rail.hidden = false;
+  const grid = $('#src-viewer-grid');
+  if (grid) grid.classList.remove('no-rail');
+  list.innerHTML = sources.map(s => {
+    const kind = (s.kind || 'txt').toUpperCase();
+    const sel = s.id === activeId ? ' selected' : '';
+    return `<div class="src-viewer-rail-item${sel}" data-src-id="${escapeHtml(s.id)}">
+      <div class="src-viewer-rail-item-name">${escapeHtml(s.name)}</div>
+      <div class="src-viewer-rail-item-meta">
+        <span class="src-viewer-rail-item-kind">${escapeHtml(kind)}</span>
+        <span>${escapeHtml(s.meta || '')}</span>
+      </div>
+    </div>`;
+  }).join('');
+  const active = list.querySelector('.selected');
+  if (active) active.scrollIntoView({ block: 'nearest' });
+}
+
+/* Enable/disable prev/next chevrons based on position in allSources(). The
+   nav wraps around, so both are always enabled unless there's ≤1 source. */
+function updateSourceViewerNavButtons(activeId) {
+  const prev = $('#src-viewer-prev');
+  const next = $('#src-viewer-next');
+  const n = allSources().length;
+  const enabled = n > 1;
+  if (prev) prev.disabled = !enabled;
+  if (next) next.disabled = !enabled;
+}
+
+/* Build the outline (TOC) panel based on the active source's kind. Hidden
+   for HTML/media sources where structure isn't meaningful. Click handlers
+   live on the outline list element via delegation in wireSourceViewer. */
+function buildSourceViewerOutline(src, { body }) {
+  const panel = $('#src-viewer-outline');
+  const list = $('#src-viewer-outline-list');
+  const title = $('#src-viewer-outline-title');
+  const grid = $('#src-viewer-grid');
+  if (!panel || !list || !grid) return;
+  const ext = (/\.([^.]+)$/.exec(src.name) || [])[1]?.toLowerCase();
+  const isHtml = /^text\/html/i.test(src.mime || '');
+  const isMedia = src.kind === 'img' || src.kind === 'video' || src.kind === 'audio' || src.kind === 'bin';
+  const isTable = body.classList.contains('is-table');
+  const isPdf = body.classList.contains('is-pdf');
+  const isTxt = body.classList.contains('is-txt');
+
+  if (isHtml || isMedia || (!isTable && !isPdf && !isTxt)) {
+    panel.hidden = true;
+    grid.classList.add('no-outline');
+    list.innerHTML = '';
+    return;
+  }
+  panel.hidden = false;
+  grid.classList.remove('no-outline');
+
+  if (isTable) {
+    title.textContent = 'Columns';
+    renderOutlineCsv(list);
+    return;
+  }
+  if (isPdf) {
+    title.textContent = 'Pages';
+    renderOutlinePdf(list, src);
+    return;
+  }
+  // isTxt
+  title.textContent = 'Outline';
+  const textEl = $('#src-viewer-text');
+  const raw = (textEl && textEl._rawText) || '';
+  renderOutlineTxt(list, raw);
+}
+
+/* Table outline: one entry per column header. Click scrolls to the first
+   row's cell in that column and pulses the header briefly. */
+function renderOutlineCsv(list) {
+  const wrap = $('#src-viewer-table-wrap');
+  if (!wrap) { list.innerHTML = '<div class="src-viewer-outline-empty">No table loaded.</div>'; return; }
+  const ths = Array.from(wrap.querySelectorAll('thead th[data-col-idx]'));
+  if (!ths.length) { list.innerHTML = '<div class="src-viewer-outline-empty">No columns detected.</div>'; return; }
+  list.innerHTML = ths.map(th => {
+    const ci = th.dataset.colIdx;
+    return `<div class="src-viewer-outline-item" data-col-idx="${escapeHtml(ci)}" title="${escapeHtml(th.textContent)}">${escapeHtml(th.textContent || '(unnamed)')}</div>`;
+  }).join('');
+}
+
+/* PDF outline: one entry per page in the extraction audit, with method
+   badge matching the existing page-card badges. Without an audit (legacy
+   PDFs) we emit nothing — the iframe viewer has no cards to jump to. */
+function renderOutlinePdf(list, src) {
+  const audit = src.extraction || null;
+  const pages = audit && Array.isArray(audit.pages) ? audit.pages : [];
+  if (!pages.length) {
+    list.innerHTML = '<div class="src-viewer-outline-empty">No page audit — outline unavailable for legacy PDF.</div>';
+    return;
+  }
+  list.innerHTML = pages.map(p => {
+    const m = (p.method || '').toLowerCase();
+    const badgeClass = m === 'native' ? 'method-native' : m === 'ocr' ? 'method-ocr' : m === 'failed' ? 'method-failed' : '';
+    const badge = badgeClass ? `<span class="method-badge ${badgeClass}">${escapeHtml(m)}</span>` : '';
+    const conf = (m === 'ocr' && typeof p.conf === 'number') ? ` <span class="src-viewer-outline-item-meta">${(p.conf * 100).toFixed(0)}%</span>` : '';
+    return `<div class="src-viewer-outline-item" data-page-num="${p.n}">page ${p.n}${badge}${conf}</div>`;
+  }).join('');
+}
+
+/* TXT outline heuristics:
+     1. Lines matching /^Line \d+ —/ (structured record files)
+     2. Markdown-style /^#{1,6}\s+/ headings (depth from # count)
+     3. ALL-CAPS lines (≥5 chars) treated as depth-0 headings
+   If <3 headings match AND ≤200 total lines, fall back to "jump every 10
+   lines" navigation. Otherwise show an empty-state hint. Cap outline at
+   200 items to avoid choking on pathological inputs. */
+function renderOutlineTxt(list, text) {
+  if (!text) {
+    list.innerHTML = '<div class="src-viewer-outline-empty">No content.</div>';
+    return;
+  }
+  const lines = text.split('\n');
+  const OUTLINE_CAP = 200;
+  const entries = [];
+  const reLine = /^(Line \d+\s*[—\-:].{0,80})/;
+  const reMd = /^(#{1,6})\s+(.+)$/;
+  const reCaps = /^[A-Z][A-Z0-9 ,.'&()/\-]{4,}$/;
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    let m = reMd.exec(raw);
+    if (m) {
+      entries.push({ ln: i + 1, label: m[2].trim(), depth: Math.min(m[1].length - 1, 3) });
+    } else if (reLine.test(raw)) {
+      entries.push({ ln: i + 1, label: raw.slice(0, 80), depth: 0 });
+    } else if (reCaps.test(trimmed) && trimmed.length <= 80) {
+      entries.push({ ln: i + 1, label: trimmed, depth: 0 });
+    }
+    if (entries.length >= OUTLINE_CAP) break;
+  }
+  if (entries.length >= 3) {
+    const truncated = entries.length === OUTLINE_CAP ? '<div class="src-viewer-outline-empty">(showing first 200)</div>' : '';
+    list.innerHTML = entries.map(e =>
+      `<div class="src-viewer-outline-item" data-depth="${e.depth}" data-line-num="${e.ln}" title="${escapeHtml(e.label)}">${escapeHtml(e.label)}</div>`
+    ).join('') + truncated;
+    return;
+  }
+  // Fallback: jump list for small files
+  if (lines.length <= 200) {
+    const bits = [];
+    for (let i = 0; i < lines.length; i += 10) {
+      const ln = i + 1;
+      const preview = (lines[i] || '').slice(0, 60).trim() || '(blank)';
+      bits.push(`<div class="src-viewer-outline-item" data-line-num="${ln}" title="${escapeHtml(preview)}">line ${ln} <span class="src-viewer-outline-item-meta">${escapeHtml(preview)}</span></div>`);
+    }
+    list.innerHTML = bits.join('');
+    return;
+  }
+  list.innerHTML = '<div class="src-viewer-outline-empty">No structure detected — use ⌘F to find or ⌘L to jump to a line.</div>';
+}
+
+/* Outline click delegation: dispatches by data attribute. */
+function wireOutlineClicks() {
+  const list = $('#src-viewer-outline-list');
+  if (!list) return;
+  list.addEventListener('click', (e) => {
+    const item = e.target.closest('.src-viewer-outline-item');
+    if (!item) return;
+    if (item.dataset.lineNum) {
+      scrollToTxtLine(Number(item.dataset.lineNum));
+    } else if (item.dataset.colIdx != null) {
+      scrollToTableColumn(Number(item.dataset.colIdx));
+    } else if (item.dataset.pageNum) {
+      scrollToPdfPage(Number(item.dataset.pageNum));
+    }
+  });
+}
+
+function scrollToTxtLine(n) {
+  const textEl = $('#src-viewer-text');
+  if (!textEl) return;
+  const line = textEl.querySelector(`.txt-line[data-line-num="${n}"]`);
+  if (!line) {
+    showToast('line ' + n + ' not available in this view');
+    return;
+  }
+  line.scrollIntoView({ block: 'center', behavior: 'auto' });
+  line.classList.add('pulse-target');
+  setTimeout(() => line.classList.remove('pulse-target'), 1500);
+}
+
+function scrollToTableColumn(colIdx) {
+  const wrap = $('#src-viewer-table-wrap');
+  if (!wrap) return;
+  const th = wrap.querySelector(`thead th[data-col-idx="${colIdx}"]`);
+  const firstTd = wrap.querySelector(`tbody td[data-col-idx="${colIdx}"]`);
+  if (th) {
+    th.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'auto' });
+    th.classList.add('pulse-target');
+    setTimeout(() => th.classList.remove('pulse-target'), 1500);
+  }
+  if (firstTd) firstTd.scrollIntoView({ block: 'center', inline: 'center', behavior: 'auto' });
+}
+
+function scrollToPdfPage(n) {
+  const wrap = $('#src-viewer-pdf-wrap');
+  if (!wrap) return;
+  let card = wrap.querySelector(`.pdf-page-card[data-page-num="${n}"]`);
+  if (!card) {
+    setTimeout(() => {
+      card = wrap.querySelector(`.pdf-page-card[data-page-num="${n}"]`);
+      if (card) {
+        card.scrollIntoView({ block: 'start', behavior: 'auto' });
+        card.classList.add('pulse-target');
+        setTimeout(() => card.classList.remove('pulse-target'), 1500);
+      }
+    }, 80);
+    return;
+  }
+  card.scrollIntoView({ block: 'start', behavior: 'auto' });
+  card.classList.add('pulse-target');
+  setTimeout(() => card.classList.remove('pulse-target'), 1500);
+}
+
+/* =========================================================================
+   In-document find (⌘F) + goto-line (⌘L)
+   ---------------------------------------------------------------------- */
+
+let _viewerFind = { query: '', hits: [], current: -1, view: null };
+let _viewerFindDebounce = 0;
+
+/* Identify which content view is active so find picks the right strategy. */
+function currentViewerViewKind() {
+  const body = $('#src-viewer')?.querySelector('.src-viewer-body');
+  if (!body) return null;
+  if (body.classList.contains('is-table')) return 'table';
+  if (body.classList.contains('is-pdf')) return 'pdf';
+  const mediaEl = $('#src-viewer-media');
+  if (mediaEl && !mediaEl.hidden && mediaEl.classList.contains('is-html')) return 'html';
+  if (mediaEl && !mediaEl.hidden) return 'media';
+  return 'text';
+}
+
+function openViewerFindBar() {
+  const bar = $('#src-viewer-findbar');
+  const input = $('#src-viewer-find-input');
+  const gotoBar = $('#src-viewer-gotobar');
+  if (!bar || !input) return;
+  if (gotoBar) gotoBar.hidden = true;
+  const kind = currentViewerViewKind();
+  _viewerFind.view = kind;
+  const disabled = kind === 'html' || kind === 'media' || kind === null;
+  input.disabled = !!disabled;
+  input.placeholder = disabled ? 'Find unavailable in this view' : 'Find in document…';
+  bar.hidden = false;
+  if (disabled) return;
+  // Seed from an existing selection inside the viewer, if any.
+  const sel = window.getSelection?.();
+  if (sel && sel.rangeCount && !sel.isCollapsed) {
+    const s = sel.toString().trim();
+    if (s && s.length <= 80 && !input.value) input.value = s;
+  }
+  input.focus();
+  input.select();
+  if (input.value) runViewerFind(input.value);
+}
+
+function closeViewerFindBar() {
+  const bar = $('#src-viewer-findbar');
+  if (!bar) return;
+  bar.hidden = true;
+  clearViewerFindHits();
+  _viewerFind.query = '';
+  _viewerFind.current = -1;
+  const input = $('#src-viewer-find-input');
+  if (input) input.value = '';
+  updateFindCount();
+}
+
+function updateFindCount() {
+  const el = $('#src-viewer-find-count');
+  if (!el) return;
+  const n = _viewerFind.hits.length;
+  if (!n) { el.textContent = _viewerFind.query ? '0 / 0' : ''; return; }
+  el.textContent = `${_viewerFind.current + 1} / ${n}`;
+}
+
+/* Escape user query for literal regex use. */
+function _escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/* Run the search across the active view, rebuilding hit array from scratch. */
+function runViewerFind(q) {
+  clearViewerFindHits();
+  _viewerFind.query = q || '';
+  _viewerFind.current = -1;
+  if (!q || q.length < 2) { updateFindCount(); return; }
+  const kind = _viewerFind.view || currentViewerViewKind();
+  if (kind === 'text') findInText(q);
+  else if (kind === 'table') findInTable(q);
+  else if (kind === 'pdf') findInPdf(q);
+  if (_viewerFind.hits.length) {
+    _viewerFind.current = 0;
+    paintCurrentFindHit();
+  }
+  updateFindCount();
+}
+
+function findInText(q) {
+  const textEl = $('#src-viewer-text');
+  if (!textEl) return;
+  const rx = new RegExp(_escapeRegex(q), 'gi');
+  if (textEl.classList.contains('is-txt-lines')) {
+    // Per-line: splice marks into each line div's innerHTML. Preserves the
+    // gutter span (kept at the front) + the text node structure.
+    const lines = textEl.querySelectorAll('.txt-line');
+    for (const line of lines) {
+      const raw = line.dataset.raw;
+      if (raw == null) continue;
+      rx.lastIndex = 0;
+      if (!rx.test(raw)) continue;
+      rx.lastIndex = 0;
+      let out = '';
+      let idx = 0;
+      let m;
+      while ((m = rx.exec(raw))) {
+        if (m.index === rx.lastIndex) { rx.lastIndex++; continue; }
+        out += escapeHtml(raw.slice(idx, m.index));
+        out += `<mark class="src-viewer-find-hit">${escapeHtml(m[0])}</mark>`;
+        idx = rx.lastIndex;
+      }
+      out += escapeHtml(raw.slice(idx));
+      // Preserve the gutter span at the front.
+      line.innerHTML = '<span class="txt-line-gutter" aria-hidden="true"></span>' + out;
+      line.querySelectorAll('mark.src-viewer-find-hit').forEach(el => _viewerFind.hits.push(el));
+    }
+    return;
+  }
+  // Flat text (post-quote scrollTo) — walk text nodes and wrap matches.
+  _wrapTextNodeMatches(textEl, rx);
+}
+
+function _wrapTextNodeMatches(root, rx) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(n) {
+      const p = n.parentElement;
+      if (!p) return NodeFilter.FILTER_REJECT;
+      if (p.classList && (p.classList.contains('src-viewer-find-hit') || p.classList.contains('txt-line-gutter'))) {
+        return NodeFilter.FILTER_REJECT;
+      }
+      return n.nodeValue && n.nodeValue.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+    }
+  });
+  const nodes = [];
+  let n;
+  while ((n = walker.nextNode())) nodes.push(n);
+  for (const node of nodes) {
+    rx.lastIndex = 0;
+    const text = node.nodeValue;
+    if (!rx.test(text)) continue;
+    rx.lastIndex = 0;
+    const frag = document.createDocumentFragment();
+    let idx = 0;
+    let m;
+    while ((m = rx.exec(text))) {
+      if (m.index === rx.lastIndex) { rx.lastIndex++; continue; }
+      if (m.index > idx) frag.appendChild(document.createTextNode(text.slice(idx, m.index)));
+      const mark = document.createElement('mark');
+      mark.className = 'src-viewer-find-hit';
+      mark.textContent = m[0];
+      frag.appendChild(mark);
+      _viewerFind.hits.push(mark);
+      idx = rx.lastIndex;
+    }
+    if (idx < text.length) frag.appendChild(document.createTextNode(text.slice(idx)));
+    node.parentNode.replaceChild(frag, node);
+  }
+}
+
+function findInTable(q) {
+  const wrap = $('#src-viewer-table-wrap');
+  if (!wrap) return;
+  const needle = q.toLowerCase();
+  const tds = wrap.querySelectorAll('tbody td:not(.rowno)');
+  for (const td of tds) {
+    const v = (td.textContent || '').toLowerCase();
+    if (v.includes(needle)) {
+      td.classList.add('src-viewer-find-hit-cell');
+      _viewerFind.hits.push(td);
+    }
+  }
+}
+
+function findInPdf(q) {
+  const wrap = $('#src-viewer-pdf-wrap');
+  if (!wrap) return;
+  const rx = new RegExp(_escapeRegex(q), 'gi');
+  const pages = wrap.querySelectorAll('.pdf-page-text');
+  for (const pageEl of pages) {
+    const raw = pageEl.dataset.raw;
+    if (!raw) continue;
+    rx.lastIndex = 0;
+    if (!rx.test(raw)) continue;
+    rx.lastIndex = 0;
+    let out = '';
+    let idx = 0;
+    let m;
+    while ((m = rx.exec(raw))) {
+      if (m.index === rx.lastIndex) { rx.lastIndex++; continue; }
+      out += escapeHtml(raw.slice(idx, m.index));
+      out += `<mark class="src-viewer-find-hit">${escapeHtml(m[0])}</mark>`;
+      idx = rx.lastIndex;
+    }
+    out += escapeHtml(raw.slice(idx));
+    pageEl.innerHTML = out;
+    pageEl.querySelectorAll('mark.src-viewer-find-hit').forEach(el => _viewerFind.hits.push(el));
+  }
+}
+
+/* Restore exact textContent by reverting marked elements to their cached
+   raw values. Critical for captureHighlightForBench offset math. */
+function clearViewerFindHits() {
+  _viewerFind.hits = [];
+  // Text view — rebuild marked lines from dataset.raw, preserving gutter.
+  const textEl = $('#src-viewer-text');
+  if (textEl && textEl.classList.contains('is-txt-lines')) {
+    const lines = textEl.querySelectorAll('.txt-line');
+    for (const line of lines) {
+      if (!line.querySelector('mark.src-viewer-find-hit')) continue;
+      const raw = line.dataset.raw || '';
+      line.textContent = raw;
+      const gutter = document.createElement('span');
+      gutter.className = 'txt-line-gutter';
+      gutter.setAttribute('aria-hidden', 'true');
+      line.insertBefore(gutter, line.firstChild);
+    }
+  } else if (textEl && !textEl.hidden) {
+    // Flat text — unwrap every mark.
+    textEl.querySelectorAll('mark.src-viewer-find-hit').forEach(m => {
+      const t = document.createTextNode(m.textContent);
+      m.parentNode.replaceChild(t, m);
+    });
+    // Merge adjacent text nodes so subsequent searches see a clean tree.
+    textEl.normalize?.();
+  }
+  // Table view — remove cell classes.
+  const tableWrap = $('#src-viewer-table-wrap');
+  if (tableWrap) {
+    tableWrap.querySelectorAll('td.src-viewer-find-hit-cell').forEach(td => {
+      td.classList.remove('src-viewer-find-hit-cell', 'is-current');
+    });
+  }
+  // PDF view — restore each page text from dataset.raw.
+  const pdfWrap = $('#src-viewer-pdf-wrap');
+  if (pdfWrap) {
+    pdfWrap.querySelectorAll('.pdf-page-text').forEach(el => {
+      if (!el.querySelector('mark.src-viewer-find-hit')) return;
+      const raw = el.dataset.raw;
+      if (raw != null) el.textContent = raw;
+    });
+  }
+}
+
+function paintCurrentFindHit() {
+  const hits = _viewerFind.hits;
+  const i = _viewerFind.current;
+  for (let j = 0; j < hits.length; j++) {
+    const el = hits[j];
+    el.classList.toggle('is-current', j === i);
+  }
+  const cur = hits[i];
+  if (cur) {
+    cur.scrollIntoView({ block: 'center', inline: 'center', behavior: 'auto' });
+  }
+}
+
+function jumpViewerFind(delta) {
+  const bar = $('#src-viewer-findbar');
+  if (bar && bar.hidden) { openViewerFindBar(); return; }
+  const n = _viewerFind.hits.length;
+  if (!n) return;
+  _viewerFind.current = (_viewerFind.current + delta + n) % n;
+  paintCurrentFindHit();
+  updateFindCount();
+}
+
+/* ---- Goto line (⌘L) ---- */
+
+function openViewerGotoBar() {
+  const bar = $('#src-viewer-gotobar');
+  const input = $('#src-viewer-goto-input');
+  if (!bar || !input) return;
+  const textEl = $('#src-viewer-text');
+  if (!textEl || !textEl.classList.contains('is-txt-lines')) {
+    showToast('goto line unavailable for this view');
+    return;
+  }
+  $('#src-viewer-findbar').hidden = true;
+  bar.hidden = false;
+  input.value = '';
+  input.focus();
+}
+
+function closeViewerGotoBar() {
+  const bar = $('#src-viewer-gotobar');
+  if (bar) bar.hidden = true;
+}
+
+function commitViewerGoto() {
+  const input = $('#src-viewer-goto-input');
+  if (!input) return;
+  const n = parseInt(input.value, 10);
+  if (!Number.isFinite(n) || n < 1) { showToast('invalid line number'); return; }
+  scrollToTxtLine(n);
+  closeViewerGotoBar();
+}
+
+/* Swap to the prev/next source in allSources() order, wrapping around. */
+function gotoAdjacentSource(delta) {
+  const cur = $('#src-viewer')._currentSrc;
+  if (!cur) return;
+  const ids = allSources().map(s => s.id);
+  const i = ids.indexOf(cur.id);
+  if (i === -1 || ids.length < 2) return;
+  const nextId = ids[(i + delta + ids.length) % ids.length];
+  showSourceViewer(nextId);
+}
+
 /* showSourceViewer(id, { scrollTo, selecting })
      scrollTo  = { kind: 'quote', highlight }     → find & pulse a text span
      scrollTo  = { kind: 'cell',  row, col }      → scroll row into view, pulse target cell
@@ -14178,6 +15082,10 @@ async function showSourceViewer(id, opts = {}) {
   const scrollTo = opts.scrollTo || null;
   const selecting = !!opts.selecting;
   const modal = $('#src-viewer');
+  // Dismiss find/goto on source swap so hits from the previous source
+  // don't appear attached to the next one.
+  closeViewerFindBar();
+  closeViewerGotoBar();
   // Snapshot the article caret before we steal focus with the modal —
   // the pill's "Insert" needs a target range to drop grounded text into.
   try {
@@ -14193,14 +15101,11 @@ async function showSourceViewer(id, opts = {}) {
   modal._currentSrc = src;
   const body = modal.querySelector('.src-viewer-body');
   $('#src-viewer-title').textContent = src.name;
-  const destBits = [];
-  if (src.destination) destBits.push(`destination: ${src.destination}`);
-  if (src.archive_url) destBits.push(`<a href="${escapeHtml(src.archive_url)}" target="_blank" rel="noopener" style="color:var(--teal-text); text-decoration:underline">archive.org ↗</a>`);
-  if (src.matrix_mxc) destBits.push(`matrix: <span style="font-family:var(--font-mono)">${escapeHtml(src.matrix_mxc)}</span>`);
-  if (src.sha256) destBits.push(`sha256: <span style="font-family:var(--font-mono)">${escapeHtml(src.sha256.slice(0, 16))}…</span>`);
   const isHtmlMime = /^text\/html/i.test(src.mime || '');
   const kindLabel = isHtmlMime ? 'HTML' : (src.kind || 'txt').toUpperCase();
-  $('#src-viewer-sub').innerHTML = `${kindLabel} · ${escapeHtml(src.meta || '')}${destBits.length ? ' · ' + destBits.join(' · ') : ''}`;
+  renderSourceViewerHeader(src, kindLabel);
+  renderSourceViewerRail(src.id);
+  updateSourceViewerNavButtons(src.id);
   const textEl = $('#src-viewer-text');
   const pdfWrap = $('#src-viewer-pdf-wrap');
   const mediaEl = $('#src-viewer-media');
@@ -14353,6 +15258,10 @@ async function showSourceViewer(id, opts = {}) {
     // open the source *at* its cited target, not just at the top.
     if (scrollTo) applySourceViewerScrollTo(scrollTo, { body });
 
+    // Outline panel: per-kind TOC. Runs after content is rendered so
+    // table/pdf outlines can read from already-mounted DOM.
+    buildSourceViewerOutline(src, { body });
+
     // Selection mode — wire cell/text picking to the anchor drawer.
     body.classList.toggle('is-selecting', selecting);
     togglePickerBar(selecting, src);
@@ -14376,6 +15285,8 @@ async function showSourceViewer(id, opts = {}) {
    math (captureHighlightForBench, quote scrollTo) working unchanged. */
 function renderPlainTextBody(textEl, body, text) {
   const raw = text == null ? '' : String(text);
+  textEl._rawText = raw;
+  textEl._rangeAnchor = null;
   if (!raw) {
     textEl.textContent = '(empty file)';
     return;
@@ -14393,8 +15304,17 @@ function renderPlainTextBody(textEl, body, text) {
   for (let i = 0; i < count; i++) {
     const line = document.createElement('div');
     line.className = 'txt-line';
+    line.dataset.lineNum = String(i + 1);
     const needsNewline = trailingNewline || i < count - 1;
-    line.textContent = parts[i] + (needsNewline ? '\n' : '');
+    const lineText = parts[i] + (needsNewline ? '\n' : '');
+    line.dataset.raw = lineText;
+    line.textContent = lineText;
+    // Transparent gutter-hit span captures clicks on the line-number region
+    // so Slice F's gutter-click handler doesn't have to measure offsets.
+    const gutter = document.createElement('span');
+    gutter.className = 'txt-line-gutter';
+    gutter.setAttribute('aria-hidden', 'true');
+    line.insertBefore(gutter, line.firstChild);
     frag.appendChild(line);
   }
   textEl.appendChild(frag);
@@ -14578,6 +15498,9 @@ function buildPdfPageCard(pageNum, pageText, pageAudit) {
   textEl.className = 'pdf-page-text';
   if (pageText.trim()) {
     textEl.textContent = pageText;
+    // Cache the raw extracted text so find-mark injection can be cleanly
+    // reverted without re-fetching or re-extracting.
+    textEl.dataset.raw = pageText;
   } else {
     textEl.classList.add('is-empty');
     textEl.textContent = '(no text extracted from this page)';
@@ -14904,6 +15827,10 @@ function togglePickerBar(selecting, src) {
   if (!bar) return;
   bar.hidden = !selecting;
   if (hint) hint.hidden = selecting;
+  // Swapping sources while the drawer is picking would corrupt drawerState,
+  // so the rail is frozen in selecting mode.
+  const rail = $('#src-viewer-rail');
+  if (rail) rail.classList.toggle('is-disabled', selecting);
   if (selecting) {
     // In selection mode the tuple bar is superfluous — we use the picker bar.
     if (tupleBar) tupleBar.hidden = true;
@@ -15127,8 +16054,13 @@ function hideSourceViewer() {
   if (hint) hint.hidden = false;
   const ops = $('#src-viewer-ops');
   if (ops) ops.hidden = true;
+  // Tear down find/goto so state can't bleed into the next open.
+  closeViewerFindBar();
+  closeViewerGotoBar();
   const body = modal.querySelector('.src-viewer-body');
   if (body) { body.classList.remove('is-selecting'); body.classList.remove('is-highlight-mode'); }
+  const rail = $('#src-viewer-rail');
+  if (rail) rail.classList.remove('is-disabled');
   highlightMode = false;
   const hlBtn = $('#src-viewer-hl-toggle');
   if (hlBtn) { hlBtn.setAttribute('aria-pressed', 'false'); hlBtn.classList.remove('active'); }
@@ -15142,9 +16074,168 @@ function hideSourceViewer() {
 function wireSourceViewer() {
   $('#src-viewer-close').addEventListener('click', hideSourceViewer);
   $('#src-viewer-backdrop').addEventListener('click', hideSourceViewer);
+
+  // Rail: click swaps sources in-place; chevrons + arrow keys cycle through.
+  const railList = $('#src-viewer-rail-list');
+  if (railList) {
+    railList.addEventListener('click', (e) => {
+      const item = e.target.closest('.src-viewer-rail-item');
+      if (!item) return;
+      const rail = $('#src-viewer-rail');
+      if (rail && rail.classList.contains('is-disabled')) return;
+      const id = item.dataset.srcId;
+      if (id) showSourceViewer(id);
+    });
+  }
+  const prevBtn = $('#src-viewer-prev');
+  if (prevBtn) prevBtn.addEventListener('click', () => gotoAdjacentSource(-1));
+  const nextBtn = $('#src-viewer-next');
+  if (nextBtn) nextBtn.addEventListener('click', () => gotoAdjacentSource(1));
+  const railToggle = $('#src-viewer-rail-toggle');
+  if (railToggle) {
+    railToggle.addEventListener('click', () => {
+      const grid = $('#src-viewer-grid');
+      if (grid) grid.classList.toggle('no-rail');
+    });
+  }
+  const outlineToggle = $('#src-viewer-outline-toggle');
+  if (outlineToggle) {
+    outlineToggle.addEventListener('click', () => {
+      const grid = $('#src-viewer-grid');
+      if (grid) grid.classList.toggle('no-outline');
+    });
+  }
+  wireOutlineClicks();
+
+  // Clickable line-number gutter — click copies "{src.name} · line N",
+  // shift-click copies a range "line A–B" using a prior anchor.
+  const textElForGutter = $('#src-viewer-text');
+  if (textElForGutter) {
+    textElForGutter.addEventListener('click', (e) => {
+      const gutter = e.target.closest('.txt-line-gutter');
+      if (!gutter) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const line = gutter.closest('.txt-line');
+      if (!line) return;
+      const n = Number(line.dataset.lineNum);
+      if (!Number.isFinite(n) || n < 1) return;
+      const modal = $('#src-viewer');
+      const src = modal && modal._currentSrc;
+      const srcName = src?.name || '';
+      const prev = textElForGutter._rangeAnchor;
+      let label;
+      if (e.shiftKey && Number.isFinite(prev) && prev !== n) {
+        const a = Math.min(prev, n);
+        const b = Math.max(prev, n);
+        label = `line ${a}–${b}`;
+        textElForGutter._rangeAnchor = null;
+        textElForGutter.querySelectorAll('.txt-line.is-range-anchor').forEach(el => el.classList.remove('is-range-anchor'));
+      } else {
+        label = `line ${n}`;
+        textElForGutter._rangeAnchor = n;
+        textElForGutter.querySelectorAll('.txt-line.is-range-anchor').forEach(el => el.classList.remove('is-range-anchor'));
+        line.classList.add('is-range-anchor');
+      }
+      const payload = srcName ? `${srcName} · ${label}` : label;
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(payload).then(
+          () => showToast(`copied "${label}"`),
+          () => showToast('copy failed')
+        );
+      } else {
+        showToast(`"${label}" (clipboard unavailable)`);
+      }
+    });
+  }
+
+  // Find toolbar
+  const findOpenBtn = $('#src-viewer-find-open');
+  if (findOpenBtn) findOpenBtn.addEventListener('click', openViewerFindBar);
+  const findInput = $('#src-viewer-find-input');
+  if (findInput) {
+    findInput.addEventListener('input', () => {
+      clearTimeout(_viewerFindDebounce);
+      const q = findInput.value;
+      _viewerFindDebounce = setTimeout(() => runViewerFind(q), 80);
+    });
+    findInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        jumpViewerFind(e.shiftKey ? -1 : 1);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        closeViewerFindBar();
+      }
+    });
+  }
+  const findPrev = $('#src-viewer-find-prev');
+  if (findPrev) findPrev.addEventListener('click', () => jumpViewerFind(-1));
+  const findNext = $('#src-viewer-find-next');
+  if (findNext) findNext.addEventListener('click', () => jumpViewerFind(1));
+  const findClose = $('#src-viewer-find-close');
+  if (findClose) findClose.addEventListener('click', closeViewerFindBar);
+
+  // Goto-line toolbar
+  const gotoInput = $('#src-viewer-goto-input');
+  if (gotoInput) {
+    gotoInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); commitViewerGoto(); }
+      else if (e.key === 'Escape') { e.preventDefault(); closeViewerGotoBar(); }
+    });
+  }
+  const gotoGo = $('#src-viewer-goto-go');
+  if (gotoGo) gotoGo.addEventListener('click', commitViewerGoto);
+  const gotoClose = $('#src-viewer-goto-close');
+  if (gotoClose) gotoClose.addEventListener('click', closeViewerGotoBar);
+
+  // Keyboard: Esc closes viewer (or find/goto bars first); ←/→ cycle sources
+  // when no input is focused and there's no active text selection. Capture
+  // phase so this beats downstream handlers while the modal is open.
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !$('#src-viewer').hidden) hideSourceViewer();
-  });
+    const modal = $('#src-viewer');
+    if (!modal || modal.hidden) return;
+    // Don't fight an overlay drawer (clip drawer) with its own Esc handler.
+    const clipDrawer = $('#clip-drawer');
+    if (clipDrawer && !clipDrawer.hidden) return;
+    if (e.key === 'Escape') {
+      const findBar = $('#src-viewer-findbar');
+      const gotoBar = $('#src-viewer-gotobar');
+      if (findBar && !findBar.hidden) { e.preventDefault(); closeViewerFindBar(); return; }
+      if (gotoBar && !gotoBar.hidden) { e.preventDefault(); closeViewerGotoBar(); return; }
+      hideSourceViewer();
+      return;
+    }
+    const mod = e.metaKey || e.ctrlKey;
+    if (mod && e.key.toLowerCase() === 'f') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      openViewerFindBar();
+      return;
+    }
+    if (mod && e.key.toLowerCase() === 'g') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      jumpViewerFind(e.shiftKey ? -1 : 1);
+      return;
+    }
+    if (mod && e.key.toLowerCase() === 'l') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      openViewerGotoBar();
+      return;
+    }
+    if (!mod && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      const ae = document.activeElement;
+      if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+      const sel = window.getSelection?.();
+      if (sel && sel.rangeCount && !sel.isCollapsed) return;
+      const rail = $('#src-viewer-rail');
+      if (rail && rail.classList.contains('is-disabled')) return;
+      e.preventDefault();
+      gotoAdjacentSource(e.key === 'ArrowRight' ? 1 : -1);
+    }
+  }, true);
 
   // Text-selection capture — when the drawer is picking, any mouseup
   // with a non-collapsed selection inside #src-viewer-text is the
