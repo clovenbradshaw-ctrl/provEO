@@ -1904,6 +1904,67 @@
     overflow-x: auto;
   }
 
+  /* Inline cells table — pasted into the article body via the paste
+     handler when the clipboard carries a Copy-JSON cells payload. Reads as
+     a block element but sits inside a .g.g-paste.cells-inline span so the
+     provenance chain stays attached to the claim. */
+  .article-body .cells-inline {
+    display: block;
+    margin: 10px 0;
+    max-width: 100%;
+    overflow-x: auto;
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    background: var(--color-background-primary);
+  }
+  .article-body .cells-inline:hover {
+    background: var(--amber-fill);
+    box-shadow: inset 0 0 0 1px var(--amber-mid);
+  }
+  .cells-inline-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+  .cells-inline-table th,
+  .cells-inline-table td {
+    padding: 6px 10px;
+    text-align: left;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    border-right: 0.5px solid var(--color-border-tertiary);
+    white-space: nowrap;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cells-inline-table th {
+    background: var(--color-background-secondary);
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+  }
+  .cells-inline-table th.row-label,
+  .cells-inline-table td.row-label {
+    font-size: 10px;
+    color: var(--color-text-tertiary);
+    background: var(--color-background-secondary);
+    font-weight: 500;
+    text-align: right;
+    max-width: 48px;
+  }
+  .cells-inline-table td.picked {
+    background: var(--amber-fill);
+    color: var(--amber-text);
+    font-weight: 600;
+  }
+  .cells-inline-table td.neighbor { color: var(--color-text-secondary); }
+  .cells-inline-table tr:last-child td { border-bottom: none; }
+  .cells-inline-table th:last-child,
+  .cells-inline-table td:last-child { border-right: none; }
+
   /* Derived view — expression box with drillable input list */
   .derived-expr {
     font-family: var(--font-mono);
@@ -6087,6 +6148,7 @@ function shortProvLabel(p) {
   if (!p) return '';
   if (p.kind === 'derived') return `${p.op}(${(p.inputs || []).length})`;
   if (p.kind === 'cell')    return `row ${p.row}`;
+  if (p.kind === 'cells')   return `table ${(p.columns || []).length}×${p.rowCount || 0}`;
   if (p.kind === 'quote') {
     const t = (p.highlight || '').trim();
     return t.length > 22 ? `"${t.slice(0,20)}…"` : `"${t}"`;
@@ -6099,6 +6161,7 @@ function shortProvValue(p) {
   if (!p) return '';
   if (p.kind === 'derived') return p.result || '';
   if (p.kind === 'cell')    return p.value || '';
+  if (p.kind === 'cells')   return `${p.cellCount || 0} cells`;
   if (p.kind === 'quote')   return '';
   return '';
 }
@@ -6373,6 +6436,7 @@ function renderProvenance(prov, { topLevel = false } = {}) {
   switch (prov.kind) {
     case 'quote':      return renderQuoteProv(prov, topLevel);
     case 'cell':       return renderCellProv(prov, topLevel);
+    case 'cells':      return renderCellsProv(prov, topLevel);
     case 'derived':    return renderDerivedProv(prov, topLevel);
     case 'conflict':
       // A LINK-built conflict has claim_a/claim_b digests; the pre-seeded
@@ -6437,6 +6501,50 @@ function renderCellProv(p, topLevel) {
         <div class="cell-scroll">
           <table class="cell-table">
             <thead><tr>${headersHtml}</tr></thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderCellsProv(p, topLevel) {
+  // Inspector view for a paste-inserted cells table. Rebuilds the table
+  // from the stored cells array so the inspector mirrors what landed in
+  // the article body.
+  const cols = Array.isArray(p.columns) ? p.columns : [];
+  const rowsByIndex = new Map();
+  for (const c of p.cells || []) {
+    if (c && c.row != null && !rowsByIndex.has(c.row)) rowsByIndex.set(c.row, new Map());
+    if (c && c.row != null && c.col != null) rowsByIndex.get(c.row).set(c.col, c.value);
+  }
+  const rowIds = [...rowsByIndex.keys()].sort((a, b) => Number(a) - Number(b));
+  const headersHtml = cols.map(c => `<th>${escapeHtml(c)}</th>`).join('');
+  const rowsHtml = rowIds.map(rid => {
+    const row = rowsByIndex.get(rid) || new Map();
+    const tds = cols.map(col => {
+      const picked = row.has(col);
+      const v = picked ? row.get(col) : '';
+      return `<td class="${picked ? 'target-cell' : 'neighbor'}">${escapeHtml(String(v == null ? '' : v))}</td>`;
+    }).join('');
+    return `<tr><td class="row-label">${escapeHtml(String(rid))}</td>${tds}</tr>`;
+  }).join('');
+  const colsLabel = cols.length ? cols.join(', ') : '(none)';
+  return `
+    <div class="prov-section">
+      <div class="prov-label">Source cells</div>
+      <div class="source-chip" data-src-name="${escapeHtml(p.src || '')}">
+        <span class="source-chip-name">${escapeHtml(p.src || 'cells')}</span>
+        <span class="source-chip-loc">${cols.length} col${cols.length === 1 ? '' : 's'} · ${p.cellCount || 0} cell${p.cellCount === 1 ? '' : 's'}</span>
+        <span class="source-chip-open">↗</span>
+      </div>
+      <div class="prov-label" style="margin-top:8px;">Columns</div>
+      <div class="prov-code">${escapeHtml(colsLabel)}</div>
+      <div class="cell-view" style="margin-top:8px;">
+        <div class="cell-scroll">
+          <table class="cell-table">
+            <thead><tr><th class="row-label">#</th>${headersHtml}</tr></thead>
             <tbody>${rowsHtml}</tbody>
           </table>
         </div>
@@ -6595,6 +6703,7 @@ function provSummary(claim) {
   switch (p.kind) {
     case 'quote':    return 'direct quote';
     case 'cell':     return `cell value · ${p.col}`;
+    case 'cells':    return `cells table · ${(p.columns || []).length} column${(p.columns || []).length === 1 ? '' : 's'}`;
     case 'derived':  return p.op + '(' + (p.inputs || []).length + ' inputs)';
     case 'conflict': return 'two claims disagree';
     case 'concur':   return 'two claims agree';
@@ -6610,6 +6719,7 @@ function provLocator(claim) {
   switch (p.kind) {
     case 'quote':    return `${p.src}${p.page ? ' · p.' + p.page : ''}`;
     case 'cell':     return `${p.src} · row ${p.row} · ${p.col}`;
+    case 'cells':    return `${p.src || 'cells'} · ${p.cellCount || 0} cells · ${(p.columns || []).length} col${(p.columns || []).length === 1 ? '' : 's'}`;
     case 'derived':  return `derived · ${(p.inputs || []).length} inputs`;
     case 'conflict': {
       if (p.claim_a && p.claim_b) return `${p.claim_a.loc || p.claim_a.src} ⟷ ${p.claim_b.loc || p.claim_b.src}`;
@@ -8991,6 +9101,7 @@ self.addEventListener('message', (ev) => {
         let value = '';
         if (p.kind === 'quote')    { loc = p.page ? (p.src + ' · p.' + p.page) : p.src; value = p.highlight || ''; }
         else if (p.kind === 'cell'){ loc = p.src + ' · row ' + p.row + ' · ' + p.col; value = p.value || ''; }
+        else if (p.kind === 'cells'){ loc = (p.src || 'cells') + ' · ' + (p.cellCount || 0) + ' cells'; value = (p.columns || []).join(', '); }
         else if (p.kind === 'derived') { loc = (p.src || 'derived'); value = p.result || ''; }
         return { id, text: c.text, kind: p.kind || '', src: p.src || '', loc, value };
       };
@@ -13292,6 +13403,16 @@ function citationFromClaim(claim) {
       kind: 'derived',
       location: [rowsLabel, expr].filter(Boolean).join(' · ')
     };
+  } else if (p.kind === 'cells') {
+    const cols = Array.isArray(p.columns) ? p.columns : [];
+    const colLabel = cols.length
+      ? (cols.slice(0, 3).join(', ') + (cols.length > 3 ? ` (+${cols.length - 3})` : ''))
+      : '';
+    source = {
+      name: p.src || 'cells',
+      kind: 'cells',
+      location: [(p.cellCount || 0) + ' cells', colLabel].filter(Boolean).join(' · ')
+    };
   } else if (p.kind === 'conflict') {
     source = { name: 'two sources', kind: 'conflict', location: '' };
   } else if (p.kind === 'absence') {
@@ -13349,6 +13470,12 @@ function serializeArticleBody() {
   if (!body) return '';
   const clone = body.cloneNode(true);
   clone.querySelectorAll('.cite-badge').forEach(el => el.remove());
+  // The inner <table> of a cells-inline span is derived state — the source of
+  // truth is `data-cells-payload`. Strip the table children before serializing
+  // so an invalid span>table structure doesn't round-trip through the parser.
+  clone.querySelectorAll('.cells-inline').forEach(el => {
+    while (el.firstChild) el.removeChild(el.firstChild);
+  });
   return clone.innerHTML;
 }
 
@@ -13626,6 +13753,10 @@ async function loadPersistedArticle() {
     // Also strip any previously-rendered badges — they get recreated by
     // renderCitations from the registry on the next pass.
     body.querySelectorAll('.cite-badge').forEach(el => el.remove());
+    // Rebuild the inner table for every pasted cells span — the HTML5 parser
+    // moves <table> out of inline spans on re-parse, so we rehydrate from the
+    // base64 payload stored on the wrapper instead of trusting the DOM.
+    rehydrateCellsTables(body);
     // rebind claim click handlers
     body.querySelectorAll('[data-id]').forEach(el => {
       el.addEventListener('click', () => showClaim(el.dataset.id));
@@ -14183,9 +14314,28 @@ function wireEditor() {
       }
       return;
     }
+    // Cells JSON paste — the "Copy JSON" button in the source viewer writes
+    // a { kind:'cells', cells:[...] } blob to the clipboard. Render it as
+    // an inline table so the row/column context that was copied lands in
+    // the prose instead of a raw JSON string.
+    const plainText = dt.getData('text/plain');
+    const cellsPayload = tryParseCellsPayload(plainText);
+    if (cellsPayload) {
+      e.preventDefault();
+      try {
+        const id = await insertCellsPayloadAsTable(cellsPayload);
+        if (id) {
+          const cols = collectCellColumnNames(cellsPayload);
+          showToast?.(`inserted ${cellsPayload.cells.length} cells · ${cols.length} column${cols.length === 1 ? '' : 's'}`);
+        }
+      } catch (err) {
+        console.warn('[proveo] cells paste failed, falling back', err);
+        document.execCommand('insertText', false, plainText);
+      }
+      return;
+    }
     e.preventDefault();
-    const t = dt.getData('text/plain');
-    document.execCommand('insertText', false, t);
+    document.execCommand('insertText', false, plainText);
   });
   title.addEventListener('paste', (e) => {
     e.preventDefault();
@@ -15039,6 +15189,10 @@ const matrixCollab = {
     if (body.innerHTML !== content.body_html) {
       const savedCaret = getBodyCaretOffset();
       body.innerHTML = content.body_html;
+      // Cells-inline tables round-trip via data-cells-payload (see
+      // rehydrateCellsTables); rebuild their inner tables before we rebind
+      // click handlers so the freshly-parsed span has its table back.
+      rehydrateCellsTables(body);
       // Rebind claim handlers on the re-parsed DOM
       body.querySelectorAll('[data-id]').forEach(el => {
         el.addEventListener('click', () => showClaim(el.dataset.id));
@@ -18096,6 +18250,325 @@ function provReadChain(dataTransfer) {
     }
   } catch {}
   return null;
+}
+
+// Detect a "cells" JSON payload on the clipboard — the shape written by
+// the source viewer's Copy JSON button (copySelectionToClipboard). Returns
+// the parsed payload when it carries { kind:'cells', cells:[...] }, else
+// null. A cheap first-char check avoids JSON.parse on normal prose.
+function tryParseCellsPayload(text) {
+  if (!text) return null;
+  const trimmed = String(text).trim();
+  if (!trimmed || (trimmed[0] !== '{' && trimmed[0] !== '[')) return null;
+  let parsed;
+  try { parsed = JSON.parse(trimmed); } catch { return null; }
+  if (!parsed || typeof parsed !== 'object') return null;
+  if (parsed.kind !== 'cells' || !Array.isArray(parsed.cells) || !parsed.cells.length) return null;
+  return parsed;
+}
+
+// Collect distinct column names from a cells payload in the order they
+// first appear in the selection. Falls back to neighborhood keys when
+// cell entries lack location.col.
+function collectCellColumnNames(payload) {
+  const cols = [];
+  const seen = new Set();
+  for (const cell of payload.cells || []) {
+    const name = cell && cell.location && cell.location.col;
+    if (typeof name === 'string' && name && !seen.has(name)) {
+      seen.add(name);
+      cols.push(name);
+    }
+  }
+  if (!cols.length) {
+    for (const cell of payload.cells || []) {
+      const nb = cell && cell.neighborhood;
+      if (nb && typeof nb === 'object') {
+        for (const k of Object.keys(nb)) {
+          if (k === '_truncated' || seen.has(k)) continue;
+          seen.add(k);
+          cols.push(k);
+        }
+      }
+    }
+  }
+  return cols;
+}
+
+// Build an HTML table element from a cells payload. Rows are the unique
+// cell rows (sorted numerically); columns come from collectCellColumnNames.
+// Cells in the selection get a `.picked` class; other intersections fill
+// from the row's neighborhood (when available) so the surrounding row
+// context reads naturally. Returns an actual DOM <table> so the table
+// survives being attached to an inline wrapper (innerHTML-parsing a table
+// inside a <span> triggers HTML5 foster-parenting).
+function buildCellsPayloadTableEl(payload) {
+  const cols = collectCellColumnNames(payload);
+  const rowsByIndex = new Map();
+  for (const c of payload.cells || []) {
+    const row = c && c.location && c.location.row;
+    const col = c && c.location && c.location.col;
+    if (row == null || col == null) continue;
+    let entry = rowsByIndex.get(row);
+    if (!entry) {
+      entry = { nb: c.neighborhood || {}, picked: new Map() };
+      rowsByIndex.set(row, entry);
+    }
+    entry.picked.set(col, c.value == null ? '' : c.value);
+  }
+  const rowIds = [...rowsByIndex.keys()].sort((a, b) => Number(a) - Number(b));
+  const table = document.createElement('table');
+  table.className = 'cells-inline-table';
+  const thead = document.createElement('thead');
+  const hr = document.createElement('tr');
+  const hRow = document.createElement('th');
+  hRow.className = 'row-label';
+  hRow.textContent = '#';
+  hr.appendChild(hRow);
+  for (const name of cols) {
+    const th = document.createElement('th');
+    th.textContent = name;
+    hr.appendChild(th);
+  }
+  thead.appendChild(hr);
+  table.appendChild(thead);
+  const tbody = document.createElement('tbody');
+  for (const rid of rowIds) {
+    const entry = rowsByIndex.get(rid);
+    const nb = entry.nb || {};
+    const tr = document.createElement('tr');
+    const rlabel = document.createElement('td');
+    rlabel.className = 'row-label';
+    rlabel.textContent = String(rid);
+    tr.appendChild(rlabel);
+    for (const col of cols) {
+      const td = document.createElement('td');
+      const picked = entry.picked.has(col);
+      td.className = picked ? 'picked' : 'neighbor';
+      const v = picked ? entry.picked.get(col) : (nb[col] != null ? nb[col] : '');
+      td.textContent = String(v == null ? '' : v);
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  return table;
+}
+
+function renderCellsPayloadAsTable(payload) {
+  const cols = collectCellColumnNames(payload);
+  const rowsByIndex = new Map();
+  const pickedValue = new Map();
+  for (const c of payload.cells || []) {
+    const row = c && c.location && c.location.row;
+    const col = c && c.location && c.location.col;
+    if (row == null || col == null) continue;
+    if (!rowsByIndex.has(row)) rowsByIndex.set(row, c.neighborhood || {});
+    pickedValue.set(row + '' + col, c.value == null ? '' : c.value);
+  }
+  const rowIds = [...rowsByIndex.keys()].sort((a, b) => Number(a) - Number(b));
+  const headCells = ['<th class="row-label">#</th>']
+    .concat(cols.map(c => `<th>${escapeHtml(c)}</th>`))
+    .join('');
+  const bodyRows = rowIds.map(rid => {
+    const nb = rowsByIndex.get(rid) || {};
+    const tds = cols.map(col => {
+      const key = rid + '' + col;
+      const picked = pickedValue.has(key);
+      const v = picked ? pickedValue.get(key) : (nb[col] != null ? nb[col] : '');
+      return `<td class="${picked ? 'picked' : 'neighbor'}">${escapeHtml(String(v))}</td>`;
+    }).join('');
+    return `<tr><td class="row-label">${escapeHtml(String(rid))}</td>${tds}</tr>`;
+  }).join('');
+  return `<table class="cells-inline-table"><thead><tr>${headCells}</tr></thead><tbody>${bodyRows}</tbody></table>`;
+}
+
+// Materialize a cells payload as a grounded table span inside the article
+// body. Emits one OBS per observed cell and a CLAIM of kind='cells'
+// whose prov_content carries the column names and picked values, so the
+// inspector and downstream consumers can iterate over them.
+async function insertCellsPayloadAsTable(payload) {
+  const body = $('#article-body');
+  if (!body) return null;
+  const sel = window.getSelection();
+  let range = sel && sel.rangeCount ? sel.getRangeAt(0) : null;
+  if (!range || !body.contains(range.commonAncestorContainer)) {
+    body.focus();
+    range = document.createRange();
+    range.selectNodeContents(body);
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+  range.deleteContents();
+
+  const columns = collectCellColumnNames(payload);
+  const cells = payload.cells || [];
+  const src = payload.source || {};
+  const rows = [...new Set(cells.map(c => c && c.location && c.location.row).filter(r => r != null))];
+  const claimId = 'u_' + ulid().slice(-8);
+  const position = {
+    workspace: (typeof matrix !== 'undefined' && matrix.activeRoomId) || 'local',
+    article_id: 'draft',
+    paragraph_id: currentParagraphId()
+  };
+  const piIds = [];
+  for (const c of cells) {
+    const obsId = 'o_' + ulid().slice(-10);
+    piIds.push(obsId);
+    await appendEvent({
+      op: 'OBS',
+      site: `observation:${obsId}`,
+      resolution: 'Figure',
+      payload: {
+        agent: 'human',
+        mode: 'direct_read',
+        source_id: src.id || null,
+        location: { row: c.location && c.location.row, col: c.location && c.location.col },
+        content: c.value,
+        context: position,
+      },
+      author: 'human'
+    });
+  }
+  const prov = {
+    kind: 'cells',
+    src: src.name || 'cells',
+    sourceId: src.id || null,
+    columns,
+    cellCount: cells.length,
+    rowCount: rows.length,
+    cells: cells.map(c => ({
+      row: c && c.location && c.location.row,
+      col: c && c.location && c.location.col,
+      value: c && c.value
+    })),
+    window: {
+      source_version_hash: (src.id && typeof USER_SOURCES !== 'undefined' && USER_SOURCES[src.id] && USER_SOURCES[src.id].sha256) || null,
+      row_range: rows.length ? [Math.min(...rows), Math.max(...rows)] : null,
+      observed_at: new Date().toISOString()
+    }
+  };
+  const trace = [
+    { op: 'OBS', txt: `${cells.length} cells observed across ${columns.length} column${columns.length === 1 ? '' : 's'}` },
+    { op: 'CLAIM', txt: `inserted table — ${columns.length}×${rows.length} (${escapeHtml(columns.slice(0, 4).join(', ') + (columns.length > 4 ? ', …' : ''))})` }
+  ];
+  await appendEventAndRefold({
+    op: 'CLAIM',
+    site: `claim:${claimId}`,
+    resolution: 'Figure',
+    payload: {
+      type: 'grounded',
+      text: `[table: ${cells.length} cells]`,
+      pi: piIds,
+      position,
+      window: prov.window,
+      prov_content: prov,
+      conf: 0.92,
+      trace
+    },
+    author: 'human'
+  });
+
+  // Wrap the rendered table in a non-editable grounded span. `contenteditable=false`
+  // keeps the table intact under the caret — the user can still click to open the
+  // inspector, but typing won't fragment it. The pipe-delimited column list sits on
+  // the span as a data attribute for callers that want to read columns back out.
+  //
+  // The full cells payload rides along base64-encoded on `data-cells-payload` so the
+  // table can be rebuilt from scratch on article load — HTML5 foster-parenting moves
+  // a <table> out of an inline span when innerHTML is re-parsed, so we never trust
+  // the serialized table children; we rebuild them from the payload instead.
+  const wrap = document.createElement('span');
+  wrap.className = 'g g-paste cells-inline';
+  wrap.dataset.id = claimId;
+  wrap.dataset.cellsColumns = columns.join('|');
+  wrap.dataset.cellsPayload = provBase64Encode(JSON.stringify(payload));
+  wrap.setAttribute('contenteditable', 'false');
+  wrap.title = `Table — ${cells.length} cells across ${columns.length} column${columns.length === 1 ? '' : 's'}. Click to inspect.`;
+  wrap.appendChild(buildCellsPayloadTableEl(payload));
+  range.insertNode(wrap);
+
+  const after = document.createRange();
+  after.setStartAfter(wrap);
+  after.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(after);
+  wrap.addEventListener('click', () => showClaim(claimId));
+
+  renderCitations();
+  await saveArticleNow();
+  renderCounts();
+  return claimId;
+}
+
+// Rebuild the inner table of every `.cells-inline` span in a container
+// from its `data-cells-payload` attribute. Necessary because the HTML5
+// parser foster-parents <table> out of inline elements when the body
+// HTML is re-parsed on load, so the serialized table children aren't
+// trustworthy. We strip whatever's inside and rebuild from the payload.
+function rehydrateCellsTables(container) {
+  const root = container || document.querySelector('#article-body');
+  if (!root) return;
+  root.querySelectorAll('.cells-inline').forEach(wrap => {
+    const b64 = wrap.dataset && wrap.dataset.cellsPayload;
+    if (!b64) return;
+    let payload;
+    try {
+      const json = provBase64Decode(b64);
+      if (!json) return;
+      payload = JSON.parse(json);
+    } catch {
+      return;
+    }
+    if (!payload || !Array.isArray(payload.cells)) return;
+    // Drop any pre-existing children (re-parsed tables, foster-parented nodes).
+    while (wrap.firstChild) wrap.removeChild(wrap.firstChild);
+    wrap.appendChild(buildCellsPayloadTableEl(payload));
+    // Foster-parented tables end up as siblings of the span — if that's
+    // happened on this load, remove the stray sibling so we don't
+    // double-render.
+    let sib = wrap.nextSibling;
+    while (sib) {
+      const next = sib.nextSibling;
+      if (sib.nodeType === 1 && sib.tagName === 'TABLE' && sib.classList.contains('cells-inline-table')) {
+        sib.parentNode.removeChild(sib);
+      } else {
+        break;
+      }
+      sib = next;
+    }
+    if (!wrap.dataset.cellsColumns) {
+      wrap.dataset.cellsColumns = collectCellColumnNames(payload).join('|');
+    }
+  });
+}
+
+// Read the column names off a pasted cells-table span. Accepts either the
+// `.cells-inline` wrapper or any descendant. Returns [] if not a cells span.
+function getInsertedTableColumns(el) {
+  if (!el) return [];
+  const wrap = el.classList && el.classList.contains('cells-inline')
+    ? el
+    : (el.closest && el.closest('.cells-inline'));
+  if (!wrap || !wrap.dataset || !wrap.dataset.cellsColumns) return [];
+  return wrap.dataset.cellsColumns.split('|').filter(Boolean);
+}
+
+// Gather the column names from every cells-table currently in the article
+// body. Useful for callers that want to reason about what fields the
+// author has already pulled through.
+function collectArticleTableColumns() {
+  const body = document.querySelector('#article-body');
+  if (!body) return [];
+  const out = [];
+  const seen = new Set();
+  body.querySelectorAll('.cells-inline').forEach(w => {
+    for (const c of getInsertedTableColumns(w)) {
+      if (!seen.has(c)) { seen.add(c); out.push(c); }
+    }
+  });
+  return out;
 }
 
 // Gather the provenance chain carried by a DOM range that sits inside the
