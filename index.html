@@ -11153,7 +11153,8 @@ const LS_CLAUDE_API_KEY = 'nl.claudeApiKey.v1';
 let CLAUDE_API_KEY = (() => {
   try { return localStorage.getItem(LS_CLAUDE_API_KEY) || ''; } catch { return ''; }
 })();
-const CLAUDE_API_MODEL = 'claude-opus-4-7';
+// Matches agents/proveo-research.yaml — keep these in sync.
+const CLAUDE_API_MODEL = 'claude-sonnet-4-6';
 
 let researchState = {
   open: false,
@@ -11161,7 +11162,9 @@ let researchState = {
   claimText: '',
   results: [],
   cardStates: {},      // candidate_id -> 'idle'|'archiving'|'archived'|'dismissed'|'error'
-  proposalByCard: {}   // candidate_id -> proposal event id after archive completes
+  proposalByCard: {},  // candidate_id -> proposal event id after archive completes
+  absences: [],        // three-state NUL records from the agent
+  pipeline: []         // search-trace strings from the agent
 };
 
 function setResearchStatus(msg, kind) {
@@ -11223,28 +11226,70 @@ function closeResearchModal() {
   researchState.open = false;
 }
 
-/* Call api.anthropic.com directly with the user's API key, giving Claude
-   the web_search tool. We ask for a JSON object shaped
-     { results: [ { url, title, excerpt, rationale, confidence } ] }
-   as the final assistant text so downstream rendering stays identical
-   to the old webhook contract. */
-async function callClaudeApi(apiKey, { query, claimText, claimId }) {
-  const systemPrompt = [
-    'You are helping a newsroom find corroborating web sources for a specific factual claim.',
-    'Use the web_search tool to gather live evidence, then return ONLY a JSON object with this exact shape:',
-    '{"results":[{"url":"...","title":"...","excerpt":"...","rationale":"...","confidence":0.0}]}',
-    'Rules:',
-    '- 3 to 6 results.',
-    '- excerpt must be a short quote actually present on the page.',
-    '- rationale explains why the page corroborates or contextualizes the claim.',
-    '- confidence is a number between 0 and 1.',
-    '- Return the JSON object only. No prose, no markdown fences.'
-  ].join('\n');
+/* System prompt mirrors agents/proveo-research.yaml verbatim. Browser
+   path approximates the agent_toolset by giving Claude the web_search
+   tool through the Messages API. */
+const PROVEO_RESEARCH_SYSTEM = [
+  'You research the open web on behalf of provEO (append-only',
+  'spreadsheet with event-log provenance). Each request comes from',
+  'a cell that needs external grounding. Return findings as typed',
+  'claims that provEO will commit to its Given-Log.',
+  '',
+  '# Claim typing',
+  '  mechanical  — direct lookup from an authoritative source',
+  '                 (confidence 1.0)',
+  '  extracted   — inferred from source prose',
+  '                 (confidence 0.5–0.9)',
+  '  uncertain   — weak grounding, conflict, or failed search',
+  '                 (confidence < 0.5)',
+  '',
+  '# Absence typing',
+  'When nothing is found, distinguish three states. Do not collapse',
+  'them to a generic null — provEO uses them differently downstream.',
+  '  never-set  — no referent exists in the searched sources',
+  '  cleared    — was present but has been retracted or corrected',
+  '  unknown    — sources exist but are inaccessible or inconclusive',
+  '',
+  '# Provenance (required on every claim and absence)',
+  '  source_url  — the page containing the substantiating text',
+  '                 (not a landing page)',
+  '  mode        — retrieved | inferred | measured | reported',
+  '  timestamp   — ISO 8601 UTC',
+  '  context     — the query frame as received from provEO',
+  '',
+  '# Output (JSON only, no prose wrapper)',
+  '{',
+  '  "query": "...",',
+  '  "findings":  [ { claim, type, confidence, provenance } ],',
+  '  "absences":  [ { expected, state, note } ],',
+  '  "pipeline":  [ "what was searched, what was rejected, why" ]',
+  '}',
+  '',
+  '# Rules',
+  '1. Fetch before asserting. No claim can come from training alone.',
+  '2. Never synthesize beyond source support. If two sources conflict,',
+  '   register both as separate findings and flag the conflict —',
+  '   do not average them.',
+  '3. Cite the specific URL that substantiates the claim, not the',
+  '   root domain.',
+  '4. Report the pipeline honestly. Failed searches belong in the',
+  '   trace. Partial pipelines are more useful than clean false ones.',
+  '5. Ambiguous query → return an "uncertain" finding naming the',
+  '   ambiguity. Do not pick a reading.',
+  '6. Terse. No hedging, no "it\'s worth noting," no promotional',
+  '   framing in any field.'
+].join('\n');
+
+/* Calls api.anthropic.com directly with the user's API key, runs the
+   provEO Research Agent, and returns the parsed envelope
+     { query, findings, absences, pipeline }. */
+async function callResearchAgent(apiKey, { query, claimText, claimId }) {
   const userMsg = [
-    `Claim: ${claimText || '(not provided)'}`,
-    `Claim id: ${claimId || '(none)'}`,
+    `provEO cell context — claim_id: ${claimId || '(none)'}`,
+    `Claim text: ${claimText || '(not provided)'}`,
     `Research query: ${query}`,
-    'Search the web and return the JSON object described in the system prompt.'
+    '',
+    'Run the agent contract above and return the JSON envelope.'
   ].join('\n');
   const resp = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -11257,7 +11302,7 @@ async function callClaudeApi(apiKey, { query, claimText, claimId }) {
     body: JSON.stringify({
       model: CLAUDE_API_MODEL,
       max_tokens: 4096,
-      system: systemPrompt,
+      system: PROVEO_RESEARCH_SYSTEM,
       tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }],
       messages: [{ role: 'user', content: userMsg }]
     })
@@ -11276,14 +11321,41 @@ async function callClaudeApi(apiKey, { query, claimText, claimId }) {
     ? data.content.filter(b => b && b.type === 'text').map(b => b.text || '')
     : [];
   const joined = textBlocks.join('\n').trim();
-  if (!joined) throw new Error('claude returned no text content');
+  if (!joined) throw new Error('agent returned no text content');
   const match = joined.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('claude response did not contain JSON');
+  if (!match) throw new Error('agent response did not contain JSON');
   let parsed;
   try { parsed = JSON.parse(match[0]); }
-  catch (e) { throw new Error('claude JSON parse failed: ' + (e.message || e)); }
-  if (!parsed || !Array.isArray(parsed.results)) throw new Error('claude response missing results[]');
-  return parsed.results;
+  catch (e) { throw new Error('agent JSON parse failed: ' + (e.message || e)); }
+  if (!parsed || !Array.isArray(parsed.findings)) throw new Error('agent response missing findings[]');
+  return {
+    query: typeof parsed.query === 'string' ? parsed.query : query,
+    findings: parsed.findings,
+    absences: Array.isArray(parsed.absences) ? parsed.absences : [],
+    pipeline: Array.isArray(parsed.pipeline) ? parsed.pipeline : []
+  };
+}
+
+/* Adapt agent findings to the card shape used by the existing renderer
+   and the DEF web_evidence proposal payload. */
+function findingToCard(finding) {
+  const prov = (finding && finding.provenance) || {};
+  const claim = (finding && typeof finding.claim === 'string') ? finding.claim : '';
+  const type = (finding && typeof finding.type === 'string') ? finding.type : 'uncertain';
+  const url = typeof prov.source_url === 'string' ? prov.source_url : '';
+  const titleSrc = claim || url || '(untitled finding)';
+  const title = titleSrc.length > 120 ? titleSrc.slice(0, 120) + '…' : titleSrc;
+  const rationaleParts = [`type: ${type}`];
+  if (prov.mode) rationaleParts.push(`mode: ${prov.mode}`);
+  if (prov.context) rationaleParts.push(`context: ${prov.context}`);
+  return {
+    url,
+    title,
+    excerpt: claim,
+    rationale: rationaleParts.join(' · '),
+    confidence: typeof finding.confidence === 'number' ? finding.confidence : null,
+    _finding: finding
+  };
 }
 
 /* Deterministic demo mock: generate plausible-looking candidates based on
@@ -11447,13 +11519,18 @@ async function archiveResearchCandidate(result) {
           rationale: result.rationale || '',
           confidence: typeof result.confidence === 'number' ? result.confidence : null
         },
+        finding: result._finding || null,
+        trace: {
+          absences: researchState.absences,
+          pipeline: researchState.pipeline
+        },
         archive: {
           source_id: sourceId,
           archive_url: archiveUrl,
           captured_at: capturedAt,
           sha256
         },
-        agent: 'model:claude-opus-4-7',
+        agent: `agent:proveo-research/model:${CLAUDE_API_MODEL}`,
         rule_set_version: (typeof RULE_SET_VERSION === 'string' ? RULE_SET_VERSION : null)
       },
       author: 'model'
@@ -11494,30 +11571,35 @@ async function runClaudeResearch() {
     try { localStorage.setItem(LS_CLAUDE_API_KEY, apiKey); } catch {}
   }
   const allowDemo = !!(demoEl && demoEl.checked);
-  setResearchStatus('Querying Claude for evidence…', null);
+  setResearchStatus('Running provEO Research Agent…', null);
   researchState.results = [];
   researchState.cardStates = {};
   researchState.proposalByCard = {};
+  researchState.absences = [];
+  researchState.pipeline = [];
   renderResearchResults();
 
   let results = null;
   let usedDemo = false;
   try {
     if (!apiKey) throw new Error('no API key configured');
-    results = await callClaudeApi(apiKey, {
+    const envelope = await callResearchAgent(apiKey, {
       query, claimText: researchState.claimText, claimId: researchState.claimId
     });
+    results = envelope.findings.map(findingToCard).filter(c => c.url);
+    researchState.absences = envelope.absences;
+    researchState.pipeline = envelope.pipeline;
   } catch (err) {
     if (allowDemo) {
       results = demoSearchResults({ query, claimText: researchState.claimText });
       usedDemo = true;
     } else {
-      setResearchStatus(`Claude search failed: ${err.message || err}`, 'err');
+      setResearchStatus(`Research agent failed: ${err.message || err}`, 'err');
       return;
     }
   }
   if (!Array.isArray(results) || !results.length) {
-    setResearchStatus(usedDemo ? 'Demo returned no results.' : 'Claude returned no results.', 'err');
+    setResearchStatus(usedDemo ? 'Demo returned no results.' : 'Agent returned no findings with source URLs.', 'err');
     return;
   }
   // Tag each result with a stable client-side id so state survives re-render.
@@ -11525,8 +11607,12 @@ async function runClaudeResearch() {
     r._cardId = 'rc_' + hashString((r.url || '') + '|' + (r.title || '') + '|' + Math.random());
   }
   researchState.results = results;
+  const traceParts = [];
+  if (researchState.absences.length) traceParts.push(`${researchState.absences.length} absence${researchState.absences.length === 1 ? '' : 's'}`);
+  if (researchState.pipeline.length) traceParts.push(`${researchState.pipeline.length}-step trace`);
+  const traceSuffix = traceParts.length ? ` · ${traceParts.join(', ')}` : '';
   setResearchStatus(
-    `${results.length} candidate${results.length === 1 ? '' : 's'} returned${usedDemo ? ' (demo mode)' : ''}. Archive the ones worth reviewing.`,
+    `${results.length} finding${results.length === 1 ? '' : 's'} returned${usedDemo ? ' (demo mode)' : ''}${traceSuffix}. Archive the ones worth committing.`,
     'ok'
   );
   renderResearchResults();
