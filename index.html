@@ -7816,7 +7816,7 @@ async function callChatAgent(apiKey, opts) {
 
   const body = {
     model: CLAUDE_API_MODEL,
-    max_tokens: 2048,
+    max_tokens: 4096,
     system,
     messages
   };
@@ -7828,34 +7828,49 @@ async function callChatAgent(apiKey, opts) {
     body.tools = [tool];
   }
 
-  const resp = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-      'content-type': 'application/json'
-    },
-    body: JSON.stringify(body)
-  });
-  if (!resp.ok) {
-    let detail = '';
-    try {
-      const raw = await resp.text();
-      const asJson = (() => { try { return JSON.parse(raw); } catch { return null; } })();
-      detail = (asJson && asJson.error && asJson.error.message) ? asJson.error.message : raw.slice(0, 240);
-    } catch {}
-    throw new Error(`http ${resp.status}${detail ? ' — ' + detail : ''}`);
+  // Loop on `pause_turn` so server-tool turns (web_search) can resume.
+  // The model returns pause_turn when it used a server tool but needs
+  // another turn to produce final text; we echo the assistant content
+  // back and let it continue. Cap the loop so a pathological run can't
+  // spin forever.
+  const allContent = [];
+  let lastStopReason = null;
+  for (let i = 0; i < 4; i++) {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+    if (!resp.ok) {
+      let detail = '';
+      try {
+        const raw = await resp.text();
+        const asJson = (() => { try { return JSON.parse(raw); } catch { return null; } })();
+        detail = (asJson && asJson.error && asJson.error.message) ? asJson.error.message : raw.slice(0, 240);
+      } catch {}
+      throw new Error(`http ${resp.status}${detail ? ' — ' + detail : ''}`);
+    }
+    const data = await resp.json();
+    const content = Array.isArray(data.content) ? data.content : [];
+    for (const b of content) allContent.push(b);
+    lastStopReason = data.stop_reason || null;
+    if (lastStopReason !== 'pause_turn') break;
+    body.messages = body.messages.concat([{ role: 'assistant', content }]);
   }
-  const data = await resp.json();
-  const textBlocks = Array.isArray(data.content)
-    ? data.content.filter(b => b && b.type === 'text')
-    : [];
-  const toolBlocks = Array.isArray(data.content)
-    ? data.content.filter(b => b && (b.type === 'server_tool_use' || b.type === 'web_search_tool_result'))
-    : [];
+
+  const textBlocks = allContent.filter(b => b && b.type === 'text');
+  const toolBlocks = allContent.filter(b => b && (b.type === 'server_tool_use' || b.type === 'web_search_tool_result'));
   const joined = textBlocks.map(b => b.text || '').join('\n').trim();
-  if (!joined) throw new Error('claude returned no text content');
+  if (!joined) {
+    const reason = lastStopReason ? ` (stop_reason: ${lastStopReason})` : '';
+    const toolHint = toolBlocks.length ? `; ${toolBlocks.length} tool block${toolBlocks.length === 1 ? '' : 's'} returned but no text — try disabling web search or raising max searches` : '';
+    throw new Error(`claude returned no text content${reason}${toolHint}`);
+  }
 
   const citations = [];
   const seenUrls = new Set();
