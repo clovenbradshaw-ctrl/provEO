@@ -3650,6 +3650,122 @@
     flex-shrink: 0;
   }
 
+  /* ---------- PDF VIEW TOGGLE (Visual / Split / Text) ---------- */
+  .pdf-view-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    overflow: hidden;
+    margin-left: auto;
+  }
+  .pdf-view-toggle-btn {
+    appearance: none;
+    background: var(--color-background-primary);
+    color: var(--color-text-secondary);
+    font-family: var(--font-sans);
+    font-size: 11px;
+    padding: 5px 12px;
+    border: 0;
+    border-right: 0.5px solid var(--color-border-tertiary);
+    cursor: pointer;
+    letter-spacing: 0.02em;
+  }
+  .pdf-view-toggle-btn:last-child { border-right: 0; }
+  .pdf-view-toggle-btn:hover { background: var(--color-background-tertiary); }
+  .pdf-view-toggle-btn.is-active {
+    background: var(--teal-fill);
+    color: var(--teal-text);
+    font-weight: 600;
+  }
+  .src-viewer-pdf-wrap.view-visual .pdf-page-card { grid-template-columns: minmax(0, 1fr); }
+  .src-viewer-pdf-wrap.view-visual .pdf-page-text-wrap { display: none; }
+  .src-viewer-pdf-wrap.view-visual .pdf-page-canvas-wrap { border-right: 0; }
+  .src-viewer-pdf-wrap.view-text   .pdf-page-card { grid-template-columns: minmax(0, 1fr); }
+  .src-viewer-pdf-wrap.view-text   .pdf-page-canvas-wrap { display: none; }
+
+  /* Line-numbered text column inside a PDF page card. Gives the text side
+     the same gutter UX as plain-text sources so regions and lines can be
+     cited by number. */
+  .pdf-page-text.is-lined {
+    padding: 14px 0 14px 0;
+    counter-reset: pdfln;
+  }
+  .pdf-page-text.is-lined .pdf-txt-line {
+    display: block;
+    padding: 0 18px 0 56px;
+    position: relative;
+    white-space: pre-wrap;
+    min-height: 1.6em;
+  }
+  .pdf-page-text.is-lined .pdf-txt-line::before {
+    counter-increment: pdfln;
+    content: counter(pdfln);
+    position: absolute;
+    left: 0;
+    width: 44px;
+    text-align: right;
+    color: var(--color-text-tertiary);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    user-select: none;
+    padding-right: 10px;
+    border-right: 0.5px solid var(--color-border-tertiary);
+  }
+
+  /* ---------- PDF REGION SELECTION (visual citing) ---------- */
+  .pdf-page-canvas-wrap { position: relative; }
+  .pdf-page-canvas-wrap canvas { cursor: crosshair; }
+  .pdf-region-box {
+    position: absolute;
+    border: 1.5px dashed var(--amber-text);
+    background: rgba(240, 180, 60, 0.18);
+    pointer-events: none;
+    z-index: 2;
+    border-radius: 2px;
+  }
+  .pdf-region-box.is-picked {
+    border-style: solid;
+    background: rgba(240, 180, 60, 0.22);
+    box-shadow: 0 0 0 2px rgba(240, 180, 60, 0.35);
+  }
+  .pdf-region-hint {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    padding: 3px 8px;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    border-radius: 3px;
+    pointer-events: none;
+    z-index: 3;
+    opacity: 0.35;
+    transition: opacity 0.15s;
+  }
+  .pdf-page-canvas-wrap:hover .pdf-region-hint { opacity: 0.9; }
+
+  /* Region thumbnail shown in clipboard items and in-article citation
+     chips so the reader can see what visual area was cited. */
+  .clip-item-thumb {
+    display: block;
+    max-width: 260px;
+    max-height: 180px;
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: 3px;
+    background: #fff;
+    padding: 2px;
+    align-self: start;
+  }
+  .clip-item-region-text {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    margin-top: 4px;
+  }
+
   /* ---------- CSV / TSV TABLE VIEW (spreadsheet-style) ---------- */
   .src-viewer-body.is-table { width: min(1400px, 96vw); }
   .src-viewer-table-wrap {
@@ -5519,7 +5635,9 @@ const SOURCE_SAMPLES = (function () {
 
   // ---- ohs_quarterly_q4.pdf (rendered as plain-text extraction) ----
   // Deliberately silent on Solaren and on NDP coordination so the a1/a2
-  // absence claims stand up to a reader who checks.
+  // absence claims stand up to a reader who checks. "\f" separators mark
+  // page breaks — the fixture PDF renderer splits here to produce the
+  // 3-page visual rendering that matches the "3 pp" meta.
   const ohs = [
     'Office of Homeless Services',
     'Quarterly Report · Q4 FY2025',
@@ -5549,7 +5667,7 @@ const SOURCE_SAMPLES = (function () {
     '3. Encampment Resolutions',
     '',
     'Twenty-two encampment sites were resolved during the quarter. All resolutions followed the 14-day notice protocol adopted in 2023. Each case is documented in the HMIS record with photographs, belongings-intake forms, and outreach worker narratives. Appendix C summarizes dates and dispositions.',
-    '',
+    '\f',
     '4. Material Contracts',
     '',
     'OHS maintained the following material service contracts during the quarter. A "material contract" is defined for the purposes of this report as any agreement with a single vendor totaling $100,000 or more per fiscal year.',
@@ -5563,7 +5681,7 @@ const SOURCE_SAMPLES = (function () {
     '  Northstar Data Systems          HMIS database hosting          $142,800',
     '',
     'No new material contracts were executed during the quarter. No material contracts were terminated. All renewals followed Metro Procurement regulations and are on file with the Division of Purchases.',
-    '',
+    '\f',
     '5. Interagency Coordination',
     '',
     'OHS participated in the monthly Interagency Task Force convened by the Mayor\'s Office (Parks, Police, Public Works, Fire, and Health). Coordination with non-governmental partners is conducted through the Community Advisory Committee and is documented in the Committee\'s published minutes.',
@@ -16232,6 +16350,9 @@ async function showSourceViewer(id, opts = {}) {
     }
   } catch {}
   modal._currentSrc = src;
+  // A freshly opened source shouldn't inherit a pending region pick
+  // from the previous one — its bbox coords wouldn't even make sense.
+  if (typeof pdfClearPendingRegion === 'function') pdfClearPendingRegion();
   const body = modal.querySelector('.src-viewer-body');
   $('#src-viewer-title').textContent = src.name;
   const isHtmlMime = /^text\/html/i.test(src.mime || '');
@@ -16364,6 +16485,7 @@ async function showSourceViewer(id, opts = {}) {
       const text = SOURCE_SAMPLES[id];
       const ext = (/\.([^.]+)$/.exec(src.name) || [])[1]?.toLowerCase();
       const isTable = src.kind === 'csv' || ext === 'csv' || ext === 'tsv';
+      const isPdfFixture = src.kind === 'pdf' || ext === 'pdf';
       if (isTable) {
         const tableKind = ext === 'tsv' ? 'tsv' : 'csv';
         const { html, rowCount, colCount, headers, body: tableBody } = renderCsvTable(text, tableKind);
@@ -16380,6 +16502,14 @@ async function showSourceViewer(id, opts = {}) {
           tupleBar._src = src;
           resetCellTuple();
         }
+      } else if (isPdfFixture) {
+        // Fixture PDF: render the raw visual (synthesized from the text
+        // fixture) next to the extracted text, with the same view toggle
+        // and region-citation affordances as real user-uploaded PDFs.
+        textEl.hidden = true;
+        pdfWrap.hidden = false;
+        body.classList.add('is-pdf');
+        renderFixturePdfSource(src, text, pdfWrap);
       } else {
         renderPlainTextBody(textEl, body, text);
       }
@@ -16548,11 +16678,25 @@ async function renderPdfSource(src, container) {
 
   container.innerHTML = '';
   if (audit) container.appendChild(buildPdfDocSummary(audit));
+  container.appendChild(buildPdfViewToggle(container));
 
   const cards = [];
   for (let i = 1; i <= doc.numPages; i++) {
     const pageAudit = audit?.pages?.find(p => p.n === i) || null;
     const card = buildPdfPageCard(i, pageTexts[i - 1] || '', pageAudit);
+    const textEl = card.querySelector('.pdf-page-text');
+    if (textEl && (pageTexts[i - 1] || '').trim()) {
+      decoratePdfTextWithLines(textEl, pageTexts[i - 1]);
+    }
+    // The region-pick affordance lives on the canvas wrap; add a hint
+    // overlay matching the fixture path so users discover the feature.
+    const cw = card.querySelector('.pdf-page-canvas-wrap');
+    if (cw && !cw.querySelector('.pdf-region-hint')) {
+      const hint = document.createElement('div');
+      hint.className = 'pdf-region-hint';
+      hint.textContent = 'drag to cite a visual region';
+      cw.appendChild(hint);
+    }
     container.appendChild(card);
     cards.push(card);
   }
@@ -16566,7 +16710,7 @@ async function renderPdfSource(src, container) {
       const card = entry.target;
       observer.unobserve(card);
       const pageNum = Number(card.dataset.pageNum);
-      renderPdfCanvas(doc, pageNum, card.querySelector('.pdf-page-canvas-wrap'), token);
+      renderPdfCanvas(doc, pageNum, card.querySelector('.pdf-page-canvas-wrap'), token, src);
     }
   }, { root: container, rootMargin: '400px 0px' });
   cards.forEach(c => observer.observe(c));
@@ -16646,7 +16790,7 @@ function buildPdfPageCard(pageNum, pageText, pageAudit) {
   return card;
 }
 
-async function renderPdfCanvas(doc, pageNum, container, token) {
+async function renderPdfCanvas(doc, pageNum, container, token, src) {
   try {
     const page = await doc.getPage(pageNum);
     if (token.cancelled) return;
@@ -16662,8 +16806,19 @@ async function renderPdfCanvas(doc, pageNum, container, token) {
     const ctx = canvas.getContext('2d', { alpha: false });
     await page.render({ canvasContext: ctx, viewport }).promise;
     if (token.cancelled) return;
+    // Real PDF renders don't have line-rect metadata, but we stash the
+    // rendered width/height + page number so region citations still
+    // capture bbox proportions and the page they came from.
+    canvas._cssWidth  = canvas.width;
+    canvas._cssHeight = canvas.height;
+    canvas._pageNum   = pageNum;
     container.innerHTML = '';
+    const hint = document.createElement('div');
+    hint.className = 'pdf-region-hint';
+    hint.textContent = 'drag to cite a visual region';
     container.appendChild(canvas);
+    container.appendChild(hint);
+    wirePdfCanvasRegionSelection(container, canvas, { pageNum, src });
   } catch (err) {
     if (token.cancelled) return;
     container.innerHTML = '';
@@ -16700,6 +16855,441 @@ function splitExtractedTextByPage(text, expectedPages) {
   }
   return out;
 }
+
+/* ======================================================================
+   FIXTURE PDF VISUAL RENDERING
+   ----------------------------------------------------------------------
+   Built-in demo PDFs (ohs, min) don't have real PDF bytes on disk — the
+   file ships with just the extracted-text fixture. To still give readers
+   a visual "this is what the page looked like" view alongside the text,
+   we paint each page onto a canvas at US-letter proportions using a
+   paper-styled layout. Form-feed chars ("\f") in the fixture text mark
+   page breaks. The line rectangles we draw are cached on the canvas so
+   that a visual-region citation can recover the underlying text by
+   intersecting the picked bbox with the drawn line rects.
+====================================================================== */
+
+function splitFixtureTextByFormFeed(text) {
+  const raw = text == null ? '' : String(text);
+  if (!raw) return [''];
+  // Split on \f (optionally followed by \n). Trim surrounding blank lines
+  // on each page so the first line of a section doesn't sit under a weird
+  // gap from the form-feed marker.
+  const parts = raw.split(/\f\n?/);
+  return parts.map(p => p.replace(/^\n+|\n+$/g, ''));
+}
+
+// Synthesize a page-count-consistent audit record for a fixture PDF so
+// every code path that branches on src.extraction (outline, provenance,
+// view toggle) sees a consistent shape. The "native" method reflects the
+// fact that the text was authored directly rather than OCR'd.
+function buildFixturePdfAudit(src, pageTexts) {
+  return {
+    engine: 'fixture@1',
+    ocr_engine: null,
+    doc_sha256: 'fixture:' + src.id,
+    page_count: pageTexts.length,
+    method: 'native',
+    extracted_at: null,
+    pages: pageTexts.map((t, i) => ({
+      n: i + 1,
+      method: 'native',
+      chars: t.length,
+      ms: 0,
+      fixture: true
+    }))
+  };
+}
+
+/* Render a fixture PDF into the same pdf-page-card layout that real
+   user-uploaded PDFs use, so the visual+text split view, outline, and
+   region citation all work identically for demo content. */
+function renderFixturePdfSource(src, text, container) {
+  container.innerHTML = '';
+  const pageTexts = splitFixtureTextByFormFeed(text);
+  const audit = src.extraction && Array.isArray(src.extraction.pages) && src.extraction.pages.length === pageTexts.length
+    ? src.extraction
+    : buildFixturePdfAudit(src, pageTexts);
+  // Stash the audit on the source so clipBuildProvenance can surface the
+  // page_count / fixture engine in citation chips.
+  src.extraction = audit;
+
+  container.appendChild(buildPdfDocSummary(audit));
+  container.appendChild(buildPdfViewToggle(container));
+
+  pageTexts.forEach((pageText, i) => {
+    const pageNum = i + 1;
+    const pageAudit = audit.pages[i];
+    const card = buildPdfPageCard(pageNum, pageText, pageAudit);
+    const canvasWrap = card.querySelector('.pdf-page-canvas-wrap');
+    canvasWrap.innerHTML = '';
+    const canvas = document.createElement('canvas');
+    canvasWrap.appendChild(canvas);
+    const hint = document.createElement('div');
+    hint.className = 'pdf-region-hint';
+    hint.textContent = 'drag to cite a visual region';
+    canvasWrap.appendChild(hint);
+    drawFixturePageCanvas(canvas, pageText, pageNum, pageTexts.length);
+    wirePdfCanvasRegionSelection(canvasWrap, canvas, { pageNum, src });
+    // Turn the extracted-text column into a line-numbered block so a
+    // reader can navigate by line just like the plain-text view.
+    const textEl = card.querySelector('.pdf-page-text');
+    if (textEl && pageText.trim()) {
+      decoratePdfTextWithLines(textEl, pageText);
+    }
+    container.appendChild(card);
+  });
+}
+
+// A tiny reusable "view mode" switcher: Visual / Split / Text. Toggles
+// classes on the wrap so our CSS can collapse either column without
+// re-rendering the page cards.
+function buildPdfViewToggle(wrap) {
+  const bar = document.createElement('div');
+  bar.className = 'pdf-view-toggle';
+  bar.innerHTML = `
+    <button class="pdf-view-toggle-btn" data-mode="visual" type="button">Visual</button>
+    <button class="pdf-view-toggle-btn is-active" data-mode="split" type="button">Split</button>
+    <button class="pdf-view-toggle-btn" data-mode="text" type="button">Text</button>
+  `;
+  const apply = (mode) => {
+    wrap.classList.remove('view-visual', 'view-split', 'view-text');
+    wrap.classList.add('view-' + mode);
+    bar.querySelectorAll('.pdf-view-toggle-btn').forEach(b => {
+      b.classList.toggle('is-active', b.dataset.mode === mode);
+    });
+  };
+  apply('split');
+  bar.addEventListener('click', (e) => {
+    const btn = e.target.closest('.pdf-view-toggle-btn');
+    if (!btn) return;
+    apply(btn.dataset.mode);
+  });
+  return bar;
+}
+
+// Replace the pre-wrap text with a sequence of numbered line divs so the
+// user can hover a specific line to copy its number into a citation.
+function decoratePdfTextWithLines(textEl, pageText) {
+  textEl.classList.add('is-lined');
+  textEl.textContent = '';
+  const lines = pageText.split('\n');
+  const frag = document.createDocumentFragment();
+  for (const ln of lines) {
+    const d = document.createElement('span');
+    d.className = 'pdf-txt-line';
+    // Non-breaking fallback character keeps blank lines visible as a
+    // numbered gap, not a collapsed zero-height row.
+    d.textContent = ln.length ? ln : ' ';
+    frag.appendChild(d);
+  }
+  textEl.appendChild(frag);
+}
+
+/* Paint the fixture page onto a canvas at US-letter proportions. The
+   rasterised result is the reader's "raw visual" surrogate when there
+   are no real PDF bytes to show. Each drawn line's bbox (in canvas
+   pixels) is kept on canvas._lineRects so a region selection can pull
+   the underlying text out later. */
+function drawFixturePageCanvas(canvas, pageText, pageNum, totalPages) {
+  const cssWidth  = 612;   // US-letter width in CSS px at 1x
+  const cssHeight = 792;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width  = cssWidth  * dpr;
+  canvas.height = cssHeight * dpr;
+  // Set only the width as a CSS hint; let aspect-ratio preserve the
+  // 612:792 letter proportion so `max-width: 100%` downscales cleanly
+  // when the modal is narrow.
+  canvas.style.maxWidth  = cssWidth + 'px';
+  canvas.style.width = '100%';
+  canvas.style.height = 'auto';
+  canvas.style.aspectRatio = `${cssWidth} / ${cssHeight}`;
+  const ctx = canvas.getContext('2d', { alpha: false });
+  ctx.scale(dpr, dpr);
+
+  // Paper
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, cssWidth, cssHeight);
+  // Faint edge shadow is applied via CSS box-shadow on the canvas.
+
+  const marginX = 72;
+  const marginTop = 72;
+  const marginBottom = 54;
+  const lineH = 14;
+  const bodyFont = '12px "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace';
+  const headingFont = '600 14px "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace';
+  ctx.fillStyle = '#1a1a1a';
+  ctx.textBaseline = 'top';
+
+  const lineRects = [];
+  let y = marginTop;
+  const lines = pageText.split('\n');
+
+  // Running header (file-like name) on every page.
+  ctx.font = '10px "SFMono-Regular", Menlo, monospace';
+  ctx.fillStyle = '#888';
+  ctx.fillText(`page ${pageNum} of ${totalPages}`, marginX, 32);
+  ctx.textAlign = 'right';
+  ctx.fillText(new Date().toISOString().slice(0, 10), cssWidth - marginX, 32);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#1a1a1a';
+  ctx.font = bodyFont;
+
+  // Heading detection: first line on page 1, or any line starting with a
+  // digit + period (e.g. "1. Executive Summary"), or ALL-CAPS short line.
+  const isHeadingLine = (raw, idx) => {
+    if (!raw) return false;
+    if (pageNum === 1 && idx === 0) return true;
+    if (/^\d+\.\s+.+/.test(raw)) return true;
+    if (/^[A-Z][A-Z0-9 ,.'&()\/\-]{4,}$/.test(raw.trim()) && raw.length <= 60) return true;
+    return false;
+  };
+
+  const maxWidth = cssWidth - marginX * 2;
+  const wrapText = (raw, font) => {
+    ctx.font = font;
+    if (ctx.measureText(raw).width <= maxWidth) return [raw];
+    const words = raw.split(/(\s+)/);
+    const out = [];
+    let cur = '';
+    for (const w of words) {
+      const tentative = cur + w;
+      if (ctx.measureText(tentative).width > maxWidth && cur) {
+        out.push(cur);
+        cur = w.replace(/^\s+/, '');
+      } else {
+        cur = tentative;
+      }
+    }
+    if (cur) out.push(cur);
+    return out;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+    const heading = isHeadingLine(raw, i);
+    const font = heading ? headingFont : bodyFont;
+    const wrapped = wrapText(raw, font);
+    for (const piece of wrapped) {
+      if (y + lineH > cssHeight - marginBottom) break;
+      ctx.font = font;
+      ctx.fillStyle = heading ? '#0e0e0e' : '#1a1a1a';
+      ctx.fillText(piece, marginX, y);
+      lineRects.push({
+        text: piece,
+        x: marginX,
+        y: y,
+        w: Math.min(maxWidth, ctx.measureText(piece).width),
+        h: lineH
+      });
+      y += lineH + (heading ? 4 : 0);
+    }
+    if (!raw) y += 4; // paragraph gap from blank source line
+  }
+
+  canvas._lineRects = lineRects;
+  canvas._pageNum = pageNum;
+  canvas._cssWidth  = cssWidth;
+  canvas._cssHeight = cssHeight;
+  canvas._pageText = pageText;
+}
+
+/* Wire click-drag region selection onto a PDF canvas (works for both
+   fixture-drawn canvases and real PDF.js-rendered canvases). On mouseup,
+   stash a _pendingRegion on the src-viewer modal and show the selection
+   pill anchored at the box so the existing Insert / Save-to-clipboard
+   buttons pick it up. */
+function wirePdfCanvasRegionSelection(wrap, canvas, info) {
+  if (!wrap || !canvas || wrap._regionWired) return;
+  wrap._regionWired = true;
+  let box = null;
+  let start = null;
+
+  // Returns the pointer position in canvas coordinates (for bbox math)
+  // and wrap coordinates (for positioning the overlay box). The two
+  // differ because the wrap pads + centers the canvas.
+  const localPoint = (ev) => {
+    const cRect = canvas.getBoundingClientRect();
+    const wRect = wrap.getBoundingClientRect();
+    const cx = Math.max(0, Math.min(cRect.width,  ev.clientX - cRect.left));
+    const cy = Math.max(0, Math.min(cRect.height, ev.clientY - cRect.top));
+    return {
+      cx, cy,
+      // wrap-relative coords; include the wrap's current scroll so the
+      // overlay stays pinned to the drag point even if the wrap has
+      // been scrolled past the first screenful of the canvas.
+      wx: cx + (cRect.left - wRect.left) + wrap.scrollLeft,
+      wy: cy + (cRect.top  - wRect.top ) + wrap.scrollTop,
+      cRect
+    };
+  };
+
+  wrap.addEventListener('pointerdown', (ev) => {
+    if (ev.button !== 0) return;
+    // Only fire on the canvas surface itself (not on overlays)
+    if (ev.target !== canvas) return;
+    ev.preventDefault();
+    pdfClearPendingRegion();
+    start = localPoint(ev);
+    if (box) box.remove();
+    box = document.createElement('div');
+    box.className = 'pdf-region-box';
+    box.style.left = start.wx + 'px';
+    box.style.top  = start.wy + 'px';
+    box.style.width = '0px';
+    box.style.height = '0px';
+    wrap.appendChild(box);
+    wrap.setPointerCapture?.(ev.pointerId);
+  });
+
+  wrap.addEventListener('pointermove', (ev) => {
+    if (!start || !box) return;
+    const p = localPoint(ev);
+    const wx = Math.min(start.wx, p.wx);
+    const wy = Math.min(start.wy, p.wy);
+    const w = Math.abs(p.wx - start.wx);
+    const h = Math.abs(p.wy - start.wy);
+    box.style.left = wx + 'px';
+    box.style.top  = wy + 'px';
+    box.style.width = w + 'px';
+    box.style.height = h + 'px';
+  });
+
+  const finish = (ev) => {
+    if (!start || !box) return;
+    const p = localPoint(ev);
+    const cx = Math.min(start.cx, p.cx);
+    const cy = Math.min(start.cy, p.cy);
+    const cw = Math.abs(p.cx - start.cx);
+    const ch = Math.abs(p.cy - start.cy);
+    start = null;
+    wrap.releasePointerCapture?.(ev.pointerId);
+
+    // Rejects a click-without-drag so single-clicks on the canvas stay
+    // as "nothing happened" rather than empty regions.
+    if (cw < 8 || ch < 8) {
+      if (box) { box.remove(); box = null; }
+      return;
+    }
+    box.classList.add('is-picked');
+    // Canvas-space bbox (independent of on-screen scale) so the crop
+    // matches the stored image no matter how the reader sized the modal.
+    const sx = canvas.width  / p.cRect.width;
+    const sy = canvas.height / p.cRect.height;
+    const cBox = { x: cx * sx, y: cy * sy, w: cw * sx, h: ch * sy };
+    const region = captureCanvasRegion(canvas, cBox, info);
+    region._wrap = wrap;
+    region._box = box;
+    const modal = $('#src-viewer');
+    if (modal) modal._pendingRegion = region;
+    pdfShowRegionPill(wrap, box);
+  };
+
+  wrap.addEventListener('pointerup', finish);
+  wrap.addEventListener('pointercancel', () => {
+    if (box) { box.remove(); box = null; }
+    start = null;
+  });
+}
+
+/* Capture the pixel bbox off the canvas as a dataURL thumbnail + the
+   underlying text if we know it. Line rects from drawFixturePageCanvas
+   are consulted first; real-PDF canvases (no line rects) fall back to
+   the full page text. */
+function captureCanvasRegion(canvas, cBox, info) {
+  // Thumbnail: crop the selected bbox into a fresh canvas so it can be
+  // shown in the clipboard drawer and carried inside the provenance.
+  const off = document.createElement('canvas');
+  off.width = Math.max(4, Math.round(cBox.w));
+  off.height = Math.max(4, Math.round(cBox.h));
+  const octx = off.getContext('2d');
+  try {
+    octx.drawImage(canvas, cBox.x, cBox.y, cBox.w, cBox.h, 0, 0, off.width, off.height);
+  } catch (err) {
+    // drawImage can throw on cross-origin canvases; fall back to a
+    // placeholder so provenance still records the bbox + page number.
+    octx.fillStyle = '#eee';
+    octx.fillRect(0, 0, off.width, off.height);
+  }
+  let thumb = '';
+  try { thumb = off.toDataURL('image/png'); } catch {}
+
+  // Convert canvas-pixel bbox back to "logical" page coords that match
+  // _cssWidth/_cssHeight (for fixtures) or the canvas dimensions (for
+  // real PDFs). bboxNorm is 0..1 so a reader can re-anchor regardless
+  // of the render scale.
+  const W = canvas._cssWidth  || canvas.width;
+  const H = canvas._cssHeight || canvas.height;
+  const scaleX = W / canvas.width;
+  const scaleY = H / canvas.height;
+  const logicalBox = {
+    x: cBox.x * scaleX,
+    y: cBox.y * scaleY,
+    w: cBox.w * scaleX,
+    h: cBox.h * scaleY
+  };
+  const bboxNorm = {
+    x: logicalBox.x / W,
+    y: logicalBox.y / H,
+    w: logicalBox.w / W,
+    h: logicalBox.h / H
+  };
+
+  // Recover the lines whose rects overlap the picked bbox. These rects
+  // are in logical (css) pixels because that's how we drew them.
+  const rects = canvas._lineRects || [];
+  const picked = [];
+  for (const r of rects) {
+    const rb = { x: r.x, y: r.y, w: r.w, h: r.h };
+    const overlapX = Math.max(0, Math.min(logicalBox.x + logicalBox.w, rb.x + rb.w) - Math.max(logicalBox.x, rb.x));
+    const overlapY = Math.max(0, Math.min(logicalBox.y + logicalBox.h, rb.y + rb.h) - Math.max(logicalBox.y, rb.y));
+    if (overlapX > 2 && overlapY > 2) picked.push(r.text);
+  }
+  const text = picked.length
+    ? picked.join('\n')
+    : (canvas._pageText ? `[visual region · page ${info.pageNum}]` : `[visual region · page ${info.pageNum}]`);
+
+  return {
+    kind: 'region',
+    pageNum: info.pageNum,
+    srcId: info.src?.id || null,
+    bbox: logicalBox,
+    bboxNorm,
+    pageWidth: W,
+    pageHeight: H,
+    thumb,
+    text
+  };
+}
+
+/* Show the existing clip-select-pill over the picked region so the user
+   can "+ Insert" or "+ Save to clipboard" without needing a dedicated
+   region-only pill. pendingRegion on the modal flags that Insert/Add
+   handlers should prefer the region over any text selection. */
+function pdfShowRegionPill(wrap, box) {
+  const pill = $('#clip-select-pill');
+  if (!pill || !box) return;
+  const rect = box.getBoundingClientRect();
+  pill.hidden = false;
+  // The pill uses translate(-50%, -100%), so "left/top" == the point
+  // the arrow should sit under. Center horizontally on the box and
+  // anchor to its top edge so the arrow points down into the region.
+  pill.style.left = (rect.left + rect.width / 2) + 'px';
+  pill.style.top  = rect.top + 'px';
+  const anchorBtn = $('#clip-select-anchor');
+  if (anchorBtn) anchorBtn.hidden = true;
+}
+
+function pdfClearPendingRegion() {
+  const modal = $('#src-viewer');
+  const r = modal && modal._pendingRegion;
+  if (r && r._box) r._box.remove();
+  if (modal) modal._pendingRegion = null;
+}
+
+/* ======================================================================
+   END fixture PDF / region selection helpers
+====================================================================== */
 
 /* Selection envelope used everywhere downstream:
      { kind:'cell', source:{id,name,kind}, location:{row,col,colIdx},
@@ -17201,6 +17791,7 @@ function hideSourceViewer() {
   // leak memory across repeated opens.
   revokeSrcViewerMedia();
   modal._currentSrc = null;
+  if (typeof pdfClearPendingRegion === 'function') pdfClearPendingRegion();
   modal.hidden = true;
   if (typeof clipHidePill === 'function') clipHidePill();
 }
@@ -19160,11 +19751,24 @@ function clipRenderDrawer() {
   CLIPBOARD.forEach(item => {
     const p = item.provenance || {};
     const chips = [];
+    if (p.region) chips.push('<span class="clip-item-chip" style="background:var(--amber-fill);color:var(--amber-text);border-color:transparent">visual region</span>');
+    if (p.page != null) chips.push(`<span class="clip-item-chip">page ${p.page}</span>`);
     if (p.pageMethod) chips.push(`<span class="clip-item-chip method-${escapeHtml(p.pageMethod)}">${escapeHtml(p.pageMethod)}${p.pageConf != null ? ' · conf ' + p.pageConf : ''}</span>`);
     if (p.destination) chips.push(`<span class="clip-item-chip">${escapeHtml(p.destination)}</span>`);
     if (p.extractionEngine) chips.push(`<span class="clip-item-chip">${escapeHtml(p.extractionEngine)}</span>`);
     if (p.sha256) chips.push(`<span class="clip-item-chip" title="${escapeHtml(p.sha256)}">sha ${escapeHtml(p.sha256.slice(0, 10))}…</span>`);
     chips.push(`<span class="clip-item-chip">${item.length} ch</span>`);
+    // Region picks render the cropped thumbnail above the text so the
+    // reader can see the visual evidence without re-opening the source.
+    let thumbHtml = '';
+    if (p.region && p.region.thumb) {
+      const b = p.region.bbox || {};
+      const regionMeta = `page ${p.page} · ${Math.round(b.w||0)}×${Math.round(b.h||0)} at (${Math.round(b.x||0)}, ${Math.round(b.y||0)})`;
+      thumbHtml = `
+        <img class="clip-item-thumb" src="${p.region.thumb}" alt="region crop">
+        <div class="clip-item-region-text">${escapeHtml(regionMeta)}</div>
+      `;
+    }
     const row = document.createElement('div');
     row.className = 'clip-item';
     row.dataset.id = item.id;
@@ -19173,6 +19777,7 @@ function clipRenderDrawer() {
         <span class="clip-item-src" data-action="view" title="Open source">${clipSrcLabelHTML(p)}</span>
         <span class="clip-item-time" title="${escapeHtml(item.createdAt)}">${clipRelTime(item.createdAt)}</span>
       </div>
+      ${thumbHtml}
       <div class="clip-item-text">${escapeHtml(item.text)}</div>
       <div class="clip-item-meta">${chips.join('')}</div>
       <div class="clip-item-actions">
@@ -19238,13 +19843,58 @@ function clipBuildProvenance(range) {
   }
   return p;
 }
+
+/* Build provenance for a visual PDF region pick. Different in shape from
+   clipBuildProvenance because there's no DOM range — the evidence is a
+   bbox on a specific page plus the cropped thumbnail. We still include
+   the overlapping text (when we know it) so downstream tools that
+   search by text keep working. */
+function clipBuildProvenanceForRegion(region) {
+  const modal = $('#src-viewer');
+  const src = modal && modal._currentSrc;
+  if (!src || !region) return null;
+  const audit = src.extraction || null;
+  const pageAudit = audit?.pages?.find(x => x.n === region.pageNum) || null;
+  return {
+    sourceId: src.id,
+    sourceName: src.name,
+    sourceKind: src.kind || null,
+    mime: src.mime || null,
+    sha256: src.sha256 || audit?.doc_sha256 || null,
+    destination: src.destination || null,
+    archive_url: src.archive_url || null,
+    matrix_mxc: src.matrix_mxc || null,
+    extractionEngine: audit?.engine || null,
+    ocrEngine: audit?.ocr_engine || null,
+    page: region.pageNum,
+    pageMethod: pageAudit?.method || null,
+    pageConf: pageAudit?.ocr_confidence ?? null,
+    pageChars: pageAudit?.chars ?? null,
+    region: {
+      bbox: region.bbox,
+      bboxNorm: region.bboxNorm,
+      pageWidth: region.pageWidth,
+      pageHeight: region.pageHeight,
+      thumb: region.thumb
+    }
+  };
+}
 // Insert the current source-viewer selection into #article-body as a
 // grounded claim span, carrying full provenance. Closes the viewer so
 // the user lands back in their editor at the freshly inserted text.
 async function clipInsertFromSelection() {
   let chain = null;
+  // Visual region picks take priority over any stray text selection
+  // the browser kept from a previous action — the box on screen is the
+  // user's active evidence.
+  const modalReg = $('#src-viewer');
+  const pendingRegion = modalReg && modalReg._pendingRegion;
+  if (pendingRegion) {
+    const prov = clipBuildProvenanceForRegion(pendingRegion);
+    if (prov) chain = provChainFromSource(prov, pendingRegion.text || `[visual region · page ${pendingRegion.pageNum}]`);
+  }
   const sel = window.getSelection?.();
-  if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+  if (!chain && sel && sel.rangeCount > 0 && !sel.isCollapsed) {
     const range = sel.getRangeAt(0);
     const text = sel.toString().trim();
     if (text) {
@@ -19281,6 +19931,7 @@ async function clipInsertFromSelection() {
     } catch {}
   }
   clipHidePill();
+  pdfClearPendingRegion();
   hideSourceViewer();
   try {
     const claimId = await provInsertGroundedFromChain(next);
@@ -19292,6 +19943,39 @@ async function clipInsertFromSelection() {
   }
 }
 function clipAddFromSelection() {
+  // Prefer a visual-region pick if one is active: it's what the user
+  // drew on screen, and unlike a text range it survives the browser
+  // collapsing the selection on button focus.
+  const modalReg = $('#src-viewer');
+  const pendingRegion = modalReg && modalReg._pendingRegion;
+  if (pendingRegion) {
+    const prov = clipBuildProvenanceForRegion(pendingRegion);
+    if (!prov) { clipToast('Open a source to save a region'); return; }
+    const text = pendingRegion.text || `[visual region · page ${pendingRegion.pageNum}]`;
+    const item = {
+      id: 'clip_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36),
+      text,
+      length: text.length,
+      createdAt: new Date().toISOString(),
+      provenance: prov,
+    };
+    CLIPBOARD.unshift(item);
+    if (CLIPBOARD.length > CLIPBOARD_MAX) CLIPBOARD.length = CLIPBOARD_MAX;
+    saveClipboard();
+    clipUpdateFab();
+    const fab = $('#clip-fab');
+    if (fab) {
+      fab.classList.remove('just-added');
+      void fab.offsetWidth;
+      fab.classList.add('just-added');
+    }
+    clipToast('Region saved to clipboard');
+    clipHidePill();
+    pdfClearPendingRegion();
+    const d = $('#clip-drawer');
+    if (d && !d.hidden) clipRenderDrawer();
+    return;
+  }
   const sel = window.getSelection?.();
   if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
     // Parent selection is empty — the user may be selecting inside an HTML
@@ -19332,6 +20016,15 @@ function clipPositionPill() {
   const sel = window.getSelection?.();
   const pill = $('#clip-select-pill');
   if (!pill) return;
+  // A pending visual-region pick is the active evidence — keep the pill
+  // over the box and short-circuit the text-selection branch so an empty
+  // selection doesn't hide it.
+  const modalR = $('#src-viewer');
+  const pendingRegion = modalR && modalR._pendingRegion;
+  if (pendingRegion && pendingRegion._box && pendingRegion._box.isConnected) {
+    pdfShowRegionPill(pendingRegion._wrap, pendingRegion._box);
+    return;
+  }
   if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
     // Defer to the iframe preview if it has an active selection.
     const iframe = activeHtmlIframe();
