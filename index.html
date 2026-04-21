@@ -3608,6 +3608,47 @@
   .method-badge.method-native { background: var(--teal-fill); color: var(--teal-text); }
   .method-badge.method-ocr    { background: var(--amber-fill); color: var(--amber-text); }
   .method-badge.method-failed { background: var(--blue-fill); color: var(--red-mid); }
+  /* Per-page OCR acknowledgement banner shown inside the text column on
+     pages whose text came from OCR rather than the PDF's text layer.
+     The method pill in the page head already labels it, but the banner
+     makes the provenance unmissable when a reader is scanning text. */
+  .pdf-ocr-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 0;
+    padding: 8px 14px;
+    background: var(--amber-fill);
+    color: var(--amber-text);
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    line-height: 1.5;
+  }
+  .pdf-ocr-notice b { font-weight: 700; }
+  .pdf-ocr-notice .pdf-ocr-notice-icon { flex: 0 0 auto; }
+  .pdf-ocr-notice.is-failed {
+    background: var(--blue-fill);
+    color: var(--red-mid);
+  }
+  /* Document-level OCR banner at the top of a PDF whose text was
+     produced (even in part) by OCR. Sits above the per-page summary and
+     flags the provenance caveat once for the whole document. */
+  .pdf-ocr-doc-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--amber-fill);
+    color: var(--amber-text);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    line-height: 1.5;
+    flex-shrink: 0;
+  }
+  .pdf-ocr-doc-banner b { font-weight: 700; }
   .pdf-doc-summary {
     padding: 14px 18px;
     background: var(--color-background-primary);
@@ -6572,6 +6613,28 @@ function renderProvenance(prov, { topLevel = false } = {}) {
 
 function renderQuoteProv(p, topLevel) {
   const loc = p.page ? `${p.src} · p.${p.page}` : p.src;
+  // OCR acknowledgement: when the quote was lifted from a page whose
+  // text was produced by OCR rather than the PDF's text layer, surface
+  // that in the inspector so a reader evaluating the claim sees the
+  // extraction method inline — not buried in the audit JSON.
+  let ocrNotice = '';
+  if (p.pageMethod === 'ocr') {
+    const conf = (p.pageConf != null) ? ` at <b>${escapeHtml(String(p.pageConf))}</b>% confidence` : '';
+    const engine = p.ocrEngine ? ` via <b>${escapeHtml(p.ocrEngine)}</b>` : '';
+    ocrNotice = `
+      <div class="pdf-ocr-notice" style="margin-top:8px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary)">
+        <span class="pdf-ocr-notice-icon" aria-hidden="true">⚠</span>
+        <span><b>OCR-derived quote.</b> The text on page ${escapeHtml(String(p.page ?? '?'))} was read by OCR${engine}${conf}, not from the PDF&apos;s text layer. Verify against the visual before citing.</span>
+      </div>
+    `;
+  } else if (p.pageMethod === 'failed') {
+    ocrNotice = `
+      <div class="pdf-ocr-notice is-failed" style="margin-top:8px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary)">
+        <span class="pdf-ocr-notice-icon" aria-hidden="true">⚠</span>
+        <span><b>Extraction failed</b> on page ${escapeHtml(String(p.page ?? '?'))}. The quoted text may be incomplete; verify against the visual.</span>
+      </div>
+    `;
+  }
   return `
     <div class="prov-section">
       <div class="prov-label">Source quote</div>
@@ -6587,6 +6650,7 @@ function renderQuoteProv(p, topLevel) {
           <span>open in source →</span>
         </div>
       </div>
+      ${ocrNotice}
     </div>
   `;
 }
@@ -16678,6 +16742,10 @@ async function renderPdfSource(src, container) {
 
   container.innerHTML = '';
   if (audit) container.appendChild(buildPdfDocSummary(audit));
+  if (audit) {
+    const banner = buildPdfOcrDocBanner(audit);
+    if (banner) container.appendChild(banner);
+  }
   container.appendChild(buildPdfViewToggle(container));
 
   const cards = [];
@@ -16749,6 +16817,31 @@ function buildPdfDocSummary(audit) {
   return wrap;
 }
 
+/* Document-level OCR banner. Rendered once per PDF (above the page
+   cards) when any page went through OCR, so a reader opening the
+   document sees the provenance caveat before they start reading the
+   text. Returns null when OCR wasn't used anywhere. */
+function buildPdfOcrDocBanner(audit) {
+  if (!audit || !Array.isArray(audit.pages)) return null;
+  const ocrPages = audit.pages.filter(p => p.method === 'ocr');
+  if (!ocrPages.length) return null;
+  const confs = ocrPages.map(p => p.ocr_confidence).filter(c => typeof c === 'number');
+  const avgConf = confs.length
+    ? Math.round((confs.reduce((a, b) => a + b, 0) / confs.length) * 10) / 10
+    : null;
+  const pageNums = ocrPages.map(p => p.n).join(', ');
+  const banner = document.createElement('div');
+  banner.className = 'pdf-ocr-doc-banner';
+  banner.innerHTML = `
+    <span aria-hidden="true">⚠</span>
+    <span><b>OCR was used on this document.</b> ${ocrPages.length} of ${audit.page_count} page${audit.page_count === 1 ? '' : 's'}
+      (${escapeHtml(pageNums)}) had no usable text layer and were read by
+      <b>${escapeHtml(audit.ocr_engine || 'an OCR engine')}</b>${avgConf != null ? ` at an average confidence of <b>${avgConf}</b>%` : ''}.
+      OCR pages are labelled on the page head and inside the text column; citations lifted from those pages carry the OCR method in their provenance chain.</span>
+  `;
+  return banner;
+}
+
 function buildPdfPageCard(pageNum, pageText, pageAudit) {
   const card = document.createElement('div');
   card.className = 'pdf-page-card';
@@ -16763,7 +16856,13 @@ function buildPdfPageCard(pageNum, pageText, pageAudit) {
   const head = document.createElement('div');
   head.className = 'pdf-page-head';
   const method = pageAudit?.method || 'native';
-  const badge = `<span class="method-badge method-${method}">${method}${
+  const badge = `<span class="method-badge method-${method}" title="${
+    method === 'ocr'
+      ? 'Text on this page was produced by OCR, not read from the PDF&apos;s text layer.'
+      : method === 'failed'
+        ? 'Text extraction failed for this page.'
+        : 'Text on this page was read directly from the PDF&apos;s text layer.'
+  }">${method}${
     method === 'ocr' && pageAudit?.ocr_confidence != null ? ` · conf ${pageAudit.ocr_confidence}` : ''
   }${
     method === 'failed' && pageAudit?.error ? ` · ${escapeHtml(pageAudit.error.slice(0, 32))}` : ''
@@ -16783,6 +16882,36 @@ function buildPdfPageCard(pageNum, pageText, pageAudit) {
     textEl.textContent = '(no text extracted from this page)';
   }
   textWrap.appendChild(head);
+  // OCR acknowledgement: when the text below was produced by OCR (or
+  // extraction failed), say so explicitly in the text column so a
+  // reader can't mistake it for the PDF's original text layer. The
+  // method pill in the head already labels it, but readers scan text
+  // not badges — this makes the caveat unmissable.
+  if (method === 'ocr') {
+    const notice = document.createElement('div');
+    notice.className = 'pdf-ocr-notice';
+    const conf = pageAudit?.ocr_confidence;
+    const lang = pageAudit?.ocr_lang;
+    notice.innerHTML = `
+      <span class="pdf-ocr-notice-icon" aria-hidden="true">⚠</span>
+      <span><b>OCR-extracted text.</b> This page had no usable text layer, so the text below was produced by optical character recognition${
+        lang ? ` (${escapeHtml(lang)})` : ''
+      }${
+        conf != null ? ` at <b>${conf}</b>% confidence` : ''
+      }. Treat it as a machine reading of the image, not the author&apos;s original text.</span>
+    `;
+    textWrap.appendChild(notice);
+  } else if (method === 'failed') {
+    const notice = document.createElement('div');
+    notice.className = 'pdf-ocr-notice is-failed';
+    notice.innerHTML = `
+      <span class="pdf-ocr-notice-icon" aria-hidden="true">⚠</span>
+      <span><b>Extraction failed.</b> Neither the text layer nor OCR produced readable text for this page${
+        pageAudit?.error ? ` (${escapeHtml(pageAudit.error.slice(0, 80))})` : ''
+      }. The visual is the only evidence available.</span>
+    `;
+    textWrap.appendChild(notice);
+  }
   textWrap.appendChild(textEl);
 
   card.appendChild(canvasWrap);
@@ -16915,6 +17044,8 @@ function renderFixturePdfSource(src, text, container) {
   src.extraction = audit;
 
   container.appendChild(buildPdfDocSummary(audit));
+  const fixtureBanner = buildPdfOcrDocBanner(audit);
+  if (fixtureBanner) container.appendChild(fixtureBanner);
   container.appendChild(buildPdfViewToggle(container));
 
   pageTexts.forEach((pageText, i) => {
@@ -16941,29 +17072,44 @@ function renderFixturePdfSource(src, text, container) {
   });
 }
 
-// A tiny reusable "view mode" switcher: Visual / Split / Text. Toggles
-// classes on the wrap so our CSS can collapse either column without
-// re-rendering the page cards.
+// Two independent on/off switches — "Visual" and "Text" — that toggle
+// which columns of the page card are shown. Both on = split (default);
+// either one on alone expands to fill. At least one must stay on so the
+// viewer never collapses to empty.
 function buildPdfViewToggle(wrap) {
   const bar = document.createElement('div');
   bar.className = 'pdf-view-toggle';
+  bar.setAttribute('role', 'group');
+  bar.setAttribute('aria-label', 'PDF view columns');
   bar.innerHTML = `
-    <button class="pdf-view-toggle-btn" data-mode="visual" type="button">Visual</button>
-    <button class="pdf-view-toggle-btn is-active" data-mode="split" type="button">Split</button>
-    <button class="pdf-view-toggle-btn" data-mode="text" type="button">Text</button>
+    <button class="pdf-view-toggle-btn is-active" data-pane="visual" type="button" aria-pressed="true" title="Show the rendered page canvas">Visual</button>
+    <button class="pdf-view-toggle-btn is-active" data-pane="text" type="button" aria-pressed="true" title="Show the extracted / OCR text">Text</button>
   `;
-  const apply = (mode) => {
+  const state = { visual: true, text: true };
+  const apply = () => {
     wrap.classList.remove('view-visual', 'view-split', 'view-text');
-    wrap.classList.add('view-' + mode);
+    if (state.visual && !state.text)      wrap.classList.add('view-visual');
+    else if (state.text && !state.visual) wrap.classList.add('view-text');
+    // both on = split (no class needed — CSS grid default is two columns)
     bar.querySelectorAll('.pdf-view-toggle-btn').forEach(b => {
-      b.classList.toggle('is-active', b.dataset.mode === mode);
+      const on = !!state[b.dataset.pane];
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
   };
-  apply('split');
+  apply();
   bar.addEventListener('click', (e) => {
     const btn = e.target.closest('.pdf-view-toggle-btn');
     if (!btn) return;
-    apply(btn.dataset.mode);
+    const pane = btn.dataset.pane;
+    const other = pane === 'visual' ? 'text' : 'visual';
+    // Guard: don't let the user turn both off. If they try, flip the
+    // other one on so at least one column stays visible.
+    if (state[pane] && !state[other]) {
+      state[other] = true;
+    }
+    state[pane] = !state[pane];
+    apply();
   });
   return bar;
 }
@@ -19350,6 +19496,7 @@ function provToProvContent(chain) {
     pageMethod: origin.pageMethod || null,
     pageConf: origin.pageConf ?? null,
     extractionEngine: origin.extractionEngine || null,
+    ocrEngine: origin.ocrEngine || null,
     destination: origin.destination || null,
     archive_url: origin.archive_url || null,
     matrix_mxc: origin.matrix_mxc || null,
