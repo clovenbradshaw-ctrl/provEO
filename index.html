@@ -12868,6 +12868,17 @@ async function analyseSource(sourceId, { file, onStage } = {}) {
       stages.extract = 'skipped';
       emit({ stage: 'extract', status: 'skipped', msg: err.message || 'extraction failed' });
     }
+
+    // --- Stage: resolve (6.6) ---
+    emit({ stage: 'resolve', status: 'start' });
+    try {
+      const { merged, rewired } = await resolveEntitiesForSource(sourceId);
+      stages.resolve = 'ran';
+      emit({ stage: 'resolve', status: 'ran', msg: `${merged} nodes, ${rewired} edges rewired` });
+    } catch (err) {
+      stages.resolve = 'skipped';
+      emit({ stage: 'resolve', status: 'skipped', msg: err.message || 'resolution failed' });
+    }
   } else {
     stages.extract = 'skipped';
   }
@@ -13894,6 +13905,290 @@ registerExtractor({
     return cached;
   }
 });
+
+/* ======================================================================
+   ENTITY RESOLUTION (Prompt 6.6)
+   ----------------------------------------------------------------------
+   After all extractors run, the graph is a bag of raw surface forms
+   ('Metro Council', 'the Council', 'MC'). Entity resolution collapses
+   equivalents into canonical GRAPH_NODES entries. Two merge rules:
+     1. Normalised forms match (lowercase, stripped of titles / articles
+        / punctuation, with seed aliases applied).
+     2. Name embeddings cosine >= 0.85 in MiniLM space.
+   Edge subject/object references get rewritten to canonical ids in
+   the same pass so downstream readers see a clean graph.
+====================================================================== */
+
+/* Seed alias table for Nashville-flavoured shorthand. Keys are
+   normalised (lowercased); values are the canonical display form.
+   Expand via a REC event when a new alias gets confirmed. */
+const ENTITY_ALIASES = {
+  'mnpd': 'Metropolitan Nashville Police Department',
+  'nfd': 'Nashville Fire Department',
+  'dcso': "Davidson County Sheriff's Office",
+  'ndp': 'Nashville Downtown Partnership',
+  'mta': 'Metropolitan Transit Authority',
+  'mdha': 'Metropolitan Development and Housing Agency',
+  'metro': 'Metropolitan Government of Nashville and Davidson County',
+  'metro gov': 'Metropolitan Government of Nashville and Davidson County',
+  'metro government': 'Metropolitan Government of Nashville and Davidson County',
+  'the council': 'Metro Council',
+  'mc': 'Metro Council',
+  'council': 'Metro Council',
+  'the mayor': 'Mayor',
+  'the partnership': 'Nashville Downtown Partnership',
+  'tdot': 'Tennessee Department of Transportation',
+  'tdec': 'Tennessee Department of Environment and Conservation',
+  'dot': 'Department of Transportation',
+  'dor': 'Department of Revenue',
+  'doj': 'Department of Justice'
+};
+
+const ENTITY_TITLES = /^(?:Mr|Mrs|Ms|Dr|Hon|Rev|Sen|Rep|Gov|Lt|Col|Gen|Capt|Mayor|Councilmember|Council\s?member|Chief|Director|Commissioner|Secretary|Administrator|Attorney|Judge)\.?\s+/i;
+const LEADING_ARTICLE = /^(?:the|a|an)\s+/i;
+
+/* Stable slug for a display name. Used as the canonical node id. */
+function entitySlug(name) {
+  return String(name || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '') || 'unknown';
+}
+
+/* Normalise a surface form for equivalence-class grouping. Titles
+   and leading articles are stripped; whitespace collapsed;
+   punctuation removed; aliases applied last so 'MNPD' and
+   'Metropolitan Nashville Police Department' land on the same key. */
+function normaliseEntityName(raw) {
+  if (!raw) return '';
+  let s = String(raw).trim();
+  // Strip title prefixes iteratively (handles "Hon. Mayor Smith").
+  for (let i = 0; i < 3; i++) {
+    const next = s.replace(ENTITY_TITLES, '');
+    if (next === s) break;
+    s = next;
+  }
+  s = s.replace(LEADING_ARTICLE, '');
+  s = s.toLowerCase();
+  s = s.replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+  if (ENTITY_ALIASES[s]) s = ENTITY_ALIASES[s].toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+  return s;
+}
+
+/* Type conflict resolution. More specific wins. */
+const ENTITY_TYPE_RANK = {
+  vendor: 5, person: 5, motion: 5, bill: 5,
+  program: 4, org: 4,
+  geo: 3,
+  amount: 2, date: 2, citation: 2, role: 2,
+  entity: 1, concept: 1, segment: 1, source: 1, row: 1, page: 1,
+  identifier: 0, dimension: 0, boolean: 0, action: 0, authority: 0, url: 0, email: 0, phone: 0, vote: 0
+};
+function moreSpecificType(a, b) {
+  const ra = ENTITY_TYPE_RANK[a] ?? 0;
+  const rb = ENTITY_TYPE_RANK[b] ?? 0;
+  return ra >= rb ? a : b;
+}
+
+/* Pool of surface forms extracted from the graph. One entry per
+   (sourceId, nodeRef) keyed by normalised form. Each entry carries
+   the surface-form set, type votes, and the supporting segments
+   (for transformationLabels aggregation). */
+function collectSurfaceFormsForSource(sourceId) {
+  const pool = new Map(); // normalised -> { surfaceForms: Set, types: Map<type,count>, segments: Set, longest: string }
+  for (const edge of GRAPH_EDGES.values()) {
+    if (edge.sourceId !== sourceId) continue;
+    for (const ref of [edge.subject, edge.object]) {
+      if (!ref || !ref.name) continue;
+      if (ref.type === 'source' || ref.type === 'segment' || ref.type === 'page' || ref.type === 'row') {
+        // Structural references — skip the entity-resolution pass;
+        // their ids are already canonical.
+        continue;
+      }
+      const norm = normaliseEntityName(ref.name);
+      if (!norm) continue;
+      let bucket = pool.get(norm);
+      if (!bucket) {
+        bucket = { surfaceForms: new Set(), types: new Map(), segments: new Set(), longest: ref.name };
+        pool.set(norm, bucket);
+      }
+      bucket.surfaceForms.add(ref.name);
+      if (ref.name.length > bucket.longest.length) bucket.longest = ref.name;
+      const typ = ref.type || 'entity';
+      bucket.types.set(typ, (bucket.types.get(typ) || 0) + 1);
+      if (edge.evidenceSegmentId) bucket.segments.add(edge.evidenceSegmentId);
+    }
+  }
+  return pool;
+}
+
+/* Merge normalised buckets by MiniLM cosine on their canonical
+   display names. Runs in O(n^2) — fine for a few hundred entities
+   per source. Skips the embedding pass when the embedder isn't
+   available, keeping normalisation as the sole merge rule. */
+async function mergeByEmbedding(buckets, { threshold = 0.85 } = {}) {
+  if (!buckets.length || buckets.length === 1) return buckets;
+  let embeddable = false;
+  try { await loadEmbedder(); embeddable = true; }
+  catch (err) { return buckets; }
+  const withVecs = [];
+  for (const b of buckets) {
+    try { withVecs.push({ bucket: b, vec: await embed(b.longest) }); }
+    catch { withVecs.push({ bucket: b, vec: null }); }
+  }
+  const parent = withVecs.map((_, i) => i);
+  const find = (i) => parent[i] === i ? i : (parent[i] = find(parent[i]));
+  for (let i = 0; i < withVecs.length; i++) {
+    for (let j = i + 1; j < withVecs.length; j++) {
+      if (!withVecs[i].vec || !withVecs[j].vec) continue;
+      if (cosine(withVecs[i].vec, withVecs[j].vec) >= threshold) {
+        const ri = find(i), rj = find(j);
+        if (ri !== rj) parent[ri] = rj;
+      }
+    }
+  }
+  const groups = new Map();
+  for (let i = 0; i < withVecs.length; i++) {
+    const root = find(i);
+    if (!groups.has(root)) groups.set(root, []);
+    groups.get(root).push(withVecs[i].bucket);
+  }
+  // Merge each group into one bucket.
+  const merged = [];
+  for (const group of groups.values()) {
+    if (group.length === 1) { merged.push(group[0]); continue; }
+    const primary = group.reduce((best, b) => b.longest.length > best.longest.length ? b : best, group[0]);
+    for (const b of group) {
+      if (b === primary) continue;
+      for (const sf of b.surfaceForms) primary.surfaceForms.add(sf);
+      for (const seg of b.segments) primary.segments.add(seg);
+      for (const [t, c] of b.types) primary.types.set(t, (primary.types.get(t) || 0) + c);
+    }
+    merged.push(primary);
+  }
+  return merged;
+}
+
+/* Aggregate per-face label distribution from supporting segments.
+   Returns { act: {cell:share}, site: {}, resolution: {} }. */
+function aggregateFaceDistribution(sourceId, segmentIds) {
+  const dist = { act: {}, site: {}, resolution: {} };
+  const totals = { act: 0, site: 0, resolution: 0 };
+  const labelsFor = SEG_LABELS[sourceId] || {};
+  for (const segId of segmentIds) {
+    const L = labelsFor[segId];
+    if (!L) continue;
+    for (const face of FACE_KEYS) {
+      const cell = L[face];
+      if (!cell) continue;
+      dist[face][cell] = (dist[face][cell] || 0) + 1;
+      totals[face]++;
+    }
+  }
+  const out = { act: {}, site: {}, resolution: {} };
+  for (const face of FACE_KEYS) {
+    const t = totals[face] || 1;
+    for (const [cell, n] of Object.entries(dist[face])) out[face][cell] = n / t;
+  }
+  return out;
+}
+
+/* Main entry. Builds canonical GRAPH_NODES entries for `sourceId`
+   and rewrites edge subject/object refs to point at canonical ids.
+   Safe to call repeatedly. */
+async function resolveEntitiesForSource(sourceId) {
+  const pool = collectSurfaceFormsForSource(sourceId);
+  if (!pool.size) return { merged: 0, rewired: 0 };
+  let buckets = [...pool.values()];
+  buckets = await mergeByEmbedding(buckets);
+
+  // Canonicalise each bucket.
+  const nameToCanonicalId = new Map();
+  const canonicalIds = [];
+  for (const bucket of buckets) {
+    // Start with the first type actually seen, not a hard-coded
+    // default, so a single-type bucket preserves its input type
+    // (e.g. 'concept') rather than falling through to 'entity'.
+    let chosenType = null;
+    for (const [t, _c] of bucket.types) {
+      chosenType = chosenType == null ? t : moreSpecificType(chosenType, t);
+    }
+    if (chosenType == null) chosenType = 'entity';
+    if (bucket.types.size > 1) {
+      console.debug('[resolve] type conflict for ' + bucket.longest + ':', [...bucket.types.entries()]);
+    }
+    const id = entitySlug(bucket.longest);
+    canonicalIds.push(id);
+    // Rolling merge: if a GRAPH_NODES entry already exists for this id,
+    // union the surface forms / segments / types.
+    const existing = GRAPH_NODES.get(id);
+    if (existing) {
+      for (const sf of bucket.surfaceForms) existing.surfaceForms.push(sf);
+      existing.surfaceForms = Array.from(new Set(existing.surfaceForms));
+      const existingSegs = new Set(existing.supportingSegments);
+      for (const s of bucket.segments) existingSegs.add(s);
+      existing.supportingSegments = Array.from(existingSegs);
+      existing.type = moreSpecificType(existing.type, chosenType);
+      existing.transformationLabels = aggregateFaceDistribution(sourceId, existing.supportingSegments);
+    } else {
+      GRAPH_NODES.set(id, {
+        id,
+        type: chosenType,
+        displayName: bucket.longest,
+        surfaceForms: Array.from(bucket.surfaceForms),
+        supportingSegments: Array.from(bucket.segments),
+        transformationLabels: aggregateFaceDistribution(sourceId, [...bucket.segments])
+      });
+    }
+    // Remember how each surface form maps to this canonical id.
+    for (const sf of bucket.surfaceForms) nameToCanonicalId.set(sf, id);
+    nameToCanonicalId.set(bucket.longest, id);
+  }
+
+  // Rewrite edges to point at canonical ids. Also dedup: rewriting
+  // can make two previously-distinct edges collide; if the new edge
+  // id already exists, merge extractors[] and discard the dup.
+  let rewired = 0;
+  const rewriteRef = (ref) => {
+    if (!ref || !ref.name) return ref;
+    const cid = nameToCanonicalId.get(ref.name);
+    if (!cid) return ref;
+    const node = GRAPH_NODES.get(cid);
+    return {
+      id: cid,
+      name: node ? node.displayName : ref.name,
+      type: node ? node.type : ref.type
+    };
+  };
+  const toDelete = [];
+  const toReinsert = [];
+  for (const [edgeId, edge] of GRAPH_EDGES) {
+    if (edge.sourceId !== sourceId) continue;
+    const newSubject = rewriteRef(edge.subject);
+    const newObject = rewriteRef(edge.object);
+    if (newSubject === edge.subject && newObject === edge.object) continue;
+    const newEdgeId = edgeIdFor(newSubject, edge.predicate, newObject);
+    if (newEdgeId === edgeId) {
+      edge.subject = newSubject;
+      edge.object = newObject;
+    } else {
+      toDelete.push(edgeId);
+      toReinsert.push({ ...edge, subject: newSubject, object: newObject, id: newEdgeId });
+      rewired++;
+    }
+  }
+  for (const id of toDelete) GRAPH_EDGES.delete(id);
+  for (const edge of toReinsert) {
+    const existing = GRAPH_EDGES.get(edge.id);
+    if (existing) {
+      for (const t of edge.extractors) if (!existing.extractors.includes(t)) existing.extractors.push(t);
+      if (CONF_RANK[edge.confidence] > CONF_RANK[existing.confidence]) existing.confidence = edge.confidence;
+    } else {
+      GRAPH_EDGES.set(edge.id, edge);
+    }
+  }
+  return { merged: canonicalIds.length, rewired };
+}
 
 /* Kicks off a fold; resolves with the three EO views plus the
    render-ready claim projection. G = observations (Given-Log),
