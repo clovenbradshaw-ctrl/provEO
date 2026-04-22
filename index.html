@@ -12993,6 +12993,15 @@ async function runExtractors(sourceId, { onProgress } = {}) {
   let runs = 0;
   const total = EXTRACTORS.length * segs.length;
   for (const ext of EXTRACTORS) {
+    // Optional prepare hook — lets an extractor do one-shot setup
+    // over the full segment list (e.g. LLM batching) before the
+    // per-segment loop reads cached results. Failures here don't
+    // stop the rest of the pipeline; per-segment run returns empty
+    // triples when prepare was skipped.
+    if (typeof ext.prepare === 'function') {
+      try { await ext.prepare(segs, context); }
+      catch (err) { console.warn('[extract] prepare ' + ext.tag + ' failed', err); }
+    }
     for (const segment of segs) {
       if (segment.kind === 'source') { runs++; continue; }
       let result;
@@ -13696,6 +13705,193 @@ registerExtractor({
     // POS fallback never claims 'full' — by construction the LLM
     // residue pass still wants to look at this segment.
     return { triples, coverage: triples.length ? 'partial' : 'none' };
+  }
+});
+
+/* ======================================================================
+   EXTRACTOR: LLM RESIDUAL PASS (tag 'llm:extract_triples')
+   ----------------------------------------------------------------------
+   Runs Claude over the narrative residue left by the mechanical
+   extractors — segments where coverage !== 'full'. The tool
+   definition constrains emission to (subject, predicate, object,
+   evidenceSpan) tuples from the closed enums in the schema; every
+   evidenceSpan must be a literal substring of the target segment's
+   text or the triple is rejected at validation and logged.
+
+   Batching is handled by the prepare hook (one API call per 16
+   segments); per-segment run reads the cached result. When no API
+   key is configured the extractor no-ops cleanly and subsequent
+   stages keep working.
+====================================================================== */
+
+/* Enum sets mirroring the tool schema — kept in JS so we can
+   validate model output without an external JSON schema validator. */
+const LLM_ENTITY_TYPES = new Set(['person','org','vendor','program','motion','bill','amount','date','geo','concept']);
+const LLM_PREDICATES = new Set(['funds','authorizes','allocates_to','contracts_with','employs','supersedes','references','reports_to','votes_on','mentions','located_in','part_of','happens_on','has_amount']);
+const LLM_CONFIDENCE = new Set(['high','medium','low']);
+
+const EXTRACT_TRIPLES_TOOL = {
+  name: 'extract_triples',
+  description: 'Emit subject-predicate-object triples grounded in the given segment. Each triple MUST cite a verbatim span from the segment text that supports it.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      segment_id: { type: 'string', description: 'The id of the segment these triples describe' },
+      triples: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['subject', 'predicate', 'object', 'evidenceSpan'],
+          properties: {
+            subject: {
+              type: 'object',
+              required: ['name', 'type'],
+              properties: {
+                name: { type: 'string' },
+                type: { type: 'string', enum: [...LLM_ENTITY_TYPES] }
+              }
+            },
+            predicate: { type: 'string', enum: [...LLM_PREDICATES] },
+            object: {
+              type: 'object',
+              required: ['name', 'type'],
+              properties: {
+                name: { type: 'string' },
+                type: { type: 'string', enum: [...LLM_ENTITY_TYPES] }
+              }
+            },
+            evidenceSpan: { type: 'string', description: 'Verbatim substring of the segment text that supports this triple' },
+            confidence: { type: 'string', enum: [...LLM_CONFIDENCE] }
+          }
+        }
+      }
+    },
+    required: ['segment_id', 'triples']
+  }
+};
+
+const LLM_EXTRACT_BATCH_SIZE = 16;
+const LLM_EXTRACT_MAX_TOKENS = 4096;
+
+const _llmExtractCache = new WeakMap();
+
+function llmExtractTargets(segments) {
+  return segments.filter(s => {
+    if (s.kind !== 'sentence' && s.kind !== 'paragraph') return false;
+    if (s.coverage === 'full') return false;
+    if (!s.text) return false;
+    const tokenCount = (s.text.match(/\S+/g) || []).length;
+    return tokenCount >= 6;
+  });
+}
+
+/* Rough cost estimate for the extraction pass. Prompt 6.8 surfaces
+   this in the import toast as a confirm-or-skip affordance. */
+function estimateLLMExtractTokens(segments) {
+  const targets = llmExtractTargets(segments);
+  let chars = 0;
+  for (const s of targets) chars += s.text.length;
+  const inputTokens = Math.ceil(chars / 4) + targets.length * 80;
+  const outputTokens = targets.length * 90;
+  return { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens, segmentCount: targets.length };
+}
+
+async function callExtractTriplesBatch(segments, apiKey) {
+  if (!apiKey) throw new Error('no API key');
+  const userPrompt = [
+    'Extract subject-predicate-object triples for each of the following segments.',
+    'Emit one extract_triples call PER segment (repeat the tool if needed). If a segment has no extractable propositions, emit an empty triples array for that segment_id.',
+    'CRITICAL: every evidenceSpan MUST be a verbatim substring of that segment\'s text. Do NOT paraphrase.',
+    '',
+    ...segments.map(s => 'segment_id: ' + s.id + '\n"""\n' + s.text + '\n"""')
+  ].join('\n');
+
+  const body = {
+    model: CLAUDE_API_MODEL,
+    max_tokens: LLM_EXTRACT_MAX_TOKENS,
+    system: 'You extract typed relationship triples from text segments. You only communicate via the extract_triples tool — do not produce free-form text output.',
+    messages: [{ role: 'user', content: userPrompt }],
+    tools: [EXTRACT_TRIPLES_TOOL],
+    tool_choice: { type: 'any' }
+  };
+
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+  if (!resp.ok) {
+    const raw = await resp.text().catch(() => '');
+    throw new Error('http ' + resp.status + (raw ? ' — ' + raw.slice(0, 240) : ''));
+  }
+  const data = await resp.json();
+  const blocks = Array.isArray(data.content) ? data.content : [];
+  const results = new Map();
+  const segmentsById = new Map(segments.map(s => [s.id, s]));
+  for (const b of blocks) {
+    if (!b || b.type !== 'tool_use' || b.name !== 'extract_triples') continue;
+    const input = b.input || {};
+    const segId = input.segment_id;
+    const seg = segmentsById.get(segId);
+    if (!seg) { console.warn('[llm-extract] unknown segment_id', segId); continue; }
+    const rawTriples = Array.isArray(input.triples) ? input.triples : [];
+    const validated = [];
+    for (const t of rawTriples) {
+      if (!t || !t.subject || !t.object || !t.predicate) continue;
+      if (!LLM_PREDICATES.has(t.predicate)) continue;
+      if (!LLM_ENTITY_TYPES.has(t.subject.type) || !LLM_ENTITY_TYPES.has(t.object.type)) continue;
+      if (!t.subject.name || !t.object.name) continue;
+      if (!t.evidenceSpan || !seg.text.includes(t.evidenceSpan)) {
+        console.warn('[llm-extract] evidenceSpan not found in segment', segId, t.evidenceSpan);
+        continue;
+      }
+      validated.push({
+        subject: { name: t.subject.name, type: t.subject.type },
+        predicate: t.predicate,
+        object: { name: t.object.name, type: t.object.type },
+        evidenceSpan: t.evidenceSpan,
+        confidence: LLM_CONFIDENCE.has(t.confidence) ? t.confidence : 'medium',
+        _tag: 'llm:extract_triples'
+      });
+    }
+    results.set(segId, {
+      triples: validated,
+      coverage: validated.length ? 'partial' : 'none'
+    });
+  }
+  return results;
+}
+
+registerExtractor({
+  name: 'llm-extract-triples',
+  tag: 'llm:extract_triples',
+  prepare: async (segments, ctx) => {
+    const apiKey = (typeof CLAUDE_API_KEY === 'string' && CLAUDE_API_KEY) ? CLAUDE_API_KEY : '';
+    if (!apiKey) return;
+    const targets = llmExtractTargets(segments);
+    if (!targets.length) return;
+    for (let i = 0; i < targets.length; i += LLM_EXTRACT_BATCH_SIZE) {
+      const batch = targets.slice(i, i + LLM_EXTRACT_BATCH_SIZE);
+      try {
+        const batchResults = await callExtractTriplesBatch(batch, apiKey);
+        for (const [segId, data] of batchResults) {
+          const seg = batch.find(s => s.id === segId);
+          if (seg) _llmExtractCache.set(seg, data);
+        }
+      } catch (err) {
+        console.warn('[llm-extract] batch failed (segments ' + i + '..' + (i + batch.length) + ')', err);
+      }
+    }
+  },
+  run: (segment, ctx) => {
+    const cached = _llmExtractCache.get(segment);
+    if (!cached) return { triples: [], coverage: 'none' };
+    return cached;
   }
 });
 
