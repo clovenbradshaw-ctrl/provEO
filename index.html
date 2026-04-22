@@ -12065,6 +12065,9 @@ function segmentSource(id, { text: textIn, kind: kindIn } = {}) {
       worker.removeEventListener('message', onMsg);
       if (d.type === 'error') { reject(new Error(d.error || 'segment worker error')); return; }
       const segments = Array.isArray(d.segments) ? d.segments : [];
+      // Every segment starts with coverage='none' — extractors (Prompt
+      // 6) promote it to 'partial' or 'full' as they emit triples.
+      for (const s of segments) s.coverage = 'none';
       SOURCE_SEGMENTS[id] = segments;
       resolve(segments);
     };
@@ -12659,7 +12662,8 @@ async function loadCachedSegments(sourceId, fp) {
     id: applySourcePrefix(sourceId, s.idSuffix),
     parentId: s.parentSuffix ? applySourcePrefix(sourceId, s.parentSuffix) : null,
     idSuffix: undefined,
-    parentSuffix: undefined
+    parentSuffix: undefined,
+    coverage: s.coverage || 'none'
   })).map(s => { const o = { ...s }; delete o.idSuffix; delete o.parentSuffix; return o; });
   SOURCE_SEGMENTS[sourceId] = segs;
   return segs;
@@ -12673,7 +12677,8 @@ async function persistSegments(sourceId, fp) {
     kind: s.kind,
     text: s.text,
     loc: s.loc,
-    tokens: s.tokens
+    tokens: s.tokens,
+    coverage: s.coverage || 'none'
   }));
   await idbPut('segments:' + fp, { version: 1, segments: packed });
 }
@@ -12841,6 +12846,31 @@ async function analyseSource(sourceId, { file, onStage } = {}) {
       emit({ stage: 'classify', status: 'skipped', msg: err.message || 'classification failed' });
     }
   }
+
+  // --- Stage: extract ---
+  // No-op when no extractors are registered (Prompt 6.1 ships the
+  // scaffold; 6.2+ populates the registry). When registered, each
+  // extractor runs over every non-source segment; triples land in
+  // GRAPH_EDGES and segment.coverage is promoted based on the
+  // strongest hint seen. Cache persistence lands in 6.8; for now we
+  // rely on re-running extraction on reload (or Re-process).
+  if (EXTRACTORS.length) {
+    emit({ stage: 'extract', status: 'start' });
+    try {
+      const { tripleCount } = await runExtractors(sourceId, {
+        onProgress: (p) => emit({ stage: 'extract', status: 'progress', done: p.done, total: p.total, msg: p.stage })
+      });
+      stages.extract = 'ran';
+      emit({ stage: 'extract', status: 'ran', msg: `${tripleCount} triples` });
+      // Re-persist segments so the promoted coverage field is cached.
+      await persistSegments(sourceId, fp);
+    } catch (err) {
+      stages.extract = 'skipped';
+      emit({ stage: 'extract', status: 'skipped', msg: err.message || 'extraction failed' });
+    }
+  } else {
+    stages.extract = 'skipped';
+  }
   return { fp, stages };
 }
 
@@ -12859,8 +12889,156 @@ async function reprocessSource(sourceId, { onStage } = {}) {
   for (const s of segs) delete SEG_EMBEDDINGS[s.id];
   delete SOURCE_SEGMENTS[sourceId];
   delete SEG_LABELS[sourceId];
+  // Drop triples and nodes emitted from this source so re-extraction
+  // starts from a clean slate.
+  if (GRAPH_EDGES && GRAPH_EDGES.size) {
+    for (const [k, e] of GRAPH_EDGES) if (e.sourceId === sourceId) GRAPH_EDGES.delete(k);
+  }
   return analyseSource(sourceId, { onStage });
 }
+
+/* ======================================================================
+   EXTRACTOR REGISTRY + GRAPH SCAFFOLD (Prompt 6.1)
+   ----------------------------------------------------------------------
+   Every segment carries a coverage field ('none' | 'partial' | 'full').
+   Extractors register themselves into EXTRACTORS and run in registry
+   order against each non-source segment; each call returns some
+   number of triples plus a coverage hint. The orchestrator takes the
+   strongest hint (full > partial > none) across all extractors that
+   touched a segment and writes that back onto the segment record.
+   The LLM residual pass (6.5) gates on coverage !== 'full' — so
+   adding a high-yield cheap extractor upstream directly reduces LLM
+   call volume.
+
+   GRAPH_EDGES is a Map<edgeId, triple> — flat in 6.1, reshaped into
+   node+edge indices in 6.8. edgeId is derived from the triple's
+   (subject, predicate, object) so re-running extraction is
+   idempotent: emitting the same triple twice lands under the same
+   key and the extractors[] lineage array grows rather than
+   duplicating the edge.
+====================================================================== */
+
+/* Map<nodeId, { id, type, displayName, surfaceForms[],
+   supportingSegments[], transformationLabels }>. Reshaped in 6.8 —
+   for 6.1 we keep the Map created but unused. */
+const GRAPH_NODES = new Map();
+
+/* Map<edgeId, { id, type, source, target, predicate,
+   evidenceSegmentId, evidenceSpan, sourceId, confidence, faceLabels,
+   extractors[] }>. edgeId = stable hash of (subject, predicate,
+   object, evidenceSegmentId). */
+const GRAPH_EDGES = new Map();
+
+/* Extractor registry. Each entry:
+     { name, tag, run: (segment, context) => { triples, coverage } }
+   where coverage is 'full' | 'partial' | 'none' and triples is an
+   array of shape
+     { subject: {name,type,id?}, predicate, object: {name,type,id?},
+       evidenceSegmentId?, evidenceSpan?, confidence,
+       attrs?: object } */
+const EXTRACTORS = [];
+
+function registerExtractor(ext) {
+  if (!ext || !ext.tag || typeof ext.run !== 'function') return;
+  EXTRACTORS.push(ext);
+}
+
+/* Stable edge id derived from content. Using a tiny fnv-1a over the
+   tuple keeps it short and deterministic — good enough for our
+   single-user corpus scale; collisions on this volume are rare and
+   the worst case is an over-merge that the Re-process button can
+   recover from. */
+function hashStr(s) {
+  let h = 0x811c9dc5 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, '0');
+}
+
+function edgeIdFor(subject, predicate, object, evidenceSegmentId) {
+  const sid = (subject && (subject.id || subject.name)) || '';
+  const oid = (object && (object.id || object.name)) || '';
+  return 'e_' + hashStr((sid || '') + '|' + (predicate || '') + '|' + (oid || '') + '|' + (evidenceSegmentId || ''));
+}
+
+/* Promote a coverage hint. 'full' wins, then 'partial', then 'none'. */
+const COVERAGE_RANK = { none: 0, partial: 1, full: 2 };
+function promoteCoverage(prev, next) {
+  const p = COVERAGE_RANK[prev] ?? 0;
+  const n = COVERAGE_RANK[next] ?? 0;
+  return n > p ? next : prev;
+}
+
+/* Walk the extractors for a single source. Runs every extractor
+   against every non-source segment, collects triples into
+   GRAPH_EDGES (dedup on edgeId, merging extractors[] lineage), and
+   promotes segment.coverage based on the strongest hint seen.
+   onProgress({stage, done, total}) drives the toast. */
+async function runExtractors(sourceId, { onProgress } = {}) {
+  const segs = SOURCE_SEGMENTS[sourceId];
+  if (!segs || !segs.length) return { tripleCount: 0, extractorsRun: 0 };
+  const labelsFor = SEG_LABELS[sourceId] || {};
+  const context = {
+    sourceId,
+    source: USER_SOURCES[sourceId] || null,
+    segmentsById: new Map(segs.map(s => [s.id, s])),
+    table: SOURCE_TABLE[sourceId] || null,
+    profile: SOURCE_PROFILE[sourceId] || null,
+    labels: labelsFor
+  };
+
+  let tripleCount = 0;
+  let runs = 0;
+  const total = EXTRACTORS.length * segs.length;
+  for (const ext of EXTRACTORS) {
+    for (const segment of segs) {
+      if (segment.kind === 'source') { runs++; continue; }
+      let result;
+      try {
+        result = await Promise.resolve(ext.run(segment, context));
+      } catch (err) {
+        console.warn('[extract] ' + ext.tag + ' on ' + segment.id + ' failed', err);
+        runs++;
+        continue;
+      }
+      const triples = (result && result.triples) || [];
+      const coverageHint = (result && result.coverage) || 'none';
+      segment.coverage = promoteCoverage(segment.coverage || 'none', coverageHint);
+      for (const t of triples) {
+        const evidenceSegmentId = t.evidenceSegmentId || segment.id;
+        const id = edgeIdFor(t.subject, t.predicate, t.object, evidenceSegmentId);
+        const existing = GRAPH_EDGES.get(id);
+        if (existing) {
+          if (!existing.extractors.includes(ext.tag)) existing.extractors.push(ext.tag);
+          // Keep the highest confidence seen across lineage.
+          if (CONF_RANK[t.confidence] > CONF_RANK[existing.confidence]) existing.confidence = t.confidence;
+        } else {
+          GRAPH_EDGES.set(id, {
+            id,
+            subject: t.subject,
+            predicate: t.predicate,
+            object: t.object,
+            evidenceSegmentId,
+            evidenceSpan: t.evidenceSpan || null,
+            sourceId,
+            confidence: t.confidence || 'medium',
+            faceLabels: labelsFor[evidenceSegmentId] || null,
+            attrs: t.attrs || null,
+            extractors: [ext.tag]
+          });
+          tripleCount++;
+        }
+      }
+      runs++;
+      if (onProgress) onProgress({ stage: 'extract:' + ext.tag, done: runs, total });
+    }
+  }
+  return { tripleCount, extractorsRun: EXTRACTORS.length };
+}
+
+const CONF_RANK = { low: 0, medium: 1, high: 2 };
 
 /* Kicks off a fold; resolves with the three EO views plus the
    render-ready claim projection. G = observations (Given-Log),
