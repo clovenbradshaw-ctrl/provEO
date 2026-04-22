@@ -12879,6 +12879,20 @@ async function analyseSource(sourceId, { file, onStage } = {}) {
       stages.resolve = 'skipped';
       emit({ stage: 'resolve', status: 'skipped', msg: err.message || 'resolution failed' });
     }
+
+    // --- Stage: join (6.7) ---
+    // Cross-source mentions + structured aggregates. Runs over the
+    // full corpus because a newly imported source can create joins
+    // against any already-loaded source.
+    emit({ stage: 'join', status: 'start' });
+    try {
+      const { mentionEdges, aggregateEdges } = await runCrossSourceJoins(sourceId);
+      stages.join = 'ran';
+      emit({ stage: 'join', status: 'ran', msg: `${mentionEdges} mentions, ${aggregateEdges} aggregates` });
+    } catch (err) {
+      stages.join = 'skipped';
+      emit({ stage: 'join', status: 'skipped', msg: err.message || 'join failed' });
+    }
   } else {
     stages.extract = 'skipped';
   }
@@ -14189,6 +14203,148 @@ async function resolveEntitiesForSource(sourceId) {
   }
   return { merged: canonicalIds.length, rewired };
 }
+
+/* ======================================================================
+   CROSS-SOURCE JOINS (Prompt 6.7)
+   ----------------------------------------------------------------------
+   After entity resolution, nodes that appeared in multiple sources
+   already share a canonical id (resolveEntitiesForSource unions
+   them across sources). This pass adds two kinds of connective
+   edges that are only meaningful once multiple sources are loaded:
+
+     cross-source            — (entity) --mentioned_in--> (source) for
+                                every source a node has supporting
+                                segments in.
+     cross-source:aggregate  — (vendor) --paid_total--> (sum) when the
+                                entity appears as a row subject in one
+                                source and has has_amount edges in
+                                another.
+
+   Runs on each import; the newly added source drives the search,
+   so incremental growth stays linear in the newly imported data.
+====================================================================== */
+
+/* Recover the sourceId from a segment id. Our segment ids use the
+   convention "<sourceId>:<localSuffix>"; if the first colon appears
+   at position > 0 we take the prefix as the source id. */
+function sourceIdOfSegment(segId) {
+  if (!segId) return null;
+  const idx = segId.indexOf(':');
+  return idx > 0 ? segId.slice(0, idx) : null;
+}
+
+/* Parse a money-like object name into a number. Handles '$1,200',
+   '1200', '$1.2 million'. Returns null on failure so the caller
+   can skip the edge. */
+function parseMoney(raw) {
+  if (raw == null) return null;
+  let s = String(raw).trim().toLowerCase().replace(/[\$,]/g, '');
+  let mult = 1;
+  if (/\b(million|m)\b/.test(s)) mult = 1e6;
+  else if (/\b(billion|b)\b/.test(s)) mult = 1e9;
+  else if (/\b(thousand|k)\b/.test(s)) mult = 1e3;
+  s = s.replace(/[a-z\s]+$/, '').trim();
+  const n = Number(s);
+  if (!Number.isFinite(n)) return null;
+  return n * mult;
+}
+
+async function runCrossSourceJoins(incomingSourceId) {
+  let mentionEdges = 0;
+  let aggregateEdges = 0;
+
+  // --- Cross-source mentions. Walk GRAPH_NODES; for any node whose
+  // supporting segments span >= 2 sources, emit one mentioned_in
+  // edge per source. Dedup via edgeIdFor handles repeated runs.
+  for (const [nodeId, node] of GRAPH_NODES) {
+    const sources = new Set();
+    for (const segId of node.supportingSegments || []) {
+      const src = sourceIdOfSegment(segId);
+      if (src) sources.add(src);
+    }
+    if (sources.size < 2) continue;
+    for (const sid of sources) {
+      const src = USER_SOURCES[sid];
+      if (!src) continue;
+      const subject = { id: nodeId, name: node.displayName, type: node.type };
+      const object = { id: sid, name: src.name || sid, type: 'source' };
+      const edgeId = edgeIdFor(subject, 'mentioned_in', object);
+      const existing = GRAPH_EDGES.get(edgeId);
+      if (existing) {
+        if (!existing.extractors.includes('cross-source')) existing.extractors.push('cross-source');
+      } else {
+        GRAPH_EDGES.set(edgeId, {
+          id: edgeId,
+          subject, predicate: 'mentioned_in', object,
+          evidenceSegmentId: [...node.supportingSegments].find(s => sourceIdOfSegment(s) === sid) || null,
+          evidenceSpan: null,
+          sourceId: incomingSourceId, // incoming source triggered the join
+          confidence: 'high',
+          faceLabels: null,
+          attrs: { acrossSources: [...sources] },
+          extractors: ['cross-source']
+        });
+        mentionEdges++;
+      }
+    }
+  }
+
+  // --- Structured aggregates. For each node that has >=1 has_amount
+  // edge across any source, sum the amounts and emit a single
+  // paid_total edge. Restricted to org/vendor/person types to avoid
+  // aggregating over amounts, dates, etc.
+  const amountsByNode = new Map(); // nodeId -> [{ amount, sourceId, segId, colAttrs }]
+  for (const edge of GRAPH_EDGES.values()) {
+    if (edge.predicate !== 'has_amount') continue;
+    const sid = edge.subject && edge.subject.id;
+    if (!sid) continue;
+    const node = GRAPH_NODES.get(sid);
+    if (!node) continue;
+    if (!['vendor', 'org', 'person'].includes(node.type)) continue;
+    const raw = edge.object && edge.object.name;
+    const amount = parseMoney(raw);
+    if (amount == null) continue;
+    if (!amountsByNode.has(sid)) amountsByNode.set(sid, []);
+    amountsByNode.get(sid).push({
+      amount, sourceId: edge.sourceId,
+      segId: edge.evidenceSegmentId,
+      column: edge.attrs && edge.attrs.column
+    });
+  }
+  for (const [nodeId, rows] of amountsByNode) {
+    // Only aggregate when the node spans multiple rows — a single
+    // row's amount is already rendered by csv-schema's own has_amount
+    // edge; paid_total is specifically the across-row sum.
+    if (rows.length < 2) continue;
+    const node = GRAPH_NODES.get(nodeId);
+    const sum = rows.reduce((a, r) => a + r.amount, 0);
+    const subject = { id: nodeId, name: node.displayName, type: node.type };
+    const object = { name: '$' + sum.toLocaleString('en-US'), type: 'amount' };
+    const edgeId = edgeIdFor(subject, 'paid_total', object);
+    const existing = GRAPH_EDGES.get(edgeId);
+    if (existing) {
+      if (!existing.extractors.includes('cross-source:aggregate')) existing.extractors.push('cross-source:aggregate');
+      existing.attrs = Object.assign({}, existing.attrs, { rowCount: rows.length, rows });
+    } else {
+      const sources = [...new Set(rows.map(r => r.sourceId).filter(Boolean))];
+      GRAPH_EDGES.set(edgeId, {
+        id: edgeId,
+        subject, predicate: 'paid_total', object,
+        evidenceSegmentId: rows[0].segId,
+        evidenceSpan: null,
+        sourceId: incomingSourceId,
+        confidence: 'high',
+        faceLabels: null,
+        attrs: { rowCount: rows.length, sum, rows, sources },
+        extractors: ['cross-source:aggregate']
+      });
+      aggregateEdges++;
+    }
+  }
+
+  return { mentionEdges, aggregateEdges };
+}
+
 
 /* Kicks off a fold; resolves with the three EO views plus the
    render-ready claim projection. G = observations (Given-Log),
