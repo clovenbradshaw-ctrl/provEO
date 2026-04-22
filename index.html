@@ -2960,6 +2960,21 @@
   }
   .sitem:hover .sitem-edit { opacity: 1; }
   .sitem-edit:hover { color: var(--color-text-primary); }
+  .sitem-reproc {
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+    padding: 0 4px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.12s, color 0.12s;
+    line-height: 1;
+    font-family: inherit;
+  }
+  .sitem:hover .sitem-reproc { opacity: 1; }
+  .sitem-reproc:hover { color: var(--color-text-primary); }
+  .sitem-reproc:disabled { cursor: progress; opacity: 0.4; }
   .sitem-tags {
     display: flex;
     flex-wrap: wrap;
@@ -6670,6 +6685,9 @@ function renderSourceItem(s) {
   const delBtn = s.user_added
     ? `<button class="sitem-del" data-del-src="${s.id}" title="Remove source">×</button>`
     : '';
+  const reprocBtn = s.user_added && (s.has_text || s.kind === 'csv' || s.kind === 'txt' || s.kind === 'pdf')
+    ? `<button class="sitem-reproc" data-reproc-src="${s.id}" title="Re-process (re-segment and re-classify)">↻</button>`
+    : '';
   const destTag = s.user_added
     ? (s.destination === 'public'
         ? `<span class="stag dest-public" title="${escapeHtml(s.archive_url || '')}">ARCHIVE</span>`
@@ -6690,6 +6708,7 @@ function renderSourceItem(s) {
       ${tagsHtml}
       <div class="sitem-actions">
         <button class="sitem-edit" data-edit-src="${s.id}" title="Edit folder &amp; tags">⋯</button>
+        ${reprocBtn}
         ${delBtn}
       </div>
     </div>
@@ -6749,6 +6768,40 @@ function renderSources() {
     });
   });
 
+  // re-process handlers — wipes the analysis cache for this source
+  // and re-runs segment -> embed -> classify. Explicit user action;
+  // nothing else invalidates the cache.
+  $$('[data-reproc-src]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.reprocSrc;
+      const src = USER_SOURCES[id] || SOURCES.find(x => x.id === id);
+      const name = src && src.name ? src.name : id;
+      btn.disabled = true;
+      try {
+        let lastPct = -1;
+        await reprocessSource(id, {
+          onStage: (s) => {
+            const prefix = `${name}:`;
+            if (s.status === 'cached') showToast(`${prefix} ${s.stage} · cached`);
+            else if (s.status === 'ran') showToast(`${prefix} ${s.stage} · done`);
+            else if (s.status === 'start') showToast(`${prefix} ${s.stage}…`);
+            else if (s.status === 'progress' && s.total) {
+              const pct = Math.floor((s.done / s.total) * 100);
+              if (pct - lastPct >= 10) { lastPct = pct; showToast(`${prefix} ${s.stage} · ${s.done}/${s.total}`); }
+            } else if (s.status === 'skipped') showToast(`${prefix} ${s.stage} skipped — ${s.msg || ''}`);
+          }
+        });
+        showToast(`re-processed ${name}`);
+      } catch (err) {
+        console.warn('[reprocess] failed', id, err);
+        showToast(`re-process failed: ${err.message || 'unknown'}`);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+
   // delete handlers
   $$('[data-del-src]').forEach(btn => {
     btn.addEventListener('click', async (e) => {
@@ -6760,7 +6813,12 @@ function renderSources() {
       delete SOURCE_TABLE[id];
       delete SOURCE_PROFILE[id];
       delete SOURCE_INDEX[id];
+      // Drop per-segment embeddings for this source before dropping
+      // the segment tree itself — walk the tree to collect ids.
+      const segs = SOURCE_SEGMENTS[id] || [];
+      for (const s of segs) delete SEG_EMBEDDINGS[s.id];
       delete SOURCE_SEGMENTS[id];
+      delete SEG_LABELS[id];
       await appendEventAndRefold({
         op: 'SRC_DEL',
         site: `source:${id}`,
@@ -12034,6 +12092,776 @@ function segmentAncestors(sourceId, segmentId) {
   return chain;
 }
 
+/* ======================================================================
+   EMBEDDINGS + ANCHOR CORPUS (Prompt 5.2)
+   ----------------------------------------------------------------------
+   MiniLM-L6-v2 (384-dim, quantised) runs in-browser via the Xenova
+   transformers.js build. Every segment and every anchor gets an L2-
+   normalised Float32Array so cosine similarity reduces to a dot
+   product. ANCHORS_CORPUS is a seed set of face-labelled sentences
+   covering the nine Act cells; classification (Prompt 5.3) does
+   majority-vote k-NN over these anchors.
+====================================================================== */
+
+/* Per-segment embeddings. segmentId -> Float32Array(384). In-memory;
+   persisted under `embeds:{fp}:minilm-l6-v2` in Prompt 5.4. */
+const SEG_EMBEDDINGS = {};
+
+/* Anchor embeddings. anchorId -> Float32Array(384). Persisted under
+   `anchors:v1:minilm-l6-v2` in Prompt 5.4. */
+const ANCHOR_EMBEDDINGS = {};
+
+/* Seed anchor corpus. Every anchor has one label per face. The Act
+   taxonomy comes from the eo-lexical-analysis pipeline:
+     NUL/SEG/ALT — differentiating x existence/structure/significance
+     SEN/CON/SUP — relating      x existence/structure/significance
+     INS/SYN/REC — generating    x existence/structure/significance
+   Site and Resolution labels use the short names from SITE_FACE /
+   RESOLUTION_FACE. When the eo-lexical-analysis repo ships a full
+   100-entry labelled set under clovenbradshaw-ctrl/eo-lexical-
+   analysis-2.0, replace this seed; the cache key below bumps to
+   anchors:v2 and forces re-embedding. */
+const ANCHORS_CORPUS = [
+  // NUL — clearing, nullifying, marking absence / non-existence
+  { id: 'a_nul_1', act: 'NUL', site: 'Void',       resolution: 'Clearing',    text: 'The prior appropriation is hereby rescinded and no further obligations shall attach.' },
+  { id: 'a_nul_2', act: 'NUL', site: 'Void',       resolution: 'Clearing',    text: 'The Committee found no evidence of the alleged disbursement in the ledger.' },
+  { id: 'a_nul_3', act: 'NUL', site: 'Entity',     resolution: 'Dissecting',  text: 'This resolution supersedes and repeals all prior conflicting resolutions.' },
+  // SEG — partitioning, dissecting, bounding an entity
+  { id: 'a_seg_1', act: 'SEG', site: 'Entity',     resolution: 'Dissecting',  text: 'The district is divided into three wards, each with its own representative.' },
+  { id: 'a_seg_2', act: 'SEG', site: 'Kind',       resolution: 'Unraveling',  text: 'The budget is split between operating expenses and capital outlays.' },
+  { id: 'a_seg_3', act: 'SEG', site: 'Field',      resolution: 'Clearing',    text: 'The property boundary between the two parcels is hereby redrawn along the creek.' },
+  // ALT — alternative, substitute, disjunctive framing
+  { id: 'a_alt_1', act: 'ALT', site: 'Paradigm',   resolution: 'Unraveling',  text: 'The proposal offers an alternative framework for community oversight of policing.' },
+  { id: 'a_alt_2', act: 'ALT', site: 'Lens',       resolution: 'Unraveling',  text: 'Members may either adopt the amended version or reject the motion outright.' },
+  { id: 'a_alt_3', act: 'ALT', site: 'Atmosphere', resolution: 'Unraveling',  text: 'Should the ordinance fail, the Council shall revert to the prior policy regime.' },
+  // SEN — sensing, registering existence of something
+  { id: 'a_sen_1', act: 'SEN', site: 'Entity',     resolution: 'Tending',     text: 'Members present were Councilmember Smith, Councilmember Jones, and Councilmember Torres.' },
+  { id: 'a_sen_2', act: 'SEN', site: 'Void',       resolution: 'Tending',     text: 'The meeting came to order at six o’clock in the evening.' },
+  { id: 'a_sen_3', act: 'SEN', site: 'Entity',     resolution: 'Binding',     text: 'Solaren International appears on the vendor list for the fiscal quarter.' },
+  // CON — connecting, binding, linking entities
+  { id: 'a_con_1', act: 'CON', site: 'Link',       resolution: 'Binding',     text: 'The city contracts with the Partnership for downtown security services.' },
+  { id: 'a_con_2', act: 'CON', site: 'Network',    resolution: 'Tracing',     text: 'The vendor is affiliated with two subsidiaries that also hold municipal contracts.' },
+  { id: 'a_con_3', act: 'CON', site: 'Link',       resolution: 'Binding',     text: 'Funding flows from the general fund to the public safety department.' },
+  // SUP — supporting, sustaining, reinforcing significance
+  { id: 'a_sup_1', act: 'SUP', site: 'Paradigm',   resolution: 'Cultivating', text: 'The council reaffirms its commitment to affordable housing across every district.' },
+  { id: 'a_sup_2', act: 'SUP', site: 'Atmosphere', resolution: 'Tending',     text: 'Public comment emphasised the program’s ongoing importance to vulnerable residents.' },
+  { id: 'a_sup_3', act: 'SUP', site: 'Lens',       resolution: 'Tracing',     text: 'The report endorses the findings of the previous audit and recommends continued funding.' },
+  // INS — instituting, creating existence (new entity, program, office)
+  { id: 'a_ins_1', act: 'INS', site: 'Entity',     resolution: 'Making',      text: 'The Committee on Fiscal Oversight is hereby established to review quarterly expenditures.' },
+  { id: 'a_ins_2', act: 'INS', site: 'Entity',     resolution: 'Making',      text: 'A new Office of Equity is created within the office of the Mayor.' },
+  { id: 'a_ins_3', act: 'INS', site: 'Kind',       resolution: 'Cultivating', text: 'The Council authorises the appropriation of forty-two thousand dollars for traffic calming.' },
+  // SYN — synthesising structure (merging, weaving, building connections)
+  { id: 'a_syn_1', act: 'SYN', site: 'Network',    resolution: 'Composing',   text: 'The new policy integrates housing, transit, and workforce programmes under a single bureau.' },
+  { id: 'a_syn_2', act: 'SYN', site: 'Link',       resolution: 'Composing',   text: 'The two prior departments are merged into the Department of Community Services.' },
+  { id: 'a_syn_3', act: 'SYN', site: 'Network',    resolution: 'Binding',     text: 'A joint task force is formed across the city, county, and state to coordinate the response.' },
+  // REC — recognising significance, reframing, giving new meaning
+  { id: 'a_rec_1', act: 'REC', site: 'Paradigm',   resolution: 'Tracing',     text: 'The council recognises the Partnership’s role as the principal downtown advocate.' },
+  { id: 'a_rec_2', act: 'REC', site: 'Lens',       resolution: 'Composing',   text: 'The report reframes last year’s shortfall as an investment in long-term capacity.' },
+  { id: 'a_rec_3', act: 'REC', site: 'Lens',       resolution: 'Tracing',     text: 'The Mayor acknowledged the Director’s contributions over a twenty-year tenure.' }
+];
+
+/* ---------- minimal IndexedDB helper ----------
+   We keep a single database `proveo-cache` with object store `kv`
+   keyed by string. Values are arbitrary structured-clone blobs
+   (Float32Arrays transfer natively). This is separate from the
+   OPFS-backed `storage` module that persists the event log — the
+   cache here is for derived analysis (embeddings, segments, labels)
+   that can always be rebuilt from the log. */
+let _idbPromise = null;
+function idbOpen() {
+  if (_idbPromise) return _idbPromise;
+  _idbPromise = new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') { reject(new Error('no indexedDB')); return; }
+    const req = indexedDB.open('proveo-cache', 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv');
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  return _idbPromise;
+}
+
+async function idbGet(key) {
+  try {
+    const db = await idbOpen();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction('kv', 'readonly');
+      const req = tx.objectStore('kv').get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) { console.warn('[idb] get failed', key, err); return undefined; }
+}
+
+async function idbPut(key, value) {
+  try {
+    const db = await idbOpen();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction('kv', 'readwrite');
+      const req = tx.objectStore('kv').put(value, key);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+    return true;
+  } catch (err) { console.warn('[idb] put failed', key, err); return false; }
+}
+
+async function idbDel(key) {
+  try {
+    const db = await idbOpen();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction('kv', 'readwrite');
+      const req = tx.objectStore('kv').delete(key);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+    return true;
+  } catch (err) { console.warn('[idb] del failed', key, err); return false; }
+}
+
+async function idbListKeysWithPrefix(prefix) {
+  try {
+    const db = await idbOpen();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction('kv', 'readonly');
+      const store = tx.objectStore('kv');
+      const out = [];
+      const req = store.openKeyCursor();
+      req.onsuccess = () => {
+        const cur = req.result;
+        if (!cur) { resolve(out); return; }
+        const k = String(cur.key);
+        if (k.startsWith(prefix)) out.push(k);
+        cur.continue();
+      };
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) { console.warn('[idb] list failed', prefix, err); return []; }
+}
+
+/* ---------- Xenova MiniLM loader ----------
+   The transformers.js build is loaded lazily from a CDN on first
+   embed() call. Model weights (~25 MB quantised) are cached by the
+   browser's HTTP cache; subsequent loads are fast. When the network
+   is unavailable we surface a clear error — the rest of the app
+   keeps working, classification just isn't available. */
+const EMBED_MODEL_NAME = 'Xenova/all-MiniLM-L6-v2';
+const EMBED_MODEL_VERSION = 'minilm-l6-v2';
+const EMBED_DIM = 384;
+const TRANSFORMERS_CDN = 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js';
+
+let _embedderPromise = null;
+let _embedderLoadFailed = false;
+
+function loadEmbedder() {
+  if (_embedderLoadFailed) return Promise.reject(new Error('embedder previously failed to load'));
+  if (_embedderPromise) return _embedderPromise;
+  _embedderPromise = (async () => {
+    try {
+      const mod = await import(TRANSFORMERS_CDN);
+      // Prefer WASM; WebGPU availability is spotty and silently falls
+      // back anyway. env.allowLocalModels = false so the CDN-hosted
+      // weights are always used (no OPFS fallback).
+      if (mod.env) {
+        mod.env.allowLocalModels = false;
+        mod.env.useBrowserCache = true;
+      }
+      const pipe = await mod.pipeline('feature-extraction', EMBED_MODEL_NAME, { quantized: true });
+      return pipe;
+    } catch (err) {
+      _embedderLoadFailed = true;
+      _embedderPromise = null;
+      throw err;
+    }
+  })();
+  return _embedderPromise;
+}
+
+function l2Normalize(arr) {
+  let sum = 0;
+  for (let i = 0; i < arr.length; i++) sum += arr[i] * arr[i];
+  if (!(sum > 0)) return arr;
+  const inv = 1 / Math.sqrt(sum);
+  const out = new Float32Array(arr.length);
+  for (let i = 0; i < arr.length; i++) out[i] = arr[i] * inv;
+  return out;
+}
+
+/* Embed a single string. Returns a 384-dim L2-normalised Float32Array.
+   Throws if the embedder isn't available. */
+async function embed(text) {
+  const pipe = await loadEmbedder();
+  const out = await pipe(String(text || ''), { pooling: 'mean', normalize: false });
+  const raw = out.data || out;
+  const f32 = raw instanceof Float32Array ? raw : new Float32Array(raw);
+  return l2Normalize(f32);
+}
+
+/* Embed many strings. Runs sequentially inside the single pipeline —
+   transformers.js already batches tokens internally; fighting it
+   with Promise.all gives no speedup and eats memory. */
+async function embedBatch(texts, onProgress) {
+  const out = new Array(texts.length);
+  for (let i = 0; i < texts.length; i++) {
+    out[i] = await embed(texts[i]);
+    if (onProgress) onProgress(i + 1, texts.length);
+  }
+  return out;
+}
+
+/* Cosine similarity — both inputs must be L2-normalised. Short-
+   circuits to a plain dot product, no division. */
+function cosine(a, b) {
+  if (!a || !b || a.length !== b.length) return 0;
+  let s = 0;
+  for (let i = 0; i < a.length; i++) s += a[i] * b[i];
+  return s;
+}
+
+/* Top-k cosine neighbours. `pool` is an array of { id, embedding }.
+   Returns the top k as [{ id, score }], sorted descending. */
+function topKCosine(query, pool, k = 5) {
+  if (!query || !pool || !pool.length) return [];
+  const scored = new Array(pool.length);
+  for (let i = 0; i < pool.length; i++) {
+    const p = pool[i];
+    scored[i] = { id: p.id, score: cosine(query, p.embedding) };
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, Math.max(1, k | 0));
+}
+
+/* Re-embed the anchor corpus. Cached under `anchors:v1:minilm-l6-v2`
+   in IndexedDB — one-time cost unless the anchor set or embedding
+   model version changes, in which case the cache key flips and a
+   fresh pass runs. Returns ANCHOR_EMBEDDINGS (for chaining). */
+const ANCHORS_CACHE_KEY = 'anchors:v1:' + EMBED_MODEL_VERSION;
+let _anchorsReadyPromise = null;
+function ensureAnchorsEmbedded({ onProgress } = {}) {
+  if (_anchorsReadyPromise) return _anchorsReadyPromise;
+  _anchorsReadyPromise = (async () => {
+    // Cache hit: rehydrate in one read.
+    const cached = await idbGet(ANCHORS_CACHE_KEY);
+    if (cached && cached.count === ANCHORS_CORPUS.length && cached.dim === EMBED_DIM && cached.vectors) {
+      for (const a of ANCHORS_CORPUS) {
+        const raw = cached.vectors[a.id];
+        if (raw) ANCHOR_EMBEDDINGS[a.id] = raw instanceof Float32Array ? raw : new Float32Array(raw);
+      }
+      if (Object.keys(ANCHOR_EMBEDDINGS).length === ANCHORS_CORPUS.length) return ANCHOR_EMBEDDINGS;
+    }
+    // Miss: embed all anchors.
+    const texts = ANCHORS_CORPUS.map(a => a.text);
+    const vecs = await embedBatch(texts, onProgress);
+    const packed = {};
+    for (let i = 0; i < ANCHORS_CORPUS.length; i++) {
+      ANCHOR_EMBEDDINGS[ANCHORS_CORPUS[i].id] = vecs[i];
+      packed[ANCHORS_CORPUS[i].id] = vecs[i];
+    }
+    await idbPut(ANCHORS_CACHE_KEY, { version: 1, dim: EMBED_DIM, count: ANCHORS_CORPUS.length, vectors: packed });
+    return ANCHOR_EMBEDDINGS;
+  })();
+  return _anchorsReadyPromise;
+}
+
+/* Pool helper: anchor entries shaped for topKCosine. Lazy so we only
+   pay the map construction once per classify pass. */
+let _anchorPoolCache = null;
+function anchorPool() {
+  if (_anchorPoolCache && _anchorPoolCache.length === ANCHORS_CORPUS.length) return _anchorPoolCache;
+  _anchorPoolCache = ANCHORS_CORPUS
+    .map(a => ({ id: a.id, embedding: ANCHOR_EMBEDDINGS[a.id] }))
+    .filter(p => p.embedding);
+  return _anchorPoolCache;
+}
+
+function anchorById(id) {
+  for (const a of ANCHORS_CORPUS) if (a.id === id) return a;
+  return null;
+}
+
+/* ======================================================================
+   FACE-LABEL CLASSIFICATION (Prompt 5.3)
+   ----------------------------------------------------------------------
+   For each leaf segment we embed the text, take the top-5 nearest
+   anchors, and tally votes independently for Act / Site / Resolution.
+   Confidence is (top_share - second_share). Low confidence collapses
+   to 'unclassified' — we keep unknown distinct from "assigned to a
+   low-agreement cell" on purpose. Parent segments (sentence,
+   paragraph, section) inherit by aggregating their classified
+   children; we also keep a full per-cell distribution so mixed
+   regions render as stacked bars rather than a flat label.
+====================================================================== */
+
+/* sourceId -> { segmentId -> { act, site, resolution, confidence,
+   knn: {...}, distribution?: {...}, aggregated?: bool,
+   supportingSegments?: number } } */
+const SEG_LABELS = {};
+
+const FACE_KEYS = ['act', 'site', 'resolution'];
+const CONF_HIGH = 0.6;
+const CONF_MED = 0.2;
+const KNN_K = 5;
+
+function bucketConfidence(margin) {
+  if (margin >= CONF_HIGH) return 'high';
+  if (margin >= CONF_MED) return 'medium';
+  return 'low';
+}
+
+// Pick the winner + margin from a tally map { cellName -> voteCount }.
+function winnerAndMargin(tally, totalVotes) {
+  let best = null, bestN = 0, second = 0;
+  for (const [cell, n] of Object.entries(tally)) {
+    if (n > bestN) { second = bestN; bestN = n; best = cell; }
+    else if (n > second) { second = n; }
+  }
+  const total = totalVotes || 1;
+  return { cell: best, margin: (bestN - second) / total, share: bestN / total };
+}
+
+// Classify one segment directly against the anchor pool. Writes into
+// SEG_LABELS[sourceId][segmentId]. Returns the label object.
+async function classifySegmentDirect(sourceId, segment) {
+  if (!segment || !segment.text || !segment.text.trim()) return null;
+  let vec = SEG_EMBEDDINGS[segment.id];
+  if (!vec) {
+    vec = await embed(segment.text);
+    SEG_EMBEDDINGS[segment.id] = vec;
+  }
+  const pool = anchorPool();
+  if (!pool.length) return null;
+  const neighbours = topKCosine(vec, pool, KNN_K);
+  const tallies = { act: {}, site: {}, resolution: {} };
+  for (const nb of neighbours) {
+    const a = anchorById(nb.id);
+    if (!a) continue;
+    for (const face of FACE_KEYS) {
+      const cell = a[face];
+      if (!cell) continue;
+      tallies[face][cell] = (tallies[face][cell] || 0) + 1;
+    }
+  }
+  const totalVotes = neighbours.length;
+  const winners = {};
+  const margins = {};
+  for (const face of FACE_KEYS) {
+    const w = winnerAndMargin(tallies[face], totalVotes);
+    winners[face] = w.cell || null;
+    margins[face] = w.margin;
+  }
+  // Segment-level confidence is the minimum margin across the three
+  // faces — if any face is ambiguous, the whole segment is.
+  const minMargin = Math.min(margins.act, margins.site, margins.resolution);
+  const confidence = bucketConfidence(minMargin);
+  const label = {
+    act: confidence === 'low' ? 'unclassified' : winners.act,
+    site: confidence === 'low' ? 'unclassified' : winners.site,
+    resolution: confidence === 'low' ? 'unclassified' : winners.resolution,
+    confidence,
+    margins,
+    knn: {
+      act: neighbours.map(n => n.id),
+      site: neighbours.map(n => n.id),
+      resolution: neighbours.map(n => n.id)
+    },
+    aggregated: false
+  };
+  if (!SEG_LABELS[sourceId]) SEG_LABELS[sourceId] = {};
+  SEG_LABELS[sourceId][segment.id] = label;
+  return label;
+}
+
+// Aggregate a parent's label from classified children. Computes a
+// per-face distribution (cell -> share) and picks the argmax as the
+// flat label. 'unclassified' children count in the distribution but
+// do not win unless they are the strict majority — this preserves
+// the NUL-vs-unclassified distinction the spec calls out.
+function aggregateFromChildren(sourceId, segment, childLabels) {
+  const distribution = { act: {}, site: {}, resolution: {} };
+  const totals = { act: 0, site: 0, resolution: 0 };
+  for (const cl of childLabels) {
+    for (const face of FACE_KEYS) {
+      const cell = cl[face];
+      if (!cell) continue;
+      distribution[face][cell] = (distribution[face][cell] || 0) + 1;
+      totals[face]++;
+    }
+  }
+  const out = {
+    confidence: 'aggregated',
+    aggregated: true,
+    supportingSegments: childLabels.length,
+    distribution: { act: {}, site: {}, resolution: {} },
+    knn: { act: [], site: [], resolution: [] }
+  };
+  for (const face of FACE_KEYS) {
+    const total = totals[face] || 1;
+    let winner = null, winnerN = 0;
+    for (const [cell, n] of Object.entries(distribution[face])) {
+      out.distribution[face][cell] = n / total;
+      if (cell !== 'unclassified' && n > winnerN) { winner = cell; winnerN = n; }
+    }
+    // If every child was unclassified, the parent is too.
+    if (!winner) {
+      const anyUn = (distribution[face]['unclassified'] || 0) > 0;
+      winner = anyUn ? 'unclassified' : null;
+    }
+    out[face] = winner;
+  }
+  if (!SEG_LABELS[sourceId]) SEG_LABELS[sourceId] = {};
+  SEG_LABELS[sourceId][segment.id] = out;
+  return out;
+}
+
+/* Classify every segment in a source. Clauses/rows are classified
+   directly; sentences without clauses are classified directly;
+   paragraphs without classified sentence children are too. Parents
+   aggregate from their children. onProgress is called with
+   (done, total) after each direct classification. */
+async function classifySource(sourceId, { onProgress } = {}) {
+  const segs = SOURCE_SEGMENTS[sourceId];
+  if (!segs || !segs.length) return null;
+  await ensureAnchorsEmbedded();
+
+  // Build children index.
+  const childrenByParent = new Map();
+  for (const s of segs) {
+    if (!s.parentId) continue;
+    if (!childrenByParent.has(s.parentId)) childrenByParent.set(s.parentId, []);
+    childrenByParent.get(s.parentId).push(s);
+  }
+  const leafKinds = new Set(['clause', 'row']);
+  const directTargets = [];
+  const classifiedIds = new Set();
+
+  // Leaves: clauses and rows always; sentences with no clause
+  // children; paragraphs with no sentence children; sections with no
+  // paragraph children.
+  for (const s of segs) {
+    if (s.kind === 'source') continue;
+    if (leafKinds.has(s.kind)) { directTargets.push(s); continue; }
+    const kids = childrenByParent.get(s.id) || [];
+    if (!kids.length) directTargets.push(s);
+  }
+
+  let done = 0;
+  for (const s of directTargets) {
+    try {
+      await classifySegmentDirect(sourceId, s);
+      classifiedIds.add(s.id);
+    } catch (err) {
+      console.warn('[classify] segment failed', s.id, err);
+    }
+    done++;
+    if (onProgress) onProgress(done, directTargets.length);
+  }
+
+  // Aggregate bottom-up. sentence -> paragraph -> section -> source.
+  const kindOrder = ['sentence', 'paragraph', 'section', 'source'];
+  const labelsFor = SEG_LABELS[sourceId] || {};
+  for (const kind of kindOrder) {
+    for (const s of segs) {
+      if (s.kind !== kind) continue;
+      if (classifiedIds.has(s.id)) continue;
+      const kids = childrenByParent.get(s.id) || [];
+      const kidLabels = kids.map(k => labelsFor[k.id]).filter(Boolean);
+      if (!kidLabels.length) continue;
+      aggregateFromChildren(sourceId, s, kidLabels);
+      classifiedIds.add(s.id);
+    }
+  }
+  return SEG_LABELS[sourceId];
+}
+
+/* ======================================================================
+   SOURCE FINGERPRINTING + ANALYSIS CACHE (Prompt 5.4)
+   ----------------------------------------------------------------------
+   fp = sha256(filename + size + first-2KB + last-2KB). Short enough to
+   collide ~never on a single-user corpus, cheap enough to compute in
+   O(4KB) for any file size. Versioned cache keys in IndexedDB separate
+   model churn (minilm-l6-v2) and anchor churn (anchors-v1) from source
+   identity:
+     segments:{fp}                  — the parsed segment tree
+     embeds:{fp}:minilm-l6-v2       — per-segment embeddings
+     labels:{fp}:anchors-v1         — per-segment face labels
+   Changing the embedder or anchor set flips a key suffix; the old
+   cache stays on disk but is unused until the user's quota eviction
+   reclaims it. The only explicit invalidation path is the Re-process
+   button on a source (Prompt 5.5). Every other surface reads through
+   the cache; nothing silently recomputes.
+====================================================================== */
+
+const ANCHORS_VERSION = 'anchors-v1';
+
+function bytesToHex(buf) {
+  const u8 = new Uint8Array(buf);
+  let out = '';
+  for (let i = 0; i < u8.length; i++) out += u8[i].toString(16).padStart(2, '0');
+  return out;
+}
+
+/* File-level fingerprint. Reads first-2KB and last-2KB plus name +
+   size. Uses Web Crypto for SHA-256. Returned hex is truncated to
+   16 chars — room enough for our single-user corpus and short
+   enough to print in a URL or debug log. */
+async function fingerprintFile(file) {
+  if (!file) throw new Error('fingerprintFile: no file');
+  const size = file.size || 0;
+  const head = await file.slice(0, Math.min(2048, size)).arrayBuffer();
+  const tail = size > 2048
+    ? await file.slice(Math.max(0, size - 2048), size).arrayBuffer()
+    : head;
+  const nameBytes = new TextEncoder().encode(String(file.name || '') + ':' + size + ':');
+  const all = new Uint8Array(nameBytes.length + head.byteLength + tail.byteLength);
+  all.set(nameBytes, 0);
+  all.set(new Uint8Array(head), nameBytes.length);
+  all.set(new Uint8Array(tail), nameBytes.length + head.byteLength);
+  const digest = await crypto.subtle.digest('SHA-256', all);
+  return bytesToHex(digest).slice(0, 16);
+}
+
+/* Text-level fingerprint. Used when we only have the extracted text
+   (e.g., re-process path where the original File isn't in scope).
+   Same shape as fingerprintFile: name + length + head + tail. */
+async function fingerprintText(name, text) {
+  const str = String(text || '');
+  const head = str.slice(0, 2048);
+  const tail = str.length > 2048 ? str.slice(str.length - 2048) : head;
+  const packed = String(name || '') + ':' + str.length + ':' + head + ':' + tail;
+  const bytes = new TextEncoder().encode(packed);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return bytesToHex(digest).slice(0, 16);
+}
+
+/* Strip the sourceId prefix from a segment id to get its deterministic
+   suffix. Used to serialise cache entries portable across source-id
+   reincarnations (same file uploaded a second time). */
+function stripSourcePrefix(sourceId, id) {
+  if (!id) return id;
+  const prefix = sourceId + ':';
+  return id.startsWith(prefix) ? id.slice(sourceId.length) : id;
+}
+
+function applySourcePrefix(sourceId, suffix) {
+  if (!suffix) return suffix;
+  if (suffix.charAt(0) === ':') return sourceId + suffix;
+  return suffix;
+}
+
+/* --- segments cache --- */
+async function loadCachedSegments(sourceId, fp) {
+  const entry = await idbGet('segments:' + fp);
+  if (!entry || !entry.segments) return null;
+  const segs = entry.segments.map(s => ({
+    ...s,
+    id: applySourcePrefix(sourceId, s.idSuffix),
+    parentId: s.parentSuffix ? applySourcePrefix(sourceId, s.parentSuffix) : null,
+    idSuffix: undefined,
+    parentSuffix: undefined
+  })).map(s => { const o = { ...s }; delete o.idSuffix; delete o.parentSuffix; return o; });
+  SOURCE_SEGMENTS[sourceId] = segs;
+  return segs;
+}
+
+async function persistSegments(sourceId, fp) {
+  const segs = SOURCE_SEGMENTS[sourceId] || [];
+  const packed = segs.map(s => ({
+    idSuffix: stripSourcePrefix(sourceId, s.id),
+    parentSuffix: s.parentId ? stripSourcePrefix(sourceId, s.parentId) : null,
+    kind: s.kind,
+    text: s.text,
+    loc: s.loc,
+    tokens: s.tokens
+  }));
+  await idbPut('segments:' + fp, { version: 1, segments: packed });
+}
+
+/* --- embeddings cache --- */
+async function loadCachedEmbeddings(sourceId, fp) {
+  const key = 'embeds:' + fp + ':' + EMBED_MODEL_VERSION;
+  const entry = await idbGet(key);
+  if (!entry || !entry.vectors) return false;
+  for (const [suffix, raw] of Object.entries(entry.vectors)) {
+    const fullId = applySourcePrefix(sourceId, suffix);
+    SEG_EMBEDDINGS[fullId] = raw instanceof Float32Array ? raw : new Float32Array(raw);
+  }
+  return true;
+}
+
+async function persistEmbeddings(sourceId, fp) {
+  const key = 'embeds:' + fp + ':' + EMBED_MODEL_VERSION;
+  const segs = SOURCE_SEGMENTS[sourceId] || [];
+  const vectors = {};
+  for (const s of segs) {
+    const vec = SEG_EMBEDDINGS[s.id];
+    if (vec) vectors[stripSourcePrefix(sourceId, s.id)] = vec;
+  }
+  await idbPut(key, { version: 1, dim: EMBED_DIM, vectors });
+}
+
+/* --- labels cache --- */
+async function loadCachedLabels(sourceId, fp) {
+  const key = 'labels:' + fp + ':' + ANCHORS_VERSION;
+  const entry = await idbGet(key);
+  if (!entry || !entry.labels) return false;
+  const labels = {};
+  for (const [suffix, L] of Object.entries(entry.labels)) {
+    labels[applySourcePrefix(sourceId, suffix)] = L;
+  }
+  SEG_LABELS[sourceId] = labels;
+  return true;
+}
+
+async function persistLabels(sourceId, fp) {
+  const key = 'labels:' + fp + ':' + ANCHORS_VERSION;
+  const raw = SEG_LABELS[sourceId] || {};
+  const labels = {};
+  for (const [fullId, L] of Object.entries(raw)) {
+    labels[stripSourcePrefix(sourceId, fullId)] = L;
+  }
+  await idbPut(key, { version: 1, labels });
+}
+
+/* Wipe all three cache entries for a fingerprint. Only the Re-process
+   button in the Sources sidebar (5.5) calls this. No implicit
+   invalidation anywhere else — if downstream code wants fresher data
+   it asks the user. */
+async function invalidateAnalysisForFingerprint(fp) {
+  if (!fp) return;
+  await Promise.all([
+    idbDel('segments:' + fp),
+    idbDel('embeds:' + fp + ':' + EMBED_MODEL_VERSION),
+    idbDel('labels:' + fp + ':' + ANCHORS_VERSION)
+  ]);
+}
+
+/* ======================================================================
+   ANALYSIS PIPELINE ORCHESTRATOR (Prompt 5.5)
+   ----------------------------------------------------------------------
+   Segment -> embed -> classify. Each stage probes IndexedDB first;
+   on cache miss the stage runs and persists. onStage emits status
+   events the import toast subscribes to. No implicit reprocessing
+   anywhere else — the only invalidation path is the Re-process
+   button in the Sources sidebar.
+====================================================================== */
+
+const SOURCE_FP = {}; // session-memory: sourceId -> fingerprint
+
+/* Compute a fingerprint from either a File (preferred, richer) or
+   the already-loaded source text (re-process path). Cached on
+   SOURCE_FP once computed. */
+async function resolveSourceFingerprint(sourceId, { file, text, name } = {}) {
+  if (SOURCE_FP[sourceId]) return SOURCE_FP[sourceId];
+  let fp;
+  if (file) fp = await fingerprintFile(file);
+  else {
+    const t = text != null ? text : (SOURCE_TEXT[sourceId] || '');
+    const n = name || (USER_SOURCES[sourceId] && USER_SOURCES[sourceId].name) || sourceId;
+    fp = await fingerprintText(n, t);
+  }
+  SOURCE_FP[sourceId] = fp;
+  return fp;
+}
+
+/* Main orchestrator. Takes a sourceId that already has its text in
+   SOURCE_TEXT (import-time) or will be loaded from OPFS (re-process
+   path). onStage({stage, status, done?, total?, msg?}) drives the
+   toast. Returns { fp, stages: { segment, embed, classify }} where
+   each stage is 'cached' | 'ran' | 'skipped'. */
+async function analyseSource(sourceId, { file, onStage } = {}) {
+  const emit = (s) => { if (onStage) try { onStage(s); } catch (e) { /* swallow */ } };
+  const text = SOURCE_TEXT[sourceId];
+  if (!text) {
+    emit({ stage: 'segment', status: 'skipped', msg: 'no text' });
+    return { fp: null, stages: { segment: 'skipped', embed: 'skipped', classify: 'skipped' } };
+  }
+  const src = USER_SOURCES[sourceId] || {};
+  const kind = (src.kind) || 'txt';
+
+  const fp = await resolveSourceFingerprint(sourceId, { file, text, name: src.name });
+  const stages = { segment: '', embed: '', classify: '' };
+
+  // --- Stage: segment ---
+  emit({ stage: 'segment', status: 'start' });
+  let segs = await loadCachedSegments(sourceId, fp);
+  if (segs && segs.length) {
+    stages.segment = 'cached';
+    emit({ stage: 'segment', status: 'cached', total: segs.length });
+  } else {
+    segs = await segmentSource(sourceId, { text, kind });
+    await persistSegments(sourceId, fp);
+    stages.segment = 'ran';
+    emit({ stage: 'segment', status: 'ran', total: segs.length });
+  }
+
+  // --- Stage: embed ---
+  emit({ stage: 'embed', status: 'start' });
+  const embedsHit = await loadCachedEmbeddings(sourceId, fp);
+  if (embedsHit) {
+    stages.embed = 'cached';
+    emit({ stage: 'embed', status: 'cached' });
+  } else {
+    // Embeddings are computed inside classifySource on demand; we
+    // only need to invoke the embedder loader here so failures surface
+    // as an embed-stage error rather than bleeding into classify.
+    try {
+      await loadEmbedder();
+      // Mark as 'ran' — classify stage will actually fill SEG_EMBEDDINGS.
+      stages.embed = 'ran';
+      emit({ stage: 'embed', status: 'ran' });
+    } catch (err) {
+      stages.embed = 'skipped';
+      emit({ stage: 'embed', status: 'skipped', msg: err.message || 'embedder unavailable' });
+      stages.classify = 'skipped';
+      emit({ stage: 'classify', status: 'skipped', msg: 'requires embedder' });
+      return { fp, stages };
+    }
+  }
+
+  // --- Stage: classify ---
+  emit({ stage: 'classify', status: 'start' });
+  const labelsHit = await loadCachedLabels(sourceId, fp);
+  if (labelsHit && stages.embed === 'cached') {
+    stages.classify = 'cached';
+    emit({ stage: 'classify', status: 'cached' });
+  } else {
+    try {
+      await classifySource(sourceId, {
+        onProgress: (done, total) => emit({ stage: 'classify', status: 'progress', done, total })
+      });
+      // Embeddings were populated inside classifySource; persist now.
+      if (stages.embed === 'ran') await persistEmbeddings(sourceId, fp);
+      await persistLabels(sourceId, fp);
+      stages.classify = 'ran';
+      emit({ stage: 'classify', status: 'ran' });
+    } catch (err) {
+      stages.classify = 'skipped';
+      emit({ stage: 'classify', status: 'skipped', msg: err.message || 'classification failed' });
+    }
+  }
+  return { fp, stages };
+}
+
+/* Re-process a source: clears cache for its fingerprint and re-runs
+   analyseSource. Called from the Re-process button in the Sources
+   sidebar. If the source has text but no fingerprint yet (e.g., on
+   a reload where we haven't analysed), we still compute a fresh fp
+   from the text and run the pipeline. */
+async function reprocessSource(sourceId, { onStage } = {}) {
+  const text = SOURCE_TEXT[sourceId] || await ensureSourceText(sourceId);
+  if (!text) return { fp: null, stages: { segment: 'skipped', embed: 'skipped', classify: 'skipped' } };
+  const fp = await resolveSourceFingerprint(sourceId, { text });
+  await invalidateAnalysisForFingerprint(fp);
+  // Drop in-memory derived state for this source before re-running.
+  const segs = SOURCE_SEGMENTS[sourceId] || [];
+  for (const s of segs) delete SEG_EMBEDDINGS[s.id];
+  delete SOURCE_SEGMENTS[sourceId];
+  delete SEG_LABELS[sourceId];
+  return analyseSource(sourceId, { onStage });
+}
+
 /* Kicks off a fold; resolves with the three EO views plus the
    render-ready claim projection. G = observations (Given-Log),
    M = interpretations (Meant-Graph), S = positional lattice.
@@ -13070,17 +13898,34 @@ async function handleUpload(files) {
       // structured indexes for CSV/TSV sources. No-op for other kinds.
       indexStructuredSource(id);
 
-      // Off-thread segmentation into the section/paragraph/sentence/
-      // clause tree that every later analysis layer keys off. Doesn't
-      // block the upload loop — the promise is tracked so subsequent
-      // stages (embed, classify) can await it.
+      // Cache-aware analysis pipeline: segment -> embed -> classify.
+      // Each stage probes IndexedDB (keyed by content fingerprint)
+      // before doing work, so repeated uploads of the same file are
+      // instant. First-run cold import triggers a MiniLM download
+      // (~25MB) on the embed stage; the toast surfaces progress.
       if (hasText) {
-        showToast(`segmenting ${file.name}…`);
         try {
-          const segs = await segmentSource(id, { text, kind });
-          console.log(`[segment] ${file.name}: ${segs.length} segments`);
+          let lastPct = -1;
+          const result = await analyseSource(id, {
+            file,
+            onStage: (s) => {
+              const prefix = `${file.name}:`;
+              if (s.status === 'cached') showToast(`${prefix} ${s.stage} · cached`);
+              else if (s.status === 'ran')    showToast(`${prefix} ${s.stage} · done`);
+              else if (s.status === 'start')  showToast(`${prefix} ${s.stage}…`);
+              else if (s.status === 'progress' && s.total) {
+                const pct = Math.floor((s.done / s.total) * 100);
+                if (pct - lastPct >= 10) {
+                  lastPct = pct;
+                  showToast(`${prefix} ${s.stage} · ${s.done}/${s.total}`);
+                }
+              } else if (s.status === 'skipped') showToast(`${prefix} ${s.stage} skipped — ${s.msg || ''}`);
+            }
+          });
+          console.log(`[analyse] ${file.name}:`, result.stages, 'fp=' + result.fp);
         } catch (err) {
-          console.warn('[segment] failed for', file.name, err);
+          console.warn('[analyse] failed for', file.name, err);
+          showToast(`analysis failed for ${file.name}: ${err.message || 'unknown'}`);
         }
       }
 
