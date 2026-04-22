@@ -6819,6 +6819,16 @@ function renderSources() {
       for (const s of segs) delete SEG_EMBEDDINGS[s.id];
       delete SOURCE_SEGMENTS[id];
       delete SEG_LABELS[id];
+      // Drop triples and prune nodes whose support is entirely from
+      // this source. Cross-source edges referencing the removed
+      // source disappear with their sourceId; aggregates depending
+      // on it go stale until the next join pass.
+      for (const [eid, e] of GRAPH_EDGES) if (e.sourceId === id) GRAPH_EDGES.delete(eid);
+      for (const [nid, n] of GRAPH_NODES) {
+        n.supportingSegments = (n.supportingSegments || []).filter(s => sourceIdOfSegment(s) !== id);
+        if (!n.supportingSegments.length) GRAPH_NODES.delete(nid);
+      }
+      delete SOURCE_FP[id];
       await appendEventAndRefold({
         op: 'SRC_DEL',
         site: `source:${id}`,
@@ -12738,8 +12748,140 @@ async function invalidateAnalysisForFingerprint(fp) {
   await Promise.all([
     idbDel('segments:' + fp),
     idbDel('embeds:' + fp + ':' + EMBED_MODEL_VERSION),
-    idbDel('labels:' + fp + ':' + ANCHORS_VERSION)
+    idbDel('labels:' + fp + ':' + ANCHORS_VERSION),
+    idbDel('triples:' + fp + ':' + EXTRACTORS_VERSION)
   ]);
+}
+
+/* ======================================================================
+   TRIPLE + MERGED-GRAPH CACHE (Prompt 6.8)
+   ----------------------------------------------------------------------
+   Per-source triples live under triples:{fp}:extractor-v1. The
+   merged graph (entity-resolved, with cross-source joins) lives
+   under graph-merge:{corpus-fp} where corpus-fp is the sorted comma
+   -joined member fingerprints. Bumping EXTRACTORS_VERSION retires
+   old triple caches without touching the anchor or embedding
+   caches — three concerns, three version knobs.
+====================================================================== */
+
+const EXTRACTORS_VERSION = 'extractor-v1';
+
+async function loadTriplesForSource(sourceId, fp) {
+  const key = 'triples:' + fp + ':' + EXTRACTORS_VERSION;
+  const entry = await idbGet(key);
+  if (!entry || !Array.isArray(entry.edges)) return false;
+  // Rewrite ids that reference this source by suffix.
+  const segsById = new Map((SOURCE_SEGMENTS[sourceId] || []).map(s => [stripSourcePrefix(sourceId, s.id), s.id]));
+  for (const e of entry.edges) {
+    // Revive Suffix-keyed segment ids
+    const evid = e.evidenceSegmentSuffix ? applySourcePrefix(sourceId, e.evidenceSegmentSuffix) : e.evidenceSegmentId;
+    const edge = {
+      id: e.id,
+      subject: e.subject,
+      predicate: e.predicate,
+      object: e.object,
+      evidenceSegmentId: evid,
+      evidenceSpan: e.evidenceSpan,
+      sourceId,
+      confidence: e.confidence,
+      faceLabels: e.faceLabels,
+      attrs: e.attrs,
+      extractors: Array.isArray(e.extractors) ? e.extractors.slice() : []
+    };
+    const existing = GRAPH_EDGES.get(edge.id);
+    if (existing) {
+      for (const t of edge.extractors) if (!existing.extractors.includes(t)) existing.extractors.push(t);
+    } else {
+      GRAPH_EDGES.set(edge.id, edge);
+    }
+  }
+  // Also revive node entries contributed by this source.
+  if (Array.isArray(entry.nodes)) {
+    for (const n of entry.nodes) {
+      const existing = GRAPH_NODES.get(n.id);
+      if (existing) {
+        for (const sf of n.surfaceForms) if (!existing.surfaceForms.includes(sf)) existing.surfaceForms.push(sf);
+        const segs = new Set(existing.supportingSegments);
+        for (const sfx of n.supportingSegmentSuffixes || []) segs.add(applySourcePrefix(sourceId, sfx));
+        existing.supportingSegments = [...segs];
+      } else {
+        GRAPH_NODES.set(n.id, {
+          id: n.id,
+          type: n.type,
+          displayName: n.displayName,
+          surfaceForms: n.surfaceForms.slice(),
+          supportingSegments: (n.supportingSegmentSuffixes || []).map(sfx => applySourcePrefix(sourceId, sfx)),
+          transformationLabels: n.transformationLabels || {}
+        });
+      }
+    }
+  }
+  return true;
+}
+
+async function persistTriplesForSource(sourceId, fp) {
+  const key = 'triples:' + fp + ':' + EXTRACTORS_VERSION;
+  const edges = [];
+  for (const edge of GRAPH_EDGES.values()) {
+    if (edge.sourceId !== sourceId) continue;
+    edges.push({
+      id: edge.id,
+      subject: edge.subject,
+      predicate: edge.predicate,
+      object: edge.object,
+      evidenceSegmentSuffix: edge.evidenceSegmentId ? stripSourcePrefix(sourceId, edge.evidenceSegmentId) : null,
+      evidenceSegmentId: edge.evidenceSegmentId,
+      evidenceSpan: edge.evidenceSpan,
+      confidence: edge.confidence,
+      faceLabels: edge.faceLabels,
+      attrs: edge.attrs,
+      extractors: edge.extractors
+    });
+  }
+  // Find GRAPH_NODES whose supporting segments are (partly) from
+  // this source — capture just those for per-source persistence.
+  const nodes = [];
+  for (const [nodeId, node] of GRAPH_NODES) {
+    const segsForSource = (node.supportingSegments || []).filter(s => sourceIdOfSegment(s) === sourceId);
+    if (!segsForSource.length) continue;
+    nodes.push({
+      id: node.id,
+      type: node.type,
+      displayName: node.displayName,
+      surfaceForms: node.surfaceForms,
+      supportingSegmentSuffixes: segsForSource.map(s => stripSourcePrefix(sourceId, s)),
+      transformationLabels: node.transformationLabels
+    });
+  }
+  await idbPut(key, { version: 1, edges, nodes });
+}
+
+/* Compute corpus fingerprint — sorted, comma-joined member fps. A
+   new source changes this key; any existing merged-graph cache
+   under a different corpus-fp stays on disk until quota eviction. */
+function corpusFingerprint() {
+  const fps = Object.values(SOURCE_FP).filter(Boolean).slice().sort();
+  return fps.join(',');
+}
+
+async function persistMergedGraph() {
+  const corpFp = corpusFingerprint();
+  if (!corpFp) return;
+  const nodes = [...GRAPH_NODES.values()];
+  const edges = [...GRAPH_EDGES.values()];
+  await idbPut('graph-merge:' + corpFp, { version: 1, nodes, edges, memberFingerprints: corpFp.split(',') });
+}
+
+async function loadMergedGraph() {
+  const corpFp = corpusFingerprint();
+  if (!corpFp) return false;
+  const entry = await idbGet('graph-merge:' + corpFp);
+  if (!entry || !Array.isArray(entry.nodes) || !Array.isArray(entry.edges)) return false;
+  GRAPH_NODES.clear();
+  GRAPH_EDGES.clear();
+  for (const n of entry.nodes) GRAPH_NODES.set(n.id, n);
+  for (const e of entry.edges) GRAPH_EDGES.set(e.id, e);
+  return true;
 }
 
 /* ======================================================================
@@ -12848,25 +12990,38 @@ async function analyseSource(sourceId, { file, onStage } = {}) {
   }
 
   // --- Stage: extract ---
-  // No-op when no extractors are registered (Prompt 6.1 ships the
-  // scaffold; 6.2+ populates the registry). When registered, each
-  // extractor runs over every non-source segment; triples land in
-  // GRAPH_EDGES and segment.coverage is promoted based on the
-  // strongest hint seen. Cache persistence lands in 6.8; for now we
-  // rely on re-running extraction on reload (or Re-process).
+  // Cache probe first. Triples for this source are keyed by fp, so
+  // re-uploading the same file gets an instant extract-stage hit.
   if (EXTRACTORS.length) {
-    emit({ stage: 'extract', status: 'start' });
-    try {
-      const { tripleCount } = await runExtractors(sourceId, {
-        onProgress: (p) => emit({ stage: 'extract', status: 'progress', done: p.done, total: p.total, msg: p.stage })
-      });
-      stages.extract = 'ran';
-      emit({ stage: 'extract', status: 'ran', msg: `${tripleCount} triples` });
-      // Re-persist segments so the promoted coverage field is cached.
-      await persistSegments(sourceId, fp);
-    } catch (err) {
-      stages.extract = 'skipped';
-      emit({ stage: 'extract', status: 'skipped', msg: err.message || 'extraction failed' });
+    const cached = await loadTriplesForSource(sourceId, fp);
+    if (cached) {
+      stages.extract = 'cached';
+      emit({ stage: 'extract', status: 'cached' });
+    } else {
+      // Cost preview — let the user skip the expensive LLM pass
+      // before it runs. Remembered per-session so we don't re-prompt
+      // for every source in a batch upload.
+      const llmCost = (typeof estimateLLMExtractTokens === 'function')
+        ? estimateLLMExtractTokens(SOURCE_SEGMENTS[sourceId] || [])
+        : null;
+      const apiKey = (typeof CLAUDE_API_KEY === 'string' && CLAUDE_API_KEY) || '';
+      let allowLLM = true;
+      if (llmCost && llmCost.segmentCount > 0 && apiKey) {
+        allowLLM = await confirmExtractionCost(llmCost, (USER_SOURCES[sourceId] && USER_SOURCES[sourceId].name) || sourceId);
+      }
+      emit({ stage: 'extract', status: 'start', msg: llmCost && llmCost.segmentCount ? (allowLLM ? `~${llmCost.totalTokens.toLocaleString()} tokens` : 'skipping LLM pass') : '' });
+      try {
+        const { tripleCount } = await runExtractors(sourceId, {
+          skipLLM: !allowLLM,
+          onProgress: (p) => emit({ stage: 'extract', status: 'progress', done: p.done, total: p.total, msg: p.stage })
+        });
+        stages.extract = allowLLM ? 'ran' : 'partial';
+        emit({ stage: 'extract', status: 'ran', msg: `${tripleCount} triples` });
+        await persistSegments(sourceId, fp);
+      } catch (err) {
+        stages.extract = 'skipped';
+        emit({ stage: 'extract', status: 'skipped', msg: err.message || 'extraction failed' });
+      }
     }
 
     // --- Stage: resolve (6.6) ---
@@ -12893,10 +13048,49 @@ async function analyseSource(sourceId, { file, onStage } = {}) {
       stages.join = 'skipped';
       emit({ stage: 'join', status: 'skipped', msg: err.message || 'join failed' });
     }
+
+    // --- Stage: merge (6.8) ---
+    // Persist triples for this source and the corpus-wide merged
+    // graph so re-opens rehydrate without re-extracting.
+    emit({ stage: 'merge', status: 'start' });
+    try {
+      await persistTriplesForSource(sourceId, fp);
+      await persistMergedGraph();
+      stages.merge = 'ran';
+      emit({ stage: 'merge', status: 'ran', msg: `${GRAPH_NODES.size} nodes, ${GRAPH_EDGES.size} edges` });
+    } catch (err) {
+      stages.merge = 'skipped';
+      emit({ stage: 'merge', status: 'skipped', msg: err.message || 'persist failed' });
+    }
   } else {
     stages.extract = 'skipped';
   }
   return { fp, stages };
+}
+
+/* User-facing cost preview for the LLM extraction pass. Returns
+   true to run the LLM pass, false to skip it. Remembered per-
+   session so batch uploads don't re-prompt per source. A threshold
+   below ~5k tokens auto-allows; anything larger asks. */
+let _llmCostSessionChoice = null;
+async function confirmExtractionCost(estimate, fileName) {
+  if (!estimate || estimate.segmentCount <= 0) return true;
+  if (estimate.totalTokens < 5000) return true;
+  if (_llmCostSessionChoice !== null) return _llmCostSessionChoice;
+  const msg = [
+    'LLM extraction for ' + fileName + ':',
+    '  ' + estimate.segmentCount + ' segments',
+    '  ~' + estimate.totalTokens.toLocaleString() + ' tokens (~' + estimate.inputTokens.toLocaleString() + ' in, ~' + estimate.outputTokens.toLocaleString() + ' out)',
+    '',
+    'Run the LLM extraction pass?',
+    '',
+    '(Cancel skips the LLM pass for all sources this session. Mechanical extractors still run.)'
+  ].join('\n');
+  let choice;
+  try { choice = (typeof confirm === 'function') ? confirm(msg) : true; }
+  catch { choice = true; }
+  _llmCostSessionChoice = choice;
+  return choice;
 }
 
 /* Re-process a source: clears cache for its fingerprint and re-runs
@@ -13000,8 +13194,11 @@ function promoteCoverage(prev, next) {
    against every non-source segment, collects triples into
    GRAPH_EDGES (dedup on edgeId, merging extractors[] lineage), and
    promotes segment.coverage based on the strongest hint seen.
-   onProgress({stage, done, total}) drives the toast. */
-async function runExtractors(sourceId, { onProgress } = {}) {
+   onProgress({stage, done, total}) drives the toast. skipLLM=true
+   excludes the llm:extract_triples extractor — useful when the
+   user declined the cost preview but still wants mechanical
+   extractors to run. */
+async function runExtractors(sourceId, { onProgress, skipLLM } = {}) {
   const segs = SOURCE_SEGMENTS[sourceId];
   if (!segs || !segs.length) return { tripleCount: 0, extractorsRun: 0 };
   const labelsFor = SEG_LABELS[sourceId] || {};
@@ -13016,8 +13213,11 @@ async function runExtractors(sourceId, { onProgress } = {}) {
 
   let tripleCount = 0;
   let runs = 0;
-  const total = EXTRACTORS.length * segs.length;
-  for (const ext of EXTRACTORS) {
+  const activeExtractors = skipLLM
+    ? EXTRACTORS.filter(e => !e.tag.startsWith('llm:'))
+    : EXTRACTORS;
+  const total = activeExtractors.length * segs.length;
+  for (const ext of activeExtractors) {
     // Optional prepare hook — lets an extractor do one-shot setup
     // over the full segment list (e.g. LLM batching) before the
     // per-segment loop reads cached results. Failures here don't
