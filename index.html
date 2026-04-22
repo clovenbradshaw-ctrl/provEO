@@ -4818,6 +4818,34 @@
 
   /* ---------- EXPLORER MODES (Sources & Entities) ---------- */
   .mode-panel.explorer.active { display: grid; grid-template-columns: 212px 1fr 340px; }
+  .room-explorer-new { display: flex; flex-direction: column; gap: 6px; }
+  .room-explorer-new .sadd { margin: 0; padding: 8px; font-size: 11.5px; }
+  .room-explorer-hint {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+    padding-top: 4px;
+    border-top: 0.5px dashed var(--color-border-tertiary);
+  }
+  .room-row-icon {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    margin-right: 4px;
+  }
+  .room-row-badge {
+    display: inline-block;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-left: 6px;
+  }
+  .room-row-badge.active { background: var(--amber-fill); color: var(--amber-text); }
+  .room-row-badge.local { background: var(--color-background-tertiary); color: var(--color-text-secondary); }
+  .room-row-badge.matrix { background: var(--teal-fill); color: var(--teal-text); }
   .explorer-filters {
     background: var(--color-background-secondary);
     border-right: 0.5px solid var(--color-border-tertiary);
@@ -4941,6 +4969,7 @@
       <button class="mtab" data-mode="chat">Chat</button>
       <button class="mtab" data-mode="source-explorer">Sources</button>
       <button class="mtab" data-mode="entity-explorer">Entities</button>
+      <button class="mtab" data-mode="rooms">Projects</button>
     </div>
     <div class="topright">
       <span id="boot-status" style="font-family: var(--font-mono); font-size: 10.5px; color: var(--color-text-secondary); margin-right: 4px;">booting…</span>
@@ -4971,6 +5000,7 @@
       <div class="slist" id="slist"></div>
       <div class="sadd-stack">
         <div class="sadd" id="sadd-btn">+ add source</div>
+        <div class="sadd" id="sadd-new-doc-btn" title="Create a new blank text document in this project">+ new document</div>
         <div class="sadd-row">
           <div class="sarc" id="sarc-btn" title="Import files and publish them to Archive.org after confirmation">↑ file → archive</div>
           <div class="sarc" id="sarc-url-btn" title="Fetch a web page and auto-publish a snapshot to Archive.org">↗ url → archive</div>
@@ -5182,6 +5212,30 @@
           </div></div>
         </div>
         <div class="rp-content" id="ent-explorer-detail-body"></div>
+      </aside>
+    </section>
+
+    <!-- ===== ROOMS / PROJECTS EXPLORER MODE ===== -->
+    <section class="mode-panel explorer" id="mode-rooms">
+      <aside class="explorer-filters">
+        <div class="spanel-head"><span>Projects</span></div>
+        <div class="room-explorer-new">
+          <button class="sadd" id="room-new-btn" type="button" title="Create a new Matrix room as a project">+ new project</button>
+          <button class="sadd" id="room-local-btn" type="button" title="Work locally without a Matrix room">◻ local workspace</button>
+        </div>
+        <input class="explorer-search" id="room-explorer-q" type="text" placeholder="Search rooms…" autocomplete="off">
+        <div class="explorer-filter-group" id="room-explorer-status"></div>
+        <div class="room-explorer-hint" id="room-explorer-hint"></div>
+      </aside>
+      <div class="explorer-list" id="room-explorer-list"></div>
+      <aside class="right-panel explorer-detail" id="room-explorer-detail" data-empty="true">
+        <div class="rp-empty">
+          <div class="rp-empty-hint"><div class="rp-empty-inner">
+            <div class="rp-empty-glyph">◩</div>
+            <div class="rp-empty-text">Select a project to inspect its members, encryption, and invite link</div>
+          </div></div>
+        </div>
+        <div class="rp-content" id="room-explorer-detail-body"></div>
       </aside>
     </section>
 
@@ -5417,9 +5471,11 @@
           <div id="ws-rooms" class="ws-room-list"><div class="cite-empty">Loading rooms…</div></div>
         </div>
         <div class="ws-btn-row">
+          <button class="btn-sm btn-sm-primary" id="ws-create-room" title="Create a new Matrix room to use as a project">+ New project</button>
           <button class="btn-sm" id="ws-refresh-rooms">Refresh</button>
           <button class="btn-sm" id="mx-logout">Sign out</button>
         </div>
+        <div id="ws-create-err" class="ws-err" hidden></div>
       </div>
       <div class="ws-section" id="ws-active-section" hidden>
         <div class="ws-section-title">Active workspace: <span id="ws-active-name" style="font-family:var(--font-serif)"></span></div>
@@ -8666,12 +8722,13 @@ function switchMode(mode) {
   $$('.mtab').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
   $$('.mode-panel').forEach(p => p.classList.toggle('active', p.id === 'mode-' + mode));
   document.body.classList.toggle('explorer-active',
-    mode === 'source-explorer' || mode === 'entity-explorer');
+    mode === 'source-explorer' || mode === 'entity-explorer' || mode === 'rooms');
 
   if (mode === 'review') renderReview();
   if (mode === 'chat') renderChat();
   if (mode === 'source-explorer') renderSourceExplorer();
   if (mode === 'entity-explorer') renderEntityExplorer();
+  if (mode === 'rooms') renderRoomExplorer();
 }
 
 /* ======================================================================
@@ -12053,6 +12110,318 @@ function isHtmlFile(name, mime) {
   return ext === 'html' || ext === 'htm' || /^text\/html/i.test(mime || '');
 }
 
+/* Create a new blank text document in the current project. This is the
+   counterpart to `+ add source` (upload) — users who want to start writing
+   from scratch can click `+ new document` and the file lands in the
+   project's source list, identical in shape to an uploaded .txt file so
+   every downstream system (citations, exporter, matrix sync) treats it
+   the same. */
+async function handleNewDocument() {
+  const raw = prompt('Name for the new document:', 'Untitled document.txt');
+  if (raw === null) return;
+  let name = (raw || '').trim();
+  if (!name) name = 'Untitled document.txt';
+  if (!/\.[a-z0-9]{1,6}$/i.test(name)) name += '.txt';
+
+  const id = 's_' + ulid().slice(-10);
+  const kind = detectKind(name, 'text/plain');
+  const text = '';
+  try {
+    await storage.saveSource(id, text);
+    SOURCE_TEXT[id] = text;
+    await appendEventAndRefold({
+      op: 'SRC',
+      site: `source:${id}`,
+      resolution: 'Figure',
+      payload: {
+        id, name, kind, mime: 'text/plain',
+        meta: 'new · 0 lines',
+        size: 0, lines: 1,
+        has_text: true,
+        has_blob: false,
+        destination: 'local',
+        archive_url: null,
+        archive_identifier: null,
+        matrix_mxc: null,
+        matrix_room_id: null,
+        sha256: null,
+        extraction: null
+      },
+      author: 'human'
+    });
+    renderSources();
+    showToast(`created ${name}`);
+    if (typeof showSourceViewer === 'function') {
+      try { showSourceViewer(id); } catch {}
+    }
+  } catch (e) {
+    console.warn('[new-doc] failed', e);
+    showToast('could not create document');
+  }
+}
+
+/* Create a new Matrix room from inside PROVeo. Matrix rooms are the
+   server-side unit of a "project" / workspace — every collaborator who
+   joins the room becomes a project member. If the SDK / session isn't
+   loaded we bail early so the offline path keeps working. */
+async function createNewProjectRoom({ nameHint } = {}) {
+  if (!matrix.client || !matrix.userId) {
+    showToast('sign in to Matrix first');
+    return null;
+  }
+  const raw = prompt('Name for the new project (Matrix room):', nameHint || 'New project');
+  if (raw === null) return null;
+  const name = (raw || '').trim();
+  if (!name) { showToast('project name required'); return null; }
+  try {
+    const res = await matrix.client.createRoom({
+      name,
+      visibility: 'private',
+      preset: 'private_chat'
+    });
+    const newRoomId = res && (res.room_id || res.roomId);
+    if (!newRoomId) throw new Error('no room_id returned');
+    // Give the SDK a moment to see the new room, then refresh + select.
+    setTimeout(async () => {
+      refreshRooms();
+      try { await selectWorkspaceRoom(newRoomId); } catch {}
+      renderWorkspaceModal();
+      if ($('#mode-rooms')?.classList.contains('active')) renderRoomExplorer();
+    }, 400);
+    showToast(`created project "${name}"`);
+    return newRoomId;
+  } catch (e) {
+    console.warn('[create-room] failed', e);
+    const errEl = $('#ws-create-err');
+    if (errEl) {
+      errEl.hidden = false;
+      errEl.textContent = (e && (e.errcode ? `${e.errcode}: ` : '') + (e.message || 'could not create room')) || 'could not create room';
+    }
+    showToast('could not create project');
+    return null;
+  }
+}
+
+/* Switch the active workspace to "local only" — no Matrix room. Detaches
+   the collab bridge so no more events sync outward; OPFS keeps working. */
+function selectLocalWorkspace() {
+  if (!matrix.activeRoomId) { showToast('already local'); return; }
+  try { matrixCollab.detach?.(); } catch {}
+  try { collabCrypto.clear?.(); } catch {}
+  matrix.activeRoomId = null;
+  matrix.members = [];
+  try { localStorage.removeItem(LS_MX_ROOM); } catch {}
+  updateWorkspaceIndicator();
+  renderE2eeStatus();
+  renderWorkspaceModal();
+  if ($('#mode-rooms')?.classList.contains('active')) renderRoomExplorer();
+  showToast('switched to local workspace');
+}
+
+/* ---- Rooms / Projects explorer ---- */
+const roomExplorerState = { q: '', statusFilter: 'all' };
+
+function renderRoomExplorer() {
+  const listEl = $('#room-explorer-list');
+  const hintEl = $('#room-explorer-hint');
+  const statusEl = $('#room-explorer-status');
+  if (!listEl) return;
+
+  // Hint text depends on whether the user has signed in to Matrix
+  if (hintEl) {
+    if (!matrix.userId) {
+      hintEl.innerHTML = 'Sign in via <strong>Workspace ▾</strong> in the top bar to see and create Matrix projects. A project is a Matrix room whose members become collaborators.';
+    } else {
+      hintEl.innerHTML = 'A <strong>project</strong> is a Matrix room. Members of the room become collaborators. Click a project to activate it.';
+    }
+  }
+
+  // Refresh from the SDK so the list reflects any rooms created elsewhere
+  if (matrix.client) refreshRooms();
+
+  // Status filter chips
+  if (statusEl && !statusEl.dataset.wired) {
+    statusEl.innerHTML = `
+      <button class="explorer-chip is-on" data-status="all">all</button>
+      <button class="explorer-chip" data-status="active">active</button>
+      <button class="explorer-chip" data-status="local">local only</button>
+    `;
+    statusEl.dataset.wired = '1';
+    $$('#room-explorer-status .explorer-chip').forEach(ch => {
+      ch.addEventListener('click', () => {
+        roomExplorerState.statusFilter = ch.dataset.status;
+        $$('#room-explorer-status .explorer-chip').forEach(c => c.classList.toggle('is-on', c === ch));
+        renderRoomExplorer();
+      });
+    });
+  }
+
+  // Search wiring (once)
+  const qEl = $('#room-explorer-q');
+  if (qEl && !qEl.dataset.wired) {
+    qEl.addEventListener('input', () => {
+      roomExplorerState.q = qEl.value.toLowerCase();
+      renderRoomExplorer();
+    });
+    qEl.dataset.wired = '1';
+  }
+
+  // Build list: "Local workspace" pseudo-row + every joined Matrix room
+  const q = roomExplorerState.q;
+  const filter = roomExplorerState.statusFilter;
+  const rows = [];
+
+  const localActive = !matrix.activeRoomId;
+  const localMatches = !q || 'local workspace'.includes(q);
+  const passLocal = filter === 'all' || filter === 'local' || (filter === 'active' && localActive);
+  if (localMatches && passLocal) {
+    rows.push(`
+      <div class="explorer-row${localActive ? ' selected' : ''}" data-room-row="__local__">
+        <div class="explorer-row-name">
+          <span class="room-row-icon">◻</span>Local workspace
+          ${localActive ? '<span class="room-row-badge active">active</span>' : ''}
+          <span class="room-row-badge local">local</span>
+        </div>
+        <div class="explorer-row-meta">no Matrix sync · lives in this browser</div>
+      </div>
+    `);
+  }
+
+  const rooms = (matrix.rooms || []).filter(r => {
+    if (q && !(r.name.toLowerCase().includes(q) || r.id.toLowerCase().includes(q))) return false;
+    if (filter === 'active') return r.id === matrix.activeRoomId;
+    if (filter === 'local') return false;
+    return true;
+  });
+
+  for (const r of rooms) {
+    const isActive = r.id === matrix.activeRoomId;
+    rows.push(`
+      <div class="explorer-row${isActive ? ' selected' : ''}" data-room-row="${escapeHtml(r.id)}">
+        <div class="explorer-row-name">
+          <span class="room-row-icon">◩</span>${escapeHtml(r.name)}
+          ${isActive ? '<span class="room-row-badge active">active</span>' : ''}
+          <span class="room-row-badge matrix">matrix</span>
+        </div>
+        <div class="explorer-row-meta">${escapeHtml(r.id)} · ${r.memberCount} member${r.memberCount === 1 ? '' : 's'}</div>
+      </div>
+    `);
+  }
+
+  listEl.innerHTML = rows.length
+    ? rows.join('')
+    : `<div class="source-empty" style="padding:24px">No projects match. ${matrix.userId ? 'Click <strong>+ new project</strong> to create one.' : 'Sign in to Matrix to see your projects.'}</div>`;
+
+  $$('#room-explorer-list [data-room-row]').forEach(el => {
+    el.addEventListener('click', async () => {
+      const rid = el.dataset.roomRow;
+      if (rid === '__local__') {
+        if (!matrix.activeRoomId) { renderRoomExplorer(); return; }
+        selectLocalWorkspace();
+        renderRoomExplorerDetail('__local__');
+      } else {
+        await selectWorkspaceRoom(rid);
+        renderRoomExplorer();
+        renderRoomExplorerDetail(rid);
+      }
+    });
+  });
+
+  // Wire top actions (once)
+  const newBtn = $('#room-new-btn');
+  if (newBtn && !newBtn.dataset.wired) {
+    newBtn.addEventListener('click', async () => {
+      if (!matrix.userId) {
+        showToast('sign in to Matrix first');
+        openWorkspaceModal();
+        return;
+      }
+      const rid = await createNewProjectRoom({});
+      if (rid) setTimeout(() => { renderRoomExplorer(); renderRoomExplorerDetail(rid); }, 500);
+    });
+    newBtn.dataset.wired = '1';
+  }
+  const localBtn = $('#room-local-btn');
+  if (localBtn && !localBtn.dataset.wired) {
+    localBtn.addEventListener('click', () => {
+      selectLocalWorkspace();
+      renderRoomExplorer();
+      renderRoomExplorerDetail('__local__');
+    });
+    localBtn.dataset.wired = '1';
+  }
+
+  // Keep the detail pane in sync with whatever is currently active
+  const activeKey = matrix.activeRoomId || '__local__';
+  renderRoomExplorerDetail(activeKey);
+}
+
+function renderRoomExplorerDetail(key) {
+  const wrap = $('#room-explorer-detail');
+  const body = $('#room-explorer-detail-body');
+  if (!wrap || !body) return;
+  wrap.setAttribute('data-empty', 'false');
+
+  if (key === '__local__' || !key) {
+    body.innerHTML = `
+      <div class="rphead">
+        <span class="rphead-title">Local workspace</span>
+      </div>
+      <div class="rpbody" style="padding:14px 16px">
+        <div class="ws-section-sub" style="margin:0 0 10px">
+          No Matrix room is active. Everything you create stays in this browser (OPFS) and does not sync to any collaborator.
+        </div>
+        <div class="ws-section-sub" style="margin:0 0 6px"><strong>Sources in this workspace</strong></div>
+        <div class="ws-section-sub">${Object.keys(USER_SOURCES || {}).length} user-added source${Object.keys(USER_SOURCES || {}).length === 1 ? '' : 's'}</div>
+      </div>
+    `;
+    return;
+  }
+
+  const room = matrix.client?.getRoom(key);
+  const name = room ? (room.name || key) : key;
+  const joined = room?.getJoinedMembers?.() || [];
+  const invited = room?.getMembersWithMembership?.('invite') || [];
+  const link = buildInviteLink(key);
+  body.innerHTML = `
+    <div class="rphead">
+      <span class="rphead-title" style="font-family:var(--font-serif)">${escapeHtml(name)}</span>
+    </div>
+    <div class="rpbody" style="padding:14px 16px; overflow-y:auto">
+      <div class="ws-section-sub" style="margin:0 0 10px; font-family:var(--font-mono)">${escapeHtml(key)}</div>
+      <div class="ws-section-sub" style="margin:0 0 6px"><strong>Members</strong> (${joined.length})</div>
+      <div class="ws-member-list" style="margin-bottom:12px">${
+        joined.map(m => `<span class="ws-member-chip" title="${escapeHtml(m.userId)}">${escapeHtml(m.name || m.rawDisplayName || m.userId)}</span>`).join('')
+        || '<span class="cite-empty">No members loaded yet.</span>'
+      }</div>
+      ${invited.length ? `<div class="ws-section-sub" style="margin:0 0 6px"><strong>Pending invites</strong> (${invited.length})</div>
+        <div style="margin-bottom:12px">${invited.map(m => `<span class="pending-mxid" style="font-family:var(--font-mono); font-size:11px">${escapeHtml(m.userId)}</span>`).join('<br>')}</div>` : ''}
+      <div class="ws-section-sub" style="margin:0 0 6px"><strong>Invite link</strong></div>
+      <div style="display:flex; gap:6px; margin-bottom:12px">
+        <input class="ws-input" id="room-detail-link" type="text" readonly value="${escapeHtml(link)}" style="flex:1; font-family:var(--font-mono); font-size:11px">
+        <button class="btn-sm" id="room-detail-copy">Copy</button>
+      </div>
+      <div class="ws-btn-row" style="gap:8px">
+        <button class="btn-sm btn-sm-primary" id="room-detail-open">Open Workspace settings</button>
+        ${key === matrix.activeRoomId ? '' : `<button class="btn-sm" id="room-detail-activate">Activate this project</button>`}
+      </div>
+    </div>
+  `;
+  const copyBtn = $('#room-detail-copy');
+  if (copyBtn) copyBtn.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(link); showToast('invite link copied'); }
+    catch { const el = $('#room-detail-link'); el?.select(); try { document.execCommand('copy'); showToast('invite link copied'); } catch { showToast('press ⌘/Ctrl+C to copy'); } }
+  });
+  const openBtn = $('#room-detail-open');
+  if (openBtn) openBtn.addEventListener('click', () => openWorkspaceModal());
+  const activateBtn = $('#room-detail-activate');
+  if (activateBtn) activateBtn.addEventListener('click', async () => {
+    await selectWorkspaceRoom(key);
+    renderRoomExplorer();
+    renderRoomExplorerDetail(key);
+  });
+}
+
 async function handleAutoArchiveUpload(files) {
   const list = Array.from(files || []);
   if (!list.length) return;
@@ -13175,6 +13544,13 @@ function wireUploads() {
     await handleUpload(e.target.files);
     input.value = '';
   });
+
+  const newDocBtn = $('#sadd-new-doc-btn');
+  if (newDocBtn) {
+    newDocBtn.addEventListener('click', () => {
+      handleNewDocument().catch(err => console.warn('[new-doc]', err));
+    });
+  }
 
   const arcBtn = $('#sarc-btn');
   const arcInput = $('#file-input-archive');
@@ -20191,6 +20567,14 @@ function wireWorkspace() {
     refreshRooms();
     renderWorkspaceModal();
   });
+  const createRoomBtn = $('#ws-create-room');
+  if (createRoomBtn) {
+    createRoomBtn.addEventListener('click', async () => {
+      const errEl = $('#ws-create-err');
+      if (errEl) errEl.hidden = true;
+      await createNewProjectRoom({});
+    });
+  }
   $('#toggle-sample').addEventListener('change', e => setSampleData(e.target.checked));
   $('#toggle-sample-in').addEventListener('change', e => setSampleData(e.target.checked));
 
