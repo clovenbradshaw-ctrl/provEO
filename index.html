@@ -12957,10 +12957,10 @@ function hashStr(s) {
   return h.toString(16).padStart(8, '0');
 }
 
-function edgeIdFor(subject, predicate, object, evidenceSegmentId) {
+function edgeIdFor(subject, predicate, object) {
   const sid = (subject && (subject.id || subject.name)) || '';
   const oid = (object && (object.id || object.name)) || '';
-  return 'e_' + hashStr((sid || '') + '|' + (predicate || '') + '|' + (oid || '') + '|' + (evidenceSegmentId || ''));
+  return 'e_' + hashStr((sid || '') + '|' + (predicate || '') + '|' + (oid || ''));
 }
 
 /* Promote a coverage hint. 'full' wins, then 'partial', then 'none'. */
@@ -13008,7 +13008,7 @@ async function runExtractors(sourceId, { onProgress } = {}) {
       segment.coverage = promoteCoverage(segment.coverage || 'none', coverageHint);
       for (const t of triples) {
         const evidenceSegmentId = t.evidenceSegmentId || segment.id;
-        const id = edgeIdFor(t.subject, t.predicate, t.object, evidenceSegmentId);
+        const id = edgeIdFor(t.subject, t.predicate, t.object);
         const existing = GRAPH_EDGES.get(id);
         if (existing) {
           if (!existing.extractors.includes(ext.tag)) existing.extractors.push(ext.tag);
@@ -13039,6 +13039,233 @@ async function runExtractors(sourceId, { onProgress } = {}) {
 }
 
 const CONF_RANK = { low: 0, medium: 1, high: 2 };
+
+/* Inside runExtractors: build a sibling order index so the structure
+   extractor can emit (segment) --follows--> (prev). Called after
+   context.segmentsById is populated. Returns Map<segmentId, prevId>. */
+function buildPrevSiblingMap(segs) {
+  const byParent = new Map();
+  for (const s of segs) {
+    if (!s.parentId) continue;
+    if (!byParent.has(s.parentId)) byParent.set(s.parentId, []);
+    byParent.get(s.parentId).push(s);
+  }
+  const prev = new Map();
+  for (const kids of byParent.values()) {
+    for (let i = 1; i < kids.length; i++) prev.set(kids[i].id, kids[i - 1].id);
+  }
+  return prev;
+}
+
+/* ======================================================================
+   EXTRACTOR: CSV SCHEMA (tag 'csv-schema')
+   ----------------------------------------------------------------------
+   Pure projection of the structured index. Row subject is the leftmost
+   vendor/name/party/identifier column, falling back to any string
+   column. Every row emits one triple per non-null column, predicate
+   picked from the column's type:
+     amount-like (number/currency/percent) -> has_<col> (amount)
+     temporal (date)                        -> happens_on (date)
+     low-cardinality string                 -> in_<col>  (dimension)
+     high-cardinality string                -> has_<col> (identifier)
+   Header segments are fully structural — coverage 'full', no triples.
+====================================================================== */
+
+function normaliseColName(name) {
+  return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+}
+
+function pickRowSubject(table, row, rowIdx) {
+  const preferred = ['vendor', 'name', 'party', 'recipient', 'payee', 'id'];
+  for (const p of preferred) {
+    const idx = table.columns.findIndex(c => normaliseColName(c.name) === p);
+    if (idx >= 0 && row[idx] != null && row[idx] !== '') return String(row[idx]);
+  }
+  for (let i = 0; i < table.columns.length; i++) {
+    const col = table.columns[i];
+    if ((col.type === 'string' || col.type === 'mixed') && row[i] != null && row[i] !== '') {
+      return String(row[i]);
+    }
+  }
+  for (let i = 0; i < row.length; i++) if (row[i] != null && row[i] !== '') return String(row[i]);
+  return 'row_' + rowIdx;
+}
+
+function cellDisplay(cell) {
+  if (cell == null) return null;
+  if (typeof cell === 'object') return cell.raw != null ? cell.raw : (cell.iso != null ? cell.iso : JSON.stringify(cell));
+  return String(cell);
+}
+
+registerExtractor({
+  name: 'csv-schema',
+  tag: 'csv-schema',
+  run: (segment, ctx) => {
+    if (segment.kind !== 'row') return { triples: [], coverage: 'none' };
+    if (!ctx.table || !ctx.table.columns) return { triples: [], coverage: 'none' };
+    // Header row: structural-only, fully explained.
+    const lineIdx = (segment.loc && segment.loc.rowStart) || 0;
+    if (lineIdx === 0) return { triples: [], coverage: 'full' };
+    const rowIdx = lineIdx - 1;
+    const row = ctx.table.rows[rowIdx];
+    if (!row) return { triples: [], coverage: 'none' };
+
+    const subjName = pickRowSubject(ctx.table, row, lineIdx);
+    const subject = {
+      id: ctx.sourceId + ':row' + lineIdx,
+      name: subjName,
+      type: 'row'
+    };
+    const triples = [];
+    for (let c = 0; c < ctx.table.columns.length; c++) {
+      const col = ctx.table.columns[c];
+      const cell = row[c];
+      if (cell == null || cell === '') continue;
+      const disp = cellDisplay(cell);
+      const colSlug = normaliseColName(col.name) || ('col' + c);
+
+      if (col.type === 'currency' || col.type === 'percent' || col.type === 'number') {
+        triples.push({
+          subject,
+          predicate: 'has_' + colSlug,
+          object: { name: disp, type: 'amount' },
+          confidence: 'high',
+          attrs: { column: col.name, colType: col.type, value: cell }
+        });
+      } else if (col.type === 'date') {
+        triples.push({
+          subject,
+          predicate: 'happens_on',
+          object: { name: disp, type: 'date' },
+          confidence: 'high',
+          attrs: { column: col.name, value: cell }
+        });
+      } else if (col.type === 'boolean') {
+        triples.push({
+          subject,
+          predicate: 'has_' + colSlug,
+          object: { name: disp, type: 'boolean' },
+          confidence: 'high',
+          attrs: { column: col.name }
+        });
+      } else {
+        // string / mixed — decide dimension vs identifier by
+        // cardinality. >=80% distinct means the column functions
+        // as an id rather than a category. Anything else (including
+        // a column like department that repeats values across rows)
+        // is a dimension.
+        const profile = ctx.profile && ctx.profile[col.name];
+        const isIdentifier = profile && ctx.table.rowCount > 0
+          ? (profile.distinct / ctx.table.rowCount) >= 0.8
+          : false;
+        // Skip the self-reference when the cell IS the subject name.
+        if (isIdentifier && disp === subjName) continue;
+        const predicate = isIdentifier ? 'has_' + colSlug : 'in_' + colSlug;
+        triples.push({
+          subject,
+          predicate,
+          object: { name: disp, type: isIdentifier ? 'identifier' : 'dimension' },
+          confidence: 'high',
+          attrs: { column: col.name, cardinality: isIdentifier ? 'identifier' : 'dimension' }
+        });
+      }
+    }
+    return { triples, coverage: 'full' };
+  }
+});
+
+/* ======================================================================
+   EXTRACTOR: DOCUMENT STRUCTURE (tag 'structure')
+   ----------------------------------------------------------------------
+   Part-of edges lift the segment tree into the graph. follows links
+   sibling pairs in document order. has_page (PDFs only) dedups to
+   one edge per page via the edge-id hash. cites runs a cheap
+   substring match against other loaded sources' display names.
+====================================================================== */
+
+registerExtractor({
+  name: 'structure',
+  tag: 'structure',
+  run: (segment, ctx) => {
+    if (!ctx.prevSibling) ctx.prevSibling = buildPrevSiblingMap(SOURCE_SEGMENTS[ctx.sourceId] || []);
+    const triples = [];
+    const srcName = (ctx.source && ctx.source.name) || ctx.sourceId;
+    const srcType = 'source';
+
+    if (segment.parentId) {
+      const parent = ctx.segmentsById.get(segment.parentId);
+      const parentIsRoot = parent && parent.kind === 'source';
+      triples.push({
+        subject: { id: segment.id, name: segment.id, type: segment.kind },
+        predicate: 'part_of',
+        object: { id: segment.parentId, name: parentIsRoot ? srcName : segment.parentId, type: parentIsRoot ? srcType : (parent ? parent.kind : 'segment') },
+        confidence: 'high'
+      });
+      // Top-level segments also get a has_segment edge from the source
+      // for easy "all top-level sections" queries.
+      if (parentIsRoot) {
+        triples.push({
+          subject: { id: ctx.sourceId, name: srcName, type: srcType },
+          predicate: 'has_segment',
+          object: { id: segment.id, name: segment.text || segment.id, type: segment.kind },
+          confidence: 'high'
+        });
+      }
+    }
+
+    const prevId = ctx.prevSibling.get(segment.id);
+    if (prevId) {
+      const prev = ctx.segmentsById.get(prevId);
+      triples.push({
+        subject: { id: segment.id, name: segment.id, type: segment.kind },
+        predicate: 'follows',
+        object: { id: prevId, name: prevId, type: prev ? prev.kind : 'segment' },
+        confidence: 'high'
+      });
+    }
+
+    // has_page — dedup handles the per-page uniqueness; we emit once
+    // per segment on the page, all matching segments land on the
+    // same edge id.
+    if (ctx.source && ctx.source.kind === 'pdf' && segment.loc && segment.loc.pageStart) {
+      const page = segment.loc.pageStart;
+      triples.push({
+        subject: { id: ctx.sourceId, name: srcName, type: srcType },
+        predicate: 'has_page',
+        object: { id: ctx.sourceId + ':page_' + page, name: 'page ' + page, type: 'page' },
+        confidence: 'high'
+      });
+    }
+
+    // Cites: cheap substring match over other loaded sources' display
+    // names. Skips our own source and skips very short names to avoid
+    // accidental matches.
+    if (segment.text && segment.text.length > 20 && segment.kind !== 'source') {
+      for (const otherId of Object.keys(USER_SOURCES)) {
+        if (otherId === ctx.sourceId) continue;
+        const other = USER_SOURCES[otherId];
+        if (!other || !other.name) continue;
+        const base = other.name.replace(/\.[^.]+$/, '').trim();
+        if (base.length < 6) continue;
+        if (segment.text.includes(base)) {
+          triples.push({
+            subject: { id: segment.id, name: segment.id, type: segment.kind },
+            predicate: 'cites',
+            object: { id: otherId, name: other.name, type: srcType },
+            confidence: 'medium',
+            attrs: { matched: base }
+          });
+        }
+      }
+    }
+
+    // Structure alone is partial coverage — propositional content
+    // still needs downstream extractors to explain it. A segment
+    // that's purely structural (an empty section heading with no
+    // body, say) is rare enough that we don't special-case it.
+    return { triples, coverage: triples.length ? 'partial' : 'none' };
+  }
+});
 
 /* Kicks off a fold; resolves with the three EO views plus the
    render-ready claim projection. G = observations (Given-Log),
