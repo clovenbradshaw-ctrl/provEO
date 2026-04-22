@@ -13569,6 +13569,136 @@ registerExtractor({
   }
 });
 
+/* ======================================================================
+   EXTRACTOR: POS/SVO FALLBACK (tag 'pos:svo')
+   ----------------------------------------------------------------------
+   compromise.js (~200 KB, UMD) lazy-loaded from CDN on first use.
+   Runs only on sentence-level segments where earlier passes left
+   coverage !== 'full' — this is the catch-all for narrative
+   sentences that don't match any deterministic pattern. Confidence
+   is always 'low': SVO from broad POS tagging mis-fires readily,
+   but at low confidence the LLM residual pass (6.5) gets to
+   overwrite with higher-confidence triples and both lineages
+   survive in the edge's extractors[].
+====================================================================== */
+
+const COMPROMISE_CDN = 'https://cdn.jsdelivr.net/npm/compromise@14.14.4/builds/compromise.js';
+
+/* Verb lemma -> canonical predicate. Predicates outside this table
+   pass through as 'mentions' with the raw verb retained in attrs.
+   Lets 6.5 overwrite low-confidence 'mentions' with a more specific
+   LLM-emitted predicate when the two triples share (subject, object). */
+const VERB_PREDICATE = {
+  fund: 'funds', funded: 'funds', funding: 'funds',
+  authorize: 'authorizes', authorise: 'authorizes', authorized: 'authorizes',
+  allocate: 'allocates_to', allocated: 'allocates_to', appropriate: 'allocates_to', appropriated: 'allocates_to',
+  contract: 'contracts_with', contracted: 'contracts_with',
+  employ: 'employs', employed: 'employs', hire: 'employs', hired: 'employs',
+  supersede: 'supersedes', superseded: 'supersedes', repeal: 'supersedes', repealed: 'supersedes',
+  reference: 'references', referenced: 'references', cite: 'references', cited: 'references',
+  report: 'reports_to', reported: 'reports_to',
+  vote: 'votes_on', voted: 'votes_on',
+  mention: 'mentions', mentioned: 'mentions', discuss: 'mentions', discussed: 'mentions', note: 'mentions', noted: 'mentions',
+  locate: 'located_in', located: 'located_in',
+  contain: 'part_of', contained: 'part_of',
+  happen: 'happens_on', happened: 'happens_on', occur: 'happens_on', occurred: 'happens_on',
+  transfer: 'transfers_to', transferred: 'transfers_to',
+  establish: 'establishes', established: 'establishes', create: 'establishes', created: 'establishes'
+};
+function normalisePredicate(rawVerb) {
+  if (!rawVerb) return null;
+  const parts = String(rawVerb).toLowerCase().trim().split(/\s+/);
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const candidate = parts[i].replace(/[^a-z]/g, '');
+    // Strip -s / -es / -ing / -ed for lemma lookup.
+    const stems = [candidate];
+    if (candidate.endsWith('ing') && candidate.length > 5) {
+      stems.push(candidate.slice(0, -3), candidate.slice(0, -3) + 'e');
+    }
+    if (candidate.endsWith('ed') && candidate.length > 4) {
+      stems.push(candidate.slice(0, -2), candidate.slice(0, -1));
+    }
+    if (candidate.endsWith('s') && candidate.length > 3) stems.push(candidate.slice(0, -1));
+    for (const stem of stems) {
+      if (VERB_PREDICATE[stem]) return VERB_PREDICATE[stem];
+    }
+  }
+  return null;
+}
+
+let _compromisePromise = null;
+function loadCompromise() {
+  if (_compromisePromise) return _compromisePromise;
+  _compromisePromise = (async () => {
+    if (typeof window !== 'undefined' && window.nlp) return window.nlp;
+    if (typeof nlp !== 'undefined') return nlp;
+    // Script-tag injection: compromise ships UMD, not ESM.
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = COMPROMISE_CDN;
+      s.async = true;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('compromise load failed'));
+      document.head.appendChild(s);
+    });
+    if (typeof window !== 'undefined' && window.nlp) return window.nlp;
+    throw new Error('compromise did not expose nlp global');
+  })();
+  return _compromisePromise;
+}
+
+registerExtractor({
+  name: 'pos-svo',
+  tag: 'pos:svo',
+  run: async (segment, ctx) => {
+    if (segment.kind !== 'sentence') return { triples: [], coverage: 'none' };
+    if (segment.coverage === 'full') return { triples: [], coverage: 'none' };
+    const text = segment.text;
+    if (!text || text.length < 15) return { triples: [], coverage: 'none' };
+    let nlp;
+    try { nlp = await loadCompromise(); }
+    catch (err) { return { triples: [], coverage: 'none' }; }
+
+    const triples = [];
+    try {
+      const doc = nlp(text);
+      // Match noun-phrase + verb-phrase + noun-phrase; compromise's
+      // tag system handles auxiliaries like "shall submit" as a verb
+      // sequence. Named groups expose the three spans cleanly.
+      const matches = doc.match('[<subject>#Noun+] [<verb>(#Verb|#Adverb)+] [<object>(#Noun|#Adjective)+]').out('array');
+      // Unfortunately groups aren't returned with .out('array'); fall
+      // back to .json() for named-group access.
+      const structured = doc.match('[<subject>#Noun+] [<verb>(#Verb|#Adverb)+] [<object>(#Noun|#Adjective)+]').json();
+      for (const m of structured) {
+        const groups = m.groups || {};
+        const subj = (groups.subject && groups.subject.text) || '';
+        const verb = (groups.verb && groups.verb.text) || '';
+        const obj = (groups.object && groups.object.text) || '';
+        if (!subj || !verb || !obj) continue;
+        // Filter out pure pronouns as subjects — they need coreference
+        // (6.6) to be useful; emitting (it) --mentions--> (x) is noise.
+        if (/^(it|this|that|these|those|they|we|he|she|you)$/i.test(subj.trim())) continue;
+        const predicate = normalisePredicate(verb) || 'mentions';
+        triples.push({
+          subject: { name: subj.trim(), type: 'entity' },
+          predicate,
+          object: { name: obj.trim(), type: 'entity' },
+          evidenceSpan: m.text || (subj + ' ' + verb + ' ' + obj),
+          confidence: 'low',
+          attrs: { rawVerb: verb.trim(), predicateNormalised: !!VERB_PREDICATE[verb.trim().toLowerCase().split(/\s+/).pop()] }
+        });
+      }
+    } catch (err) {
+      console.warn('[pos-svo] compromise match failed', err);
+      return { triples: [], coverage: 'none' };
+    }
+
+    // POS fallback never claims 'full' — by construction the LLM
+    // residue pass still wants to look at this segment.
+    return { triples, coverage: triples.length ? 'partial' : 'none' };
+  }
+});
+
 /* Kicks off a fold; resolves with the three EO views plus the
    render-ready claim projection. G = observations (Given-Log),
    M = interpretations (Meant-Graph), S = positional lattice.
