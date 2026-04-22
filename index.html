@@ -13009,10 +13009,13 @@ async function runExtractors(sourceId, { onProgress } = {}) {
       for (const t of triples) {
         const evidenceSegmentId = t.evidenceSegmentId || segment.id;
         const id = edgeIdFor(t.subject, t.predicate, t.object);
+        // A triple may carry its own _tag override (e.g. 'regex:money'
+        // vs the extractor's bare 'regex' tag) so we can distinguish
+        // atom kinds in the lineage array.
+        const tag = t._tag || ext.tag;
         const existing = GRAPH_EDGES.get(id);
         if (existing) {
-          if (!existing.extractors.includes(ext.tag)) existing.extractors.push(ext.tag);
-          // Keep the highest confidence seen across lineage.
+          if (!existing.extractors.includes(tag)) existing.extractors.push(tag);
           if (CONF_RANK[t.confidence] > CONF_RANK[existing.confidence]) existing.confidence = t.confidence;
         } else {
           GRAPH_EDGES.set(id, {
@@ -13026,7 +13029,7 @@ async function runExtractors(sourceId, { onProgress } = {}) {
             confidence: t.confidence || 'medium',
             faceLabels: labelsFor[evidenceSegmentId] || null,
             attrs: t.attrs || null,
-            extractors: [ext.tag]
+            extractors: [tag]
           });
           tripleCount++;
         }
@@ -13264,6 +13267,305 @@ registerExtractor({
     // that's purely structural (an empty section heading with no
     // body, say) is rare enough that we don't special-case it.
     return { triples, coverage: triples.length ? 'partial' : 'none' };
+  }
+});
+
+/* ======================================================================
+   EXTRACTOR: REGEX ATOMS (tag 'regex:<kind>')
+   ----------------------------------------------------------------------
+   Runs over every sentence-level segment. Each atom matches a
+   deterministic surface form (money, dates, URLs, emails, phone
+   numbers, statute citations, vote tallies) and resolves a subject
+   via a nearest-capitalized-word heuristic. 6.6 replaces the subject
+   heuristic with proper entity resolution; the predicate shape
+   stays stable across that swap so downstream consumers don't care.
+====================================================================== */
+
+const REGEX_ATOMS = [
+  { kind: 'money',     re: /\$[\d,]+(?:\.\d+)?(?:\s*(?:million|billion|thousand|k|m|b))?/gi,                  predicate: 'has_amount',   objType: 'amount' },
+  { kind: 'date-iso',  re: /\b\d{4}-\d{2}-\d{2}\b/g,                                                          predicate: 'happens_on',   objType: 'date' },
+  { kind: 'date-us',   re: /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},\s*\d{4}\b/g, predicate: 'happens_on', objType: 'date' },
+  { kind: 'url',       re: /\bhttps?:\/\/[^\s<>"')]+/gi,                                                      predicate: 'has_url',      objType: 'url' },
+  { kind: 'email',     re: /\b[A-Za-z0-9._+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g,                              predicate: 'has_email',    objType: 'email' },
+  { kind: 'phone',     re: /\b\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b/g,                                          predicate: 'has_phone',    objType: 'phone' },
+  { kind: 'citation',  re: /\b(?:Section|§)\s*\d+(?:\.\d+)*(?:\([a-z]\))?\b/g,                                predicate: 'references',   objType: 'citation' },
+  // Vote tallies need surrounding vote-word context to avoid
+  // matching "Resolution 2024-14" or other incidental hyphenated
+  // numerics. The bare tally form fires only when preceded by
+  // 'carried'/'failed'/'defeated'/'ayes'/'nays'/'vote'.
+  { kind: 'vote',      re: /\b(?:carried|failed|defeated|rejected|vote was|ayes|nays)\s+(\d+-\d+(?:-\d+)?)\b|\bMotion (?:carried|failed|defeated|rejected)\b|the ayes have it|unanimous consent/gi, predicate: 'result', objType: 'vote' }
+];
+
+// Atom kinds whose emitted triples are about the document itself
+// rather than a named actor in the sentence (citations, urls,
+// emails, phones). When the nearest-proper-noun heuristic misfires
+// we fall back to 'this_document' rather than a stray capitalized
+// word nearby.
+const DOC_ATOM_KINDS = new Set(['citation', 'url', 'email', 'phone']);
+
+function nearestCapitalizedSubject(sentenceText, atomStart) {
+  // Multi-word proper noun: "Metro Council", "Solaren International".
+  // Prefer proper nouns BEFORE the atom (subject-verb-object order)
+  // over after; within each group, closest wins.
+  const re = /\b[A-Z][A-Za-z0-9]*(?:\s+[A-Z][A-Za-z0-9]*){0,4}\b/g;
+  let bestBefore = null, bestBeforeDist = Infinity;
+  let bestAfter = null, bestAfterDist = Infinity;
+  let m;
+  while ((m = re.exec(sentenceText)) !== null) {
+    if (m.index === 0 && !m[0].includes(' ')) {
+      const lowered = m[0].toLowerCase();
+      if (['the', 'this', 'that', 'these', 'those', 'a', 'an', 'we', 'they', 'i', 'motion', 'section'].includes(lowered)) continue;
+    }
+    const dist = Math.abs(m.index - atomStart);
+    if (m.index < atomStart) {
+      if (dist < bestBeforeDist) { bestBeforeDist = dist; bestBefore = m[0]; }
+    } else if (m.index > atomStart) {
+      if (dist < bestAfterDist) { bestAfterDist = dist; bestAfter = m[0]; }
+    }
+  }
+  return bestBefore || bestAfter;
+}
+
+registerExtractor({
+  name: 'regex-atoms',
+  tag: 'regex',
+  run: (segment, ctx) => {
+    if (segment.kind !== 'sentence') return { triples: [], coverage: 'none' };
+    const text = segment.text;
+    if (!text) return { triples: [], coverage: 'none' };
+    const triples = [];
+    let atomHits = 0;
+    let totalAtomChars = 0;
+    for (const atom of REGEX_ATOMS) {
+      atom.re.lastIndex = 0;
+      let m;
+      while ((m = atom.re.exec(text)) !== null) {
+        atomHits++;
+        totalAtomChars += m[0].length;
+        let subject;
+        if (DOC_ATOM_KINDS.has(atom.kind)) {
+          subject = thisDocSubject(ctx);
+        } else {
+          const subjName = nearestCapitalizedSubject(text, m.index) || 'this_statement';
+          subject = { name: subjName, type: subjName === 'this_statement' ? 'concept' : 'entity' };
+        }
+        // For the vote atom, prefer the captured group when present
+        // (bare tally like '7-2' from 'carried 7-2').
+        const objName = atom.kind === 'vote' && m[1] ? m[1] : m[0];
+        triples.push({
+          subject,
+          predicate: atom.predicate,
+          object: { name: objName, type: atom.objType },
+          evidenceSpan: m[0],
+          confidence: 'high',
+          attrs: { atomKind: atom.kind, matchOffset: m.index },
+          _tag: 'regex:' + atom.kind
+        });
+      }
+    }
+    if (!triples.length) return { triples: [], coverage: 'none' };
+    // Rough coverage heuristic: atoms accounting for >=60% of char
+    // length suggests the sentence is dominated by structured data
+    // (e.g., a short "Motion carried 7-2." line). Otherwise partial.
+    const coverage = (totalAtomChars / text.length >= 0.6) ? 'full' : 'partial';
+    return { triples, coverage };
+  }
+});
+
+/* ======================================================================
+   EXTRACTOR: HAND-PATTERN LIBRARY (tag 'pattern:<name>')
+   ----------------------------------------------------------------------
+   Each entry declares a predicate, regex, and an emitter that binds
+   captured groups into subject/object. When every argument resolves
+   to a non-empty string, the pattern fires. Matches are restricted
+   to sentence-level segments. Adding a pattern is one array entry.
+====================================================================== */
+
+function thisDocSubject(ctx) {
+  const src = ctx.source || {};
+  return { id: ctx.sourceId, name: src.name || ctx.sourceId, type: 'source' };
+}
+
+function cleanSnippet(s) {
+  return String(s || '').replace(/\s+/g, ' ').trim().replace(/[.,;:]+$/, '');
+}
+
+const PATTERNS = [
+  {
+    // Allow internal dots so section numbers like "2.4" survive
+    // the capture; terminate on comma/semicolon/colon/paren or end
+    // of sentence.
+    name: 'pursuant-to',
+    re: /\bpursuant to ([^,;:()]{3,80}?)(?=[,;:()]|\s(?:the|a|an|we|they|I)\b|\.\s|$)/gi,
+    emit: (m, seg, ctx) => ({
+      subject: thisDocSubject(ctx),
+      predicate: 'authorized_by',
+      object: { name: cleanSnippet(m[1]), type: 'authority' },
+      evidenceSpan: m[0],
+      confidence: 'high'
+    })
+  },
+  {
+    name: 'hereby-establish',
+    re: /\bhereby (establish|establishes|establishing|designate|designates|designating|create|creates|creating)\s+((?:the |a |an )?[^.,;:()]{3,80})/gi,
+    emit: (m, seg, ctx) => ({
+      subject: thisDocSubject(ctx),
+      predicate: 'establishes',
+      object: { name: cleanSnippet(m[2]), type: 'entity' },
+      evidenceSpan: m[0],
+      confidence: 'high',
+      attrs: { verb: m[1].toLowerCase() }
+    })
+  },
+  {
+    name: 'hereby-amend',
+    re: /\bhereby (amend|amends|amending|revoke|revokes|revoking|repeal|repeals|repealing|supersede|supersedes|superseding)\s+((?:the |a |an )?[^.,;:()]{3,80})/gi,
+    emit: (m, seg, ctx) => ({
+      subject: thisDocSubject(ctx),
+      predicate: 'supersedes',
+      object: { name: cleanSnippet(m[2]), type: 'entity' },
+      evidenceSpan: m[0],
+      confidence: 'high',
+      attrs: { verb: m[1].toLowerCase() }
+    })
+  },
+  {
+    name: 'under-section',
+    re: /\bunder (Section|§)\s*(\d+(?:\.\d+)*(?:\([a-z]\))?)\b/g,
+    emit: (m, seg, ctx) => ({
+      subject: thisDocSubject(ctx),
+      predicate: 'references',
+      object: { name: 'Section ' + m[2], type: 'citation' },
+      evidenceSpan: m[0],
+      confidence: 'high'
+    })
+  },
+  {
+    name: 'officer-shall',
+    re: /\bthe (Secretary|Director|Commissioner|Mayor|Administrator|Superintendent) of (?:the )?([A-Z][A-Za-z ]{2,40}?) shall ([^.,;:]{5,80})/g,
+    emit: (m, seg, ctx) => ({
+      subject: { name: m[1] + ' of ' + cleanSnippet(m[2]), type: 'role' },
+      predicate: 'shall',
+      object: { name: cleanSnippet(m[3]), type: 'action' },
+      evidenceSpan: m[0],
+      confidence: 'high'
+    })
+  },
+  {
+    name: 'motion-carried',
+    re: /\bMotion carried (\d+)-(\d+)(?:-(\d+))?/gi,
+    emit: (m, seg, ctx) => ({
+      subject: { name: 'motion', type: 'motion' },
+      predicate: 'result',
+      object: { name: 'carried ' + m[1] + '-' + m[2] + (m[3] ? '-' + m[3] : ''), type: 'vote' },
+      evidenceSpan: m[0],
+      confidence: 'high',
+      attrs: { ayes: Number(m[1]), nays: Number(m[2]), abstain: m[3] ? Number(m[3]) : 0 }
+    })
+  },
+  {
+    name: 'motion-failed',
+    re: /\bMotion (failed|defeated|rejected) (\d+)-(\d+)(?:-(\d+))?/gi,
+    emit: (m, seg, ctx) => ({
+      subject: { name: 'motion', type: 'motion' },
+      predicate: 'result',
+      object: { name: 'failed ' + m[2] + '-' + m[3] + (m[4] ? '-' + m[4] : ''), type: 'vote' },
+      evidenceSpan: m[0],
+      confidence: 'high',
+      attrs: { verb: m[1].toLowerCase(), ayes: Number(m[2]), nays: Number(m[3]), abstain: m[4] ? Number(m[4]) : 0 }
+    })
+  },
+  {
+    name: 'designated-as',
+    re: /\b(?:is|are) hereby designated as ([^.,;:()]{3,80})/gi,
+    emit: (m, seg, ctx) => {
+      // Use the nearest preceding proper noun as subject.
+      const subjName = nearestCapitalizedSubject(seg.text, m.index) || 'this_statement';
+      return {
+        subject: { name: subjName, type: 'entity' },
+        predicate: 'designated_as',
+        object: { name: cleanSnippet(m[1]), type: 'role' },
+        evidenceSpan: m[0],
+        confidence: 'high'
+      };
+    }
+  },
+  {
+    name: 'appropriate-to',
+    re: /\bappropriat(?:e|es|ed|ing) (\$[\d,]+(?:\.\d+)?(?:\s*(?:million|billion|thousand|k|m|b))?) (?:to|for) ([^.,;:()]{3,80})/gi,
+    emit: (m, seg, ctx) => ({
+      subject: thisDocSubject(ctx),
+      predicate: 'allocates_to',
+      object: { name: cleanSnippet(m[2]), type: 'program' },
+      evidenceSpan: m[0],
+      confidence: 'high',
+      attrs: { amount: m[1] }
+    })
+  },
+  {
+    name: 'transferred-from-to',
+    re: /\btransferred from ([^,;:()]{3,50}) to ([^.,;:()]{3,50})/gi,
+    emit: (m, seg, ctx) => ({
+      subject: { name: cleanSnippet(m[1]), type: 'entity' },
+      predicate: 'transfers_to',
+      object: { name: cleanSnippet(m[2]), type: 'entity' },
+      evidenceSpan: m[0],
+      confidence: 'high'
+    })
+  },
+  {
+    name: 'effective-on',
+    re: /\beffective (?:on |as of )?((?:\d{4}-\d{2}-\d{2})|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},\s*\d{4})/gi,
+    emit: (m, seg, ctx) => ({
+      subject: thisDocSubject(ctx),
+      predicate: 'takes_effect_on',
+      object: { name: m[1], type: 'date' },
+      evidenceSpan: m[0],
+      confidence: 'high'
+    })
+  },
+  {
+    name: 'contracts-with',
+    re: /\b(?:contracts|contracted) with ([A-Z][^,.;:()]{2,60})/g,
+    emit: (m, seg, ctx) => {
+      const subjName = nearestCapitalizedSubject(seg.text, m.index) || (ctx.source && ctx.source.name) || ctx.sourceId;
+      return {
+        subject: { name: subjName, type: 'entity' },
+        predicate: 'contracts_with',
+        object: { name: cleanSnippet(m[1]), type: 'vendor' },
+        evidenceSpan: m[0],
+        confidence: 'high'
+      };
+    }
+  }
+];
+
+registerExtractor({
+  name: 'hand-patterns',
+  tag: 'pattern',
+  run: (segment, ctx) => {
+    if (segment.kind !== 'sentence') return { triples: [], coverage: 'none' };
+    const text = segment.text;
+    if (!text) return { triples: [], coverage: 'none' };
+    const triples = [];
+    let coveredChars = 0;
+    for (const pat of PATTERNS) {
+      pat.re.lastIndex = 0;
+      let m;
+      while ((m = pat.re.exec(text)) !== null) {
+        let triple;
+        try { triple = pat.emit(m, segment, ctx); }
+        catch (err) { continue; }
+        if (!triple || !triple.subject || !triple.object || !triple.predicate) continue;
+        if (!triple.subject.name || !triple.object.name) continue;
+        triple._tag = 'pattern:' + pat.name;
+        triples.push(triple);
+        coveredChars += m[0].length;
+      }
+    }
+    if (!triples.length) return { triples: [], coverage: 'none' };
+    const coverage = (coveredChars / text.length >= 0.6) ? 'full' : 'partial';
+    return { triples, coverage };
   }
 });
 
