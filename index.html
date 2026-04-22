@@ -317,6 +317,102 @@
   .article-meta .sep {
     color: var(--color-border-secondary);
   }
+  .outputs-picker {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+  }
+  .outputs-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: transparent;
+    border: 0.5px solid transparent;
+    color: var(--color-text-secondary);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.01em;
+    height: 22px;
+    padding: 0 6px;
+    border-radius: 3px;
+    cursor: pointer;
+    max-width: 280px;
+    transition: background 0.1s, border-color 0.1s, color 0.1s;
+  }
+  .outputs-btn:hover,
+  .outputs-btn[aria-expanded="true"] {
+    background: var(--color-bg-secondary, rgba(0,0,0,0.04));
+    border-color: var(--color-border-tertiary);
+    color: var(--color-text-primary);
+  }
+  .outputs-btn-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 240px;
+  }
+  .outputs-caret {
+    font-size: 9px;
+    opacity: 0.6;
+  }
+  .outputs-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 50;
+    min-width: 240px;
+    max-width: 360px;
+    padding: 4px;
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: 4px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  }
+  .outputs-menu .outputs-opt {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    text-align: left;
+    padding: 6px 10px;
+    border: 0;
+    background: transparent;
+    font-family: var(--font-serif);
+    font-size: 13px;
+    color: var(--color-text-primary);
+    border-radius: 3px;
+    cursor: pointer;
+    line-height: 1.2;
+  }
+  .outputs-menu .outputs-opt:hover,
+  .outputs-menu .outputs-opt[aria-selected="true"] {
+    background: var(--color-bg-secondary, rgba(0,0,0,0.06));
+  }
+  .outputs-menu .outputs-opt-title {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .outputs-menu .outputs-opt-check {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    width: 12px;
+    text-align: right;
+  }
+  .outputs-menu .outputs-sep {
+    height: 0.5px;
+    background: var(--color-border-tertiary);
+    margin: 4px 2px;
+  }
+  .outputs-menu .outputs-new {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-secondary);
+  }
+  .outputs-menu .outputs-new:hover {
+    color: var(--color-text-primary);
+  }
   .counts {
     font-family: var(--font-mono);
     font-size: 11px;
@@ -5175,7 +5271,13 @@
           </div>
           <div class="evidence-bench" id="evidence-bench" hidden></div>
           <div class="article-meta">
-            <span>Untitled draft</span>
+            <div class="outputs-picker">
+              <button type="button" class="outputs-btn" id="outputs-btn" aria-haspopup="listbox" aria-expanded="false">
+                <span class="outputs-btn-label" id="outputs-btn-label">Untitled</span>
+                <span class="outputs-caret">▾</span>
+              </button>
+              <div class="outputs-menu" id="outputs-menu" role="listbox" hidden></div>
+            </div>
             <span class="sep">·</span>
             <span class="counts" id="counts-meta"></span>
           </div>
@@ -9319,6 +9421,9 @@ const storage = (() => {
   }
 
   // ---- Article body persistence ----
+  // Legacy single-article store (still read on first boot so existing drafts
+  // migrate into the outputs/ directory below). New writes go through
+  // saveOutput/readOutput.
   let memArticle = null;
   async function saveArticle(html) {
     if (!available) { memArticle = html; return; }
@@ -9337,6 +9442,67 @@ const storage = (() => {
     } catch {
       return null;
     }
+  }
+  async function deleteLegacyArticle() {
+    memArticle = null;
+    if (!available) return;
+    try { await rootP.removeEntry('article.html'); } catch {}
+  }
+
+  // ---- Outputs (multi-document writing spaces) ----
+  // Each output is a payload identical in shape to the legacy article.html
+  // ({title, body, citations}), stored at outputs/{id}.json. An index file
+  // at outputs-index.json lists {id, title, createdAt, updatedAt} so the
+  // picker UI doesn't have to open every file.
+  const memOutputs = new Map();
+  let memOutputsIndex = null;
+  async function readOutputsIndex() {
+    if (!available) return memOutputsIndex;
+    try {
+      const fh = await getFile('outputs-index.json', true);
+      const f = await fh.getFile();
+      const t = await f.text();
+      return t ? JSON.parse(t) : null;
+    } catch {
+      return null;
+    }
+  }
+  async function writeOutputsIndex(list) {
+    const serialized = JSON.stringify(list, null, 2);
+    if (!available) { memOutputsIndex = JSON.parse(serialized); return; }
+    const fh = await getFile('outputs-index.json', true);
+    const w = await fh.createWritable();
+    await w.write(serialized);
+    await w.close();
+  }
+  async function saveOutput(id, payload) {
+    memOutputs.set(id, payload);
+    if (!available) return;
+    const dir = await getDir('outputs', true);
+    const fh = await dir.getFileHandle(id + '.json', { create: true });
+    const w = await fh.createWritable();
+    await w.write(payload);
+    await w.close();
+  }
+  async function readOutput(id) {
+    if (!available) return memOutputs.get(id) || null;
+    try {
+      const dir = await getDir('outputs', true);
+      const fh = await dir.getFileHandle(id + '.json');
+      const f = await fh.getFile();
+      const t = await f.text();
+      return t || null;
+    } catch {
+      return null;
+    }
+  }
+  async function deleteOutput(id) {
+    memOutputs.delete(id);
+    if (!available) return;
+    try {
+      const dir = await getDir('outputs', true);
+      await dir.removeEntry(id + '.json');
+    } catch {}
   }
 
   // ---- Entity resolution table (Phase 8, Task 27) ----
@@ -9366,7 +9532,8 @@ const storage = (() => {
   return {
     init, append, readAll, seedMarkerExists, setSeedMarker,
     saveSource, saveSourceBlob, readSource, readSourceBlob, deleteSource,
-    saveArticle, readArticle,
+    saveArticle, readArticle, deleteLegacyArticle,
+    readOutputsIndex, writeOutputsIndex, saveOutput, readOutput, deleteOutput,
     readEntities, saveEntities,
     get available() { return available; }
   };
@@ -16054,20 +16221,143 @@ function scheduleCitationsRender(delay = 120) {
   }, delay);
 }
 
+/* ---------- Outputs (multiple writing spaces) ---------- */
+// OUTPUTS is the in-memory index mirroring outputs-index.json on disk.
+// Each entry: { id, title, createdAt, updatedAt }. CURRENT_OUTPUT_ID points
+// at the entry whose payload is currently loaded into the editor.
+let OUTPUTS = [];
+let CURRENT_OUTPUT_ID = null;
+
+function currentOutputEntry() {
+  return OUTPUTS.find(o => o.id === CURRENT_OUTPUT_ID) || null;
+}
+
+async function initOutputs() {
+  const idx = await storage.readOutputsIndex();
+  OUTPUTS = Array.isArray(idx) ? idx.slice() : [];
+  if (OUTPUTS.length > 0) {
+    CURRENT_OUTPUT_ID = OUTPUTS[0].id;
+    return;
+  }
+  // First boot under the multi-output model. Migrate any legacy article.html
+  // into the first output so nothing the user wrote is lost.
+  const legacy = await storage.readArticle();
+  const now = new Date().toISOString();
+  const id = 'out_' + ulid();
+  let title = 'Untitled';
+  if (legacy) {
+    try {
+      const parsed = JSON.parse(legacy);
+      if (parsed && typeof parsed.title === 'string' && parsed.title.trim()) {
+        title = parsed.title.trim();
+      }
+    } catch {}
+    await storage.saveOutput(id, legacy);
+  }
+  OUTPUTS = [{ id, title, createdAt: now, updatedAt: now }];
+  CURRENT_OUTPUT_ID = id;
+  await storage.writeOutputsIndex(OUTPUTS);
+  if (legacy) {
+    // Payload is now canonical under outputs/; drop the legacy file so we
+    // don't re-migrate or double-read it.
+    await storage.deleteLegacyArticle();
+  }
+}
+
+async function touchOutputEntry(id, patch) {
+  const entry = OUTPUTS.find(o => o.id === id);
+  if (!entry) return;
+  Object.assign(entry, patch, { updatedAt: new Date().toISOString() });
+  await storage.writeOutputsIndex(OUTPUTS);
+  renderOutputsPicker();
+}
+
+async function createNewOutput(rawTitle) {
+  // Flush any pending edits to the current output before creating a new one.
+  clearTimeout(saveArticleTimer);
+  await saveArticleNow();
+  const title = (rawTitle || '').trim() || 'Untitled';
+  const id = 'out_' + ulid();
+  const now = new Date().toISOString();
+  OUTPUTS.push({ id, title, createdAt: now, updatedAt: now });
+  CURRENT_OUTPUT_ID = id;
+  await storage.writeOutputsIndex(OUTPUTS);
+  // Seed an empty payload so readOutput finds the file on next boot.
+  await storage.saveOutput(id, JSON.stringify({ title, body: '', citations: null }));
+  // Reset the editor to a blank state with the new title.
+  const body = $('#article-body');
+  const titleEl = $('.article-title');
+  if (body) body.innerHTML = '';
+  if (titleEl) titleEl.textContent = title;
+  CITATIONS.hydrate(null);
+  try { renderCitations(); } catch {}
+  try { renderCounts(); } catch {}
+  try { updateWordCount(); } catch {}
+  renderOutputsPicker();
+  if (titleEl) {
+    titleEl.focus();
+    const range = document.createRange();
+    range.selectNodeContents(titleEl);
+    const sel = window.getSelection();
+    if (sel) { sel.removeAllRanges(); sel.addRange(range); }
+  }
+}
+
+async function switchToOutput(id) {
+  if (!id || id === CURRENT_OUTPUT_ID) return;
+  clearTimeout(saveArticleTimer);
+  await saveArticleNow();
+  CURRENT_OUTPUT_ID = id;
+  const body = $('#article-body');
+  const titleEl = $('.article-title');
+  if (body) body.innerHTML = '';
+  if (titleEl) titleEl.textContent = '';
+  CITATIONS.hydrate(null);
+  const loaded = await loadPersistedArticle();
+  if (!loaded && titleEl) {
+    const entry = currentOutputEntry();
+    if (entry) titleEl.textContent = entry.title || 'Untitled';
+  }
+  try { renderCitations(); } catch {}
+  try { renderCounts(); } catch {}
+  try { updateWordCount(); } catch {}
+  renderOutputsPicker();
+}
+
 async function saveArticleNow() {
   const body = $('#article-body');
   const title = $('.article-title');
   if (!body) return;
+  const titleText = title ? title.innerText.trim() : 'Untitled draft';
   const payload = JSON.stringify({
-    title: title ? title.innerText.trim() : 'Untitled draft',
+    title: titleText,
     body: serializeArticleBody(),
     citations: CITATIONS.serialize()
   });
-  await storage.saveArticle(payload);
+  if (CURRENT_OUTPUT_ID) {
+    await storage.saveOutput(CURRENT_OUTPUT_ID, payload);
+    const entry = OUTPUTS.find(o => o.id === CURRENT_OUTPUT_ID);
+    if (entry) {
+      const nextTitle = titleText || 'Untitled';
+      const titleChanged = entry.title !== nextTitle;
+      entry.title = nextTitle;
+      entry.updatedAt = new Date().toISOString();
+      await storage.writeOutputsIndex(OUTPUTS);
+      if (titleChanged) renderOutputsPicker();
+    }
+  } else {
+    // Only hit on the very first render before initOutputs() finishes.
+    await storage.saveArticle(payload);
+  }
 }
 
 async function loadPersistedArticle() {
-  const raw = await storage.readArticle();
+  let raw = null;
+  if (CURRENT_OUTPUT_ID) {
+    raw = await storage.readOutput(CURRENT_OUTPUT_ID);
+  } else {
+    raw = await storage.readArticle();
+  }
   if (!raw) return false;
   try {
     const data = JSON.parse(raw);
@@ -16113,6 +16403,85 @@ function updateWordCount() {
   const text = (body.innerText || '').trim();
   const words = text ? text.split(/\s+/).length : 0;
   el.textContent = `${words} word${words === 1 ? '' : 's'}`;
+}
+
+/* ---------- Outputs picker UI ---------- */
+function renderOutputsPicker() {
+  const label = $('#outputs-btn-label');
+  const menu = $('#outputs-menu');
+  const current = currentOutputEntry();
+  if (label) label.textContent = (current && current.title) ? current.title : 'Untitled';
+  if (!menu) return;
+  // Newest updates on top, then the "+ New output" row.
+  const sorted = OUTPUTS.slice().sort((a, b) => {
+    const ua = a.updatedAt || a.createdAt || '';
+    const ub = b.updatedAt || b.createdAt || '';
+    return ub.localeCompare(ua);
+  });
+  const rows = sorted.map(o => {
+    const active = o.id === CURRENT_OUTPUT_ID;
+    const title = (o.title || 'Untitled').replace(/[<&>]/g, s => ({'<':'&lt;','&':'&amp;','>':'&gt;'}[s]));
+    return `<button type="button" class="outputs-opt" role="option" data-id="${o.id}" aria-selected="${active}">
+      <span class="outputs-opt-title">${title}</span>
+      <span class="outputs-opt-check">${active ? '✓' : ''}</span>
+    </button>`;
+  }).join('');
+  menu.innerHTML = rows
+    + '<div class="outputs-sep"></div>'
+    + '<button type="button" class="outputs-opt outputs-new" data-action="new">+ New output</button>';
+}
+
+function wireOutputsPicker() {
+  const btn = $('#outputs-btn');
+  const menu = $('#outputs-menu');
+  if (!btn || !menu) return;
+
+  const close = () => {
+    menu.hidden = true;
+    btn.setAttribute('aria-expanded', 'false');
+  };
+  const open = () => {
+    renderOutputsPicker();
+    menu.hidden = false;
+    btn.setAttribute('aria-expanded', 'true');
+  };
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (menu.hidden) open(); else close();
+  });
+
+  menu.addEventListener('click', async (e) => {
+    const opt = e.target.closest('.outputs-opt');
+    if (!opt) return;
+    e.stopPropagation();
+    close();
+    if (opt.dataset.action === 'new') {
+      const name = window.prompt('Name for the new output:', 'Untitled');
+      if (name === null) return; // cancelled
+      try { await createNewOutput(name); }
+      catch (err) { console.warn('[outputs] create failed', err); }
+      return;
+    }
+    const id = opt.dataset.id;
+    if (id) {
+      try { await switchToOutput(id); }
+      catch (err) { console.warn('[outputs] switch failed', err); }
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (menu.hidden) return;
+    if (!menu.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+      close();
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !menu.hidden) close();
+  });
+
+  renderOutputsPicker();
 }
 
 function setSyncStatus(state, label) {
@@ -22531,6 +22900,10 @@ async function init() {
 
   renderSources();
 
+  // Initialize the outputs index (migrates legacy article.html on first boot)
+  // before loading a draft — loadPersistedArticle reads from the current output.
+  await initOutputs();
+
   // render seeded article first; if a persisted draft exists, load it over
   renderArticleBody($('#article-body'));
   const hadPersisted = await loadPersistedArticle();
@@ -22547,6 +22920,7 @@ async function init() {
 
   renderCounts();
   wireEditor();
+  wireOutputsPicker();
   wireUploads();
   wireSelectionToolbar();
   wirePanelCollapse();
