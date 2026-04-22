@@ -2395,6 +2395,88 @@
   }
   .chat-bubble p { margin-bottom: 10px; }
   .chat-bubble p:last-child { margin-bottom: 0; }
+  .chat-bubble h1, .chat-bubble h2, .chat-bubble h3 {
+    font-family: var(--font-sans);
+    color: var(--color-text-primary);
+    line-height: 1.3;
+    margin: 14px 0 6px;
+  }
+  .chat-bubble h1:first-child,
+  .chat-bubble h2:first-child,
+  .chat-bubble h3:first-child { margin-top: 0; }
+  .chat-bubble h1 { font-size: 16px; font-weight: 600; }
+  .chat-bubble h2 { font-size: 14.5px; font-weight: 600; }
+  .chat-bubble h3 {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-secondary);
+  }
+  .chat-bubble strong { font-weight: 600; }
+  .chat-bubble em { font-style: italic; }
+  .chat-bubble ul, .chat-bubble ol {
+    margin: 6px 0 10px;
+    padding-left: 22px;
+  }
+  .chat-bubble ul:last-child, .chat-bubble ol:last-child { margin-bottom: 0; }
+  .chat-bubble li { margin-bottom: 3px; }
+  .chat-bubble li > ul, .chat-bubble li > ol { margin: 3px 0 0; }
+  .chat-bubble blockquote {
+    margin: 8px 0;
+    padding: 4px 10px;
+    border-left: 2px solid var(--amber-mid);
+    color: var(--color-text-secondary);
+    background: var(--amber-fill);
+    border-radius: 0 var(--border-radius-sm) var(--border-radius-sm) 0;
+  }
+  .chat-bubble hr {
+    margin: 12px 0;
+    border: 0;
+    border-top: 0.5px solid var(--color-border-tertiary);
+  }
+  .chat-bubble code {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    background: var(--color-background-tertiary);
+    padding: 1px 4px;
+    border-radius: var(--border-radius-sm);
+  }
+  .chat-bubble pre {
+    margin: 8px 0;
+    padding: 10px 12px;
+    background: var(--color-background-tertiary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    overflow-x: auto;
+    font-size: 12px;
+  }
+  .chat-bubble pre code {
+    background: transparent;
+    padding: 0;
+    font-size: inherit;
+  }
+  .chat-bubble table {
+    border-collapse: collapse;
+    margin: 8px 0;
+    font-size: 12.5px;
+    font-family: var(--font-sans);
+  }
+  .chat-bubble th, .chat-bubble td {
+    border: 0.5px solid var(--color-border-tertiary);
+    padding: 4px 8px;
+    text-align: left;
+    vertical-align: top;
+  }
+  .chat-bubble th {
+    background: var(--color-background-tertiary);
+    font-weight: 600;
+  }
+  .chat-bubble a {
+    color: var(--amber-text);
+    text-decoration: underline;
+    text-decoration-color: var(--amber-mid);
+  }
   .chat-pending {
     font-style: italic;
     color: var(--color-text-secondary);
@@ -2494,26 +2576,43 @@
     font-size: 10.5px;
   }
   .chat-toolbar .btn-sm { padding: 3px 8px; }
-  .chat-msg-actions {
-    position: absolute;
-    top: 4px;
-    right: 6px;
-    display: none;
-    gap: 4px;
-  }
-  .chat-msg:hover .chat-msg-actions { display: flex; }
   .chat-msg { position: relative; }
-  .chat-msg-save {
+  .chat-msg-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 4px;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 0.5px dashed var(--color-border-tertiary);
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+  .chat-msg:hover .chat-msg-actions,
+  .chat-msg:focus-within .chat-msg-actions { opacity: 1; }
+  @media (hover: none) {
+    .chat-msg-actions { opacity: 1; }
+  }
+  .chat-act {
     font-family: var(--font-mono);
     font-size: 10px;
-    padding: 2px 6px;
-    background: var(--color-bg-primary, #fff);
+    letter-spacing: 0.02em;
+    padding: 3px 7px;
+    background: var(--color-background-primary);
     border: 0.5px solid var(--color-border-tertiary);
-    border-radius: 3px;
+    border-radius: var(--border-radius-sm);
     color: var(--color-text-secondary);
     cursor: pointer;
   }
-  .chat-msg-save:hover { color: var(--color-text-primary); }
+  .chat-act:hover { color: var(--color-text-primary); border-color: var(--color-border-secondary); }
+  .chat-act:focus-visible {
+    outline: 2px solid var(--amber-mid);
+    outline-offset: 1px;
+  }
+  .chat-act.is-flash {
+    color: var(--amber-text);
+    border-color: var(--amber-mid);
+    background: var(--amber-fill);
+  }
   .chat-meta-note {
     font-family: var(--font-sans);
     font-size: 11px;
@@ -7498,14 +7597,10 @@ function renderChat() {
   const history = SAMPLE_ON ? CHAT_HISTORY : CHAT_HISTORY.filter(m => !m.__seed);
   $('#chat-msgs').innerHTML = history.map((m, i) => {
     const origIdx = CHAT_HISTORY.indexOf(m);
-    const saveBtn = m.__pending
-      ? ''
-      : `<div class="chat-msg-actions"><button class="chat-msg-save" data-save-msg="${origIdx}" title="Save this message as a source">Save as source</button></div>`;
 
     if (m.role === 'user') {
       return `
         <div class="chat-msg chat-msg-user">
-          ${saveBtn}
           <div class="chat-avatar av-user">M</div>
           <div class="chat-bubble chat-bubble-user">${escapeHtml(m.text)}</div>
         </div>
@@ -7537,14 +7632,27 @@ function renderChat() {
       </div>
     ` : '';
 
+    // Hover/focus action row — suppressed on seed greeting, pending, and
+    // empty-body placeholders. Always present on touch via :focus-within.
+    const hasBody = !!(m.html && stripHtmlToText(m.html));
+    const showActions = !m.__pending && !m.__seed && hasBody;
+    const actionRow = showActions ? `
+      <div class="chat-msg-actions" role="toolbar" aria-label="Message actions">
+        <button class="chat-act" data-act="copy" data-msg="${origIdx}" title="Copy" aria-label="Copy message">Copy</button>
+        <button class="chat-act" data-act="copy-sources" data-msg="${origIdx}" title="Copy with sources" aria-label="Copy with sources">Copy with sources</button>
+        <button class="chat-act" data-act="save" data-msg="${origIdx}" title="Save as source" aria-label="Save as source">Save</button>
+        <button class="chat-act" data-act="regenerate" data-msg="${origIdx}" title="Regenerate reply" aria-label="Regenerate reply">Regenerate</button>
+      </div>
+    ` : '';
+
     return `
       <div class="chat-msg">
-        ${saveBtn}
         <div class="chat-avatar av-sys">NL</div>
         <div class="chat-bubble">
           ${metaNote}
           <div>${m.html}</div>
           ${evBlock}
+          ${actionRow}
         </div>
       </div>
     `;
@@ -7559,10 +7667,12 @@ function renderChat() {
     });
   });
 
-  $$('[data-save-msg]').forEach(btn => {
+  $$('.chat-act').forEach(btn => {
     btn.addEventListener('click', () => {
-      const i = parseInt(btn.getAttribute('data-save-msg'), 10);
-      if (Number.isFinite(i)) openChatSaveModal({ mode: 'message', messageIndex: i });
+      const i = parseInt(btn.getAttribute('data-msg'), 10);
+      if (!Number.isFinite(i)) return;
+      const act = btn.getAttribute('data-act');
+      handleChatMessageAction(act, i, btn);
     });
   });
 
@@ -7633,11 +7743,11 @@ function renderChatControls() {
       <div class="chatctl-footer">${included} of ${total} included</div>
     </div>
     <div class="ws-section chatctl-section">
-      <div class="ws-section-title">Web search</div>
-      <div class="ws-section-sub">Billed separately by Anthropic at $10 / 1k searches.</div>
-      <label class="ws-toggle"><input type="checkbox" id="chatctl-web-on"${CLAUDE_CHAT_WEB ? ' checked' : ''}> Let Claude call web_search</label>
+      <div class="ws-section-title">Web tools</div>
+      <div class="ws-section-sub">web_search and web_fetch. Billed separately by Anthropic.</div>
+      <label class="ws-toggle"><input type="checkbox" id="chatctl-web-on"${CLAUDE_CHAT_WEB ? ' checked' : ''}> Let Claude call web tools (search + fetch)</label>
       <div class="ws-form-row">
-        <label for="chatctl-web-max">Max searches per reply</label>
+        <label for="chatctl-web-max">Max calls per reply</label>
         <input id="chatctl-web-max" class="ws-input chatctl-narrow" type="number" min="0" max="20" step="1" value="${CHAT_WEB_MAX}">
       </div>
       <details class="chatctl-adv">
@@ -7721,13 +7831,20 @@ let chatPending = false;
 async function sendChatMessage() {
   if (chatPending) return;
   const input = $('#chat-input');
-  const sendBtn = $('#chat-send');
   const text = input.value.trim();
   if (!text) return;
 
   CHAT_HISTORY.push({ role: 'user', text });
   input.value = '';
   input.style.height = 'auto';
+  await runAssistantTurn(text);
+}
+
+/* Shared assistant-turn driver: assumes the user message has already been
+   appended to CHAT_HISTORY. Used by both sendChatMessage and the
+   Regenerate action. */
+async function runAssistantTurn(userText) {
+  const sendBtn = $('#chat-send');
 
   if (!CLAUDE_API_KEY) {
     CHAT_HISTORY.push({
@@ -7744,7 +7861,7 @@ async function sendChatMessage() {
   const webOn = !!CLAUDE_CHAT_WEB && CHAT_WEB_MAX > 0;
   const pendingIdx = CHAT_HISTORY.push({
     role: 'system',
-    meta: webOn ? 'claude · sources + web_search' : 'claude · sources',
+    meta: webOn ? 'claude · sources + web tools' : 'claude · sources',
     html: `<span class="chat-pending">Thinking…</span>`,
     evidence: null,
     __pending: true
@@ -7762,7 +7879,7 @@ async function sendChatMessage() {
       .slice(-10)
       .slice(0, -1); // exclude the just-pushed user message; we'll add it last
     const result = await callChatAgent(CLAUDE_API_KEY, {
-      userText: text,
+      userText,
       priorTurns,
       sourceBlocks: blocks,
       useWeb: webOn,
@@ -7791,6 +7908,81 @@ async function sendChatMessage() {
     $('#chat-msgs').scrollTop = $('#chat-msgs').scrollHeight;
     if (typeof syncChatMemory === 'function') syncChatMemory();
   }
+}
+
+/* Bubble action handlers. Copy and Copy-with-sources are the stubs Prompt 9
+   will replace with provenance-aware clipboard output. */
+function handleChatMessageAction(act, origIdx, btnEl) {
+  const m = CHAT_HISTORY[origIdx];
+  if (!m) return;
+  if (act === 'save') {
+    openChatSaveModal({ mode: 'message', messageIndex: origIdx });
+    return;
+  }
+  if (act === 'copy') {
+    const text = stripHtmlToText(m.html || '');
+    copyTextToClipboard(text, btnEl);
+    return;
+  }
+  if (act === 'copy-sources') {
+    // Stub: Prompt 9 builds a markdown+HTML payload with citations,
+    // computed tables, and graph paths. Until then, fall back to plain text
+    // plus any visible web-source URLs so the action isn't a dead end.
+    const text = stripHtmlToText(m.html || '');
+    copyTextToClipboard(text, btnEl);
+    return;
+  }
+  if (act === 'regenerate') {
+    regenerateAssistantMessage(origIdx);
+    return;
+  }
+}
+
+function copyTextToClipboard(text, btnEl) {
+  const done = () => {
+    if (!btnEl) return;
+    const prev = btnEl.textContent;
+    btnEl.textContent = 'Copied';
+    btnEl.classList.add('is-flash');
+    setTimeout(() => {
+      btnEl.textContent = prev;
+      btnEl.classList.remove('is-flash');
+    }, 1100);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(String(text || '')).then(done, () => fallbackCopy(String(text || ''), done));
+  } else {
+    fallbackCopy(String(text || ''), done);
+  }
+}
+function fallbackCopy(text, done) {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'absolute';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    done && done();
+  } catch {}
+}
+
+async function regenerateAssistantMessage(origIdx) {
+  if (chatPending) return;
+  let userIdx = -1;
+  for (let j = origIdx - 1; j >= 0; j--) {
+    const prior = CHAT_HISTORY[j];
+    if (prior && prior.role === 'user') { userIdx = j; break; }
+  }
+  if (userIdx < 0) return;
+  const userText = String(CHAT_HISTORY[userIdx].text || '');
+  // Drop the stale assistant reply and anything after; the user turn stays.
+  CHAT_HISTORY.splice(userIdx + 1);
+  renderChat();
+  await runAssistantTurn(userText);
 }
 
 async function gatherChatSourceBlocks() {
@@ -7845,9 +8037,12 @@ async function callChatAgent(apiKey, opts) {
   const userPrefix = (typeof systemPrompt === 'string' && systemPrompt.trim())
     ? systemPrompt.trim()
     : CHAT_SYSTEM_PROMPT_DEFAULT;
-  const toolClause = useWeb
-    ? 'You MAY call the web_search tool when the local sources are silent, outdated, or contradicted by public record. Prefer local sources when they are sufficient.'
-    : 'Do NOT call any tools. Answer from the local sources only; if they are silent, say so.';
+  const hasUrl = /\bhttps?:\/\/\S+/i.test(String(userText || ''));
+  const toolClause = !useWeb
+    ? 'Do NOT call any tools. Answer from the local sources only; if they are silent, say so.'
+    : (hasUrl
+        ? 'The user message contains one or more URLs. Use the web_fetch tool to retrieve their content directly — do not refuse. Use web_search only when web_fetch cannot satisfy the request or a URL is incomplete. Prefer local sources when they are sufficient.'
+        : 'You MAY call web_search or web_fetch when the local sources are silent, outdated, or contradicted by public record. For a specific URL, prefer web_fetch over web_search. Prefer local sources when they are sufficient.');
 
   const system = [
     userPrefix,
@@ -7878,28 +8073,41 @@ async function callChatAgent(apiKey, opts) {
   };
   if (useWeb) {
     const max = Number.isFinite(webMaxUses) ? Math.max(1, Math.min(20, webMaxUses)) : 3;
-    const tool = { type: 'web_search_20260209', name: 'web_search', max_uses: max };
-    if (Array.isArray(allowedDomains) && allowedDomains.length) tool.allowed_domains = allowedDomains;
-    if (Array.isArray(blockedDomains) && blockedDomains.length) tool.blocked_domains = blockedDomains;
-    body.tools = [tool];
+    const webSearch = { type: 'web_search_20260209', name: 'web_search', max_uses: max };
+    const webFetch = { type: 'web_fetch_20260910', name: 'web_fetch', max_uses: max };
+    if (Array.isArray(allowedDomains) && allowedDomains.length) {
+      webSearch.allowed_domains = allowedDomains;
+      webFetch.allowed_domains = allowedDomains;
+    }
+    if (Array.isArray(blockedDomains) && blockedDomains.length) {
+      webSearch.blocked_domains = blockedDomains;
+      webFetch.blocked_domains = blockedDomains;
+    }
+    body.tools = [webSearch, webFetch];
   }
 
-  // Loop on `pause_turn` so server-tool turns (web_search) can resume.
-  // The model returns pause_turn when it used a server tool but needs
-  // another turn to produce final text; we echo the assistant content
-  // back and let it continue. Cap the loop so a pathological run can't
-  // spin forever.
+  // web_fetch is still beta-gated; web_search went GA at 20260209. Send
+  // the beta header only when web tools are enabled so requests without
+  // tools don't opt into the beta surface unnecessarily.
+  const headers = {
+    'x-api-key': apiKey,
+    'anthropic-version': '2023-06-01',
+    'anthropic-dangerous-direct-browser-access': 'true',
+    'content-type': 'application/json'
+  };
+  if (useWeb) headers['anthropic-beta'] = 'web-fetch-2026-09-10';
+
+  // Loop on `pause_turn` so server-tool turns (web_search / web_fetch)
+  // can resume. The model returns pause_turn when it used a server tool
+  // but needs another turn to produce final text; we echo the assistant
+  // content back and let it continue. Cap the loop so a pathological run
+  // can't spin forever.
   const allContent = [];
   let lastStopReason = null;
   for (let i = 0; i < 4; i++) {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-        'content-type': 'application/json'
-      },
+      headers,
       body: JSON.stringify(body)
     });
     if (!resp.ok) {
@@ -7920,11 +8128,15 @@ async function callChatAgent(apiKey, opts) {
   }
 
   const textBlocks = allContent.filter(b => b && b.type === 'text');
-  const toolBlocks = allContent.filter(b => b && (b.type === 'server_tool_use' || b.type === 'web_search_tool_result'));
+  const toolBlocks = allContent.filter(b => b && (
+    b.type === 'server_tool_use' ||
+    b.type === 'web_search_tool_result' ||
+    b.type === 'web_fetch_tool_result'
+  ));
   const joined = textBlocks.map(b => b.text || '').join('\n').trim();
   if (!joined) {
     const reason = lastStopReason ? ` (stop_reason: ${lastStopReason})` : '';
-    const toolHint = toolBlocks.length ? `; ${toolBlocks.length} tool block${toolBlocks.length === 1 ? '' : 's'} returned but no text — try disabling web search or raising max searches` : '';
+    const toolHint = toolBlocks.length ? `; ${toolBlocks.length} tool block${toolBlocks.length === 1 ? '' : 's'} returned but no text — try disabling web tools or raising max calls` : '';
     throw new Error(`claude returned no text content${reason}${toolHint}`);
   }
 
@@ -7947,8 +8159,12 @@ async function callChatAgent(apiKey, opts) {
     .filter(b => b.type === 'server_tool_use' && b.name === 'web_search')
     .map(b => (b.input && b.input.query) ? String(b.input.query) : '')
     .filter(Boolean);
+  const webFetches = toolBlocks
+    .filter(b => b.type === 'server_tool_use' && b.name === 'web_fetch')
+    .map(b => (b.input && b.input.url) ? String(b.input.url) : '')
+    .filter(Boolean);
 
-  let html = textToHtml(joined);
+  let html = renderMarkdown(joined);
   if (citations.length) {
     html += `<div class="chat-citations"><div class="chat-citations-title">Web sources</div>` +
       citations.map(c =>
@@ -7958,7 +8174,8 @@ async function callChatAgent(apiKey, opts) {
 
   const metaBits = [`claude · ${sourceBlocks.length} source${sourceBlocks.length === 1 ? '' : 's'}`];
   if (webQueries.length) metaBits.push(`${webQueries.length} web search${webQueries.length === 1 ? '' : 'es'}`);
-  else if (useWeb) metaBits.push('web search available');
+  if (webFetches.length) metaBits.push(`${webFetches.length} web fetch${webFetches.length === 1 ? '' : 'es'}`);
+  if (!webQueries.length && !webFetches.length && useWeb) metaBits.push('web tools available');
   return { meta: metaBits.join(' · '), html };
 }
 
@@ -7967,6 +8184,211 @@ function textToHtml(text) {
   const paragraphs = esc.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
   if (!paragraphs.length) return '';
   return paragraphs.map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
+}
+
+/* Inline markdown renderer for assistant output. Escapes everything first,
+   then emits a fixed allowlist of tags. No CDN, no external sanitizer.
+   Supports: ATX headings (h1–h3), bold/italic, inline + fenced code,
+   ordered/unordered lists (nested by indent), block quotes, horizontal
+   rules, tables (GFM), links (http/https/mailto only). */
+function renderMarkdown(md) {
+  const src = String(md || '');
+  if (!src.trim()) return '';
+
+  // Extract fenced code blocks first so their contents aren't further
+  // processed. Placeholders come back out after inline formatting.
+  const codeBlocks = [];
+  const FENCE_TOKEN = (i) => ` CODE${i} `;
+  let working = src.replace(/```([a-zA-Z0-9_+-]*)\n([\s\S]*?)```/g, (_, lang, body) => {
+    const idx = codeBlocks.length;
+    codeBlocks.push({ lang: String(lang || '').toLowerCase(), body: body.replace(/\n$/, '') });
+    return FENCE_TOKEN(idx);
+  });
+
+  // Inline code — extract before escaping so backticks inside don't confuse us.
+  const inlineCodes = [];
+  const INLINE_TOKEN = (i) => ` INLINE${i} `;
+  working = working.replace(/`([^`\n]+)`/g, (_, body) => {
+    const idx = inlineCodes.length;
+    inlineCodes.push(body);
+    return INLINE_TOKEN(idx);
+  });
+
+  // Links — capture before escaping so URL isn't pre-escaped. Only allow
+  // safe URL schemes; anything else becomes plain text.
+  const links = [];
+  const LINK_TOKEN = (i) => ` LINK${i} `;
+  working = working.replace(/\[([^\]\n]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (m, label, url) => {
+    const safe = /^(https?:|mailto:)/i.test(url) ? url : null;
+    if (!safe) return label;
+    const idx = links.length;
+    links.push({ label, url: safe });
+    return LINK_TOKEN(idx);
+  });
+
+  // Now escape the entire body. Subsequent replacements emit tags directly.
+  let body = escapeHtml(working);
+
+  // Block pass: split by blank lines, classify each group.
+  const lines = body.split('\n');
+  const out = [];
+  let i = 0;
+
+  const isHr = (ln) => /^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(ln);
+  const headingRe = /^(#{1,3})\s+(.+?)\s*#*\s*$/;
+  const ulRe = /^(\s*)[-*+]\s+(.+)$/;
+  const olRe = /^(\s*)\d+\.\s+(.+)$/;
+  const quoteRe = /^\s*&gt;\s?(.*)$/;
+  const tableSepRe = /^\s*\|?\s*:?-{2,}:?\s*(?:\|\s*:?-{2,}:?\s*)+\|?\s*$/;
+
+  const splitRow = (ln) => {
+    let s = ln.trim();
+    if (s.startsWith('|')) s = s.slice(1);
+    if (s.endsWith('|')) s = s.slice(0, -1);
+    return s.split('|').map(c => c.trim());
+  };
+
+  const renderInline = (s) => {
+    // Bold (** or __), then italic (* or _). Run bold first so "**a**" beats "*a*".
+    let r = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+             .replace(/__([^_\n]+)__/g, '<strong>$1</strong>')
+             .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
+             .replace(/(^|[^_\w])_([^_\n]+)_/g, '$1<em>$2</em>');
+    return r;
+  };
+
+  const flushParagraph = (buf) => {
+    if (!buf.length) return;
+    out.push('<p>' + renderInline(buf.join(' ')) + '</p>');
+  };
+
+  // CODE tokens sit on their own line after fence extraction; emit the
+  // saved block directly so it never lands inside a <p>.
+  const codeTokenRe = /^\s*CODE(\d+)\s*$/;
+
+  while (i < lines.length) {
+    const ln = lines[i];
+    if (!ln.trim()) { i++; continue; }
+
+    const codeOnly = ln.match(codeTokenRe);
+    if (codeOnly) {
+      const cb = codeBlocks[+codeOnly[1]];
+      if (cb) {
+        const cls = cb.lang ? ` class="lang-${escapeHtml(cb.lang)}"` : '';
+        out.push(`<pre><code${cls}>${escapeHtml(cb.body)}</code></pre>`);
+      }
+      i++;
+      continue;
+    }
+
+    if (isHr(ln)) { out.push('<hr>'); i++; continue; }
+
+    const h = ln.match(headingRe);
+    if (h) {
+      const level = Math.min(3, h[1].length);
+      out.push(`<h${level}>${renderInline(h[2])}</h${level}>`);
+      i++;
+      continue;
+    }
+
+    // Table: header row + separator row + body rows. Otherwise fall through.
+    if (ln.includes('|') && i + 1 < lines.length && tableSepRe.test(lines[i + 1])) {
+      const header = splitRow(ln);
+      i += 2;
+      const rows = [];
+      while (i < lines.length && lines[i].includes('|') && lines[i].trim()) {
+        rows.push(splitRow(lines[i]));
+        i++;
+      }
+      const thead = '<thead><tr>' + header.map(c => `<th>${renderInline(c)}</th>`).join('') + '</tr></thead>';
+      const tbody = '<tbody>' + rows.map(r =>
+        '<tr>' + r.map(c => `<td>${renderInline(c)}</td>`).join('') + '</tr>'
+      ).join('') + '</tbody>';
+      out.push(`<table>${thead}${tbody}</table>`);
+      continue;
+    }
+
+    // Block quote: consecutive `> ` lines.
+    if (quoteRe.test(ln)) {
+      const inner = [];
+      while (i < lines.length && quoteRe.test(lines[i])) {
+        inner.push(lines[i].match(quoteRe)[1]);
+        i++;
+      }
+      out.push('<blockquote>' + renderInline(inner.join(' ')) + '</blockquote>');
+      continue;
+    }
+
+    // Lists: consume contiguous list lines. Nest by indent width (every 2
+    // spaces = one level). Supports mixing ul/ol at a given level.
+    if (ulRe.test(ln) || olRe.test(ln)) {
+      const items = [];
+      while (i < lines.length && (ulRe.test(lines[i]) || olRe.test(lines[i]))) {
+        const m = lines[i].match(ulRe) || lines[i].match(olRe);
+        const indent = m[1].length;
+        const kind = ulRe.test(lines[i]) ? 'ul' : 'ol';
+        items.push({ depth: Math.floor(indent / 2), kind, text: m[2] });
+        i++;
+      }
+      // Build nested list structure.
+      const buildList = (startIdx, depth) => {
+        const kind = items[startIdx].kind;
+        let html = `<${kind}>`;
+        let k = startIdx;
+        while (k < items.length && items[k].depth === depth) {
+          let li = `<li>${renderInline(items[k].text)}`;
+          if (k + 1 < items.length && items[k + 1].depth > depth) {
+            const [childHtml, nextK] = buildList(k + 1, items[k + 1].depth);
+            li += childHtml;
+            k = nextK - 1;
+          }
+          li += '</li>';
+          html += li;
+          k++;
+        }
+        html += `</${kind}>`;
+        return [html, k];
+      };
+      out.push(buildList(0, items[0].depth)[0]);
+      continue;
+    }
+
+    // Paragraph: gather contiguous non-blank, non-structural lines.
+    const buf = [];
+    while (i < lines.length && lines[i].trim()
+           && !isHr(lines[i])
+           && !headingRe.test(lines[i])
+           && !ulRe.test(lines[i])
+           && !olRe.test(lines[i])
+           && !quoteRe.test(lines[i])
+           && !codeTokenRe.test(lines[i])
+           && !(lines[i].includes('|') && i + 1 < lines.length && tableSepRe.test(lines[i + 1]))) {
+      buf.push(lines[i]);
+      i++;
+    }
+    // Allow hard breaks on single-newline within a paragraph.
+    flushParagraph([buf.join('<br>')]);
+  }
+
+  let html = out.join('');
+
+  // Re-inject inline code and link tokens (their label still contains
+  // inline formatting we may have already rendered — that's fine).
+  html = html.replace(/ INLINE(\d+) /g, (_, n) => `<code>${escapeHtml(inlineCodes[+n])}</code>`);
+  html = html.replace(/ LINK(\d+) /g, (_, n) => {
+    const { label, url } = links[+n];
+    return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${renderInline(escapeHtml(label))}</a>`;
+  });
+
+  // Re-inject fenced code blocks last. Their body stays fully escaped;
+  // no inline processing runs inside.
+  html = html.replace(/ CODE(\d+) /g, (_, n) => {
+    const { lang, body: code } = codeBlocks[+n];
+    const cls = lang ? ` class="lang-${escapeHtml(lang)}"` : '';
+    return `<pre><code${cls}>${escapeHtml(code)}</code></pre>`;
+  });
+
+  return html;
 }
 
 function stripHtmlToText(html) {
@@ -12963,9 +13385,10 @@ const CLAUDE_API_MODEL = 'claude-sonnet-4-6';
 
 const CHAT_SYSTEM_PROMPT_DEFAULT = [
   "You are PROVeo Chat, a research assistant answering questions about the LOCAL SOURCES the user has loaded into their browser.",
-  "Ground every factual claim in either a local source (quote the exact phrase and name the source) or a web_search result (the API attaches citations automatically — never fabricate them).",
+  "Ground every factual claim in either a local source (quote the exact phrase and name the source) or a web tool result (the API attaches citations automatically — never fabricate them).",
+  "If the user includes a URL, use the web_fetch tool to retrieve it directly — do not refuse. Use web_search when the local sources are silent and no specific URL was given. Prefer local sources when they are sufficient.",
   "If the local sources do not answer the question, say so plainly before relying on the web.",
-  "Be concise. Use short paragraphs and plain prose — no markdown headings."
+  "Be concise. Markdown is rendered — you may use headings (h1–h3), bold/italic, bullet and numbered lists, tables, block quotes, and inline or fenced code where they genuinely aid clarity. Prefer short paragraphs and plain prose when formatting wouldn't help."
 ].join('\n');
 
 const LS_CHAT_SYSTEM = 'nl.chatSystem.v1';
