@@ -6339,6 +6339,24 @@ let USER_SOURCES = {};
 /* Cached text content (on-demand) for user-uploaded sources: { id -> text } */
 const SOURCE_TEXT = {};
 
+/* ---------- STRUCTURED INDEXES FOR CSV/TSV SOURCES ----------
+   Populated by indexStructuredSource(id) after a CSV/TSV source's text
+   becomes available. Every downstream computation (queryTable, profiling,
+   text search) reads from these stores — never re-parses the raw text.
+
+     SOURCE_TABLE[id]   — { columns: [{ name, type, nulls }], rows, rowCount }
+                          rows are typed per column. Currency/percent cells
+                          are stored as { n, raw } so display can round-trip
+                          the original string. Null cells are null.
+     SOURCE_PROFILE[id] — per-column { nulls, distinct, min, max, mean,
+                          median, p95 } plus a 10-bin histogram on numerics.
+                          One-shot on load, not lazily recomputed.
+     SOURCE_INDEX[id]   — BM25 index over the raw text (line-level chunks)
+                          used by searchText / countMentions.                */
+const SOURCE_TABLE = {};
+const SOURCE_PROFILE = {};
+const SOURCE_INDEX = {};
+
 /* ---------- SEED_CLAIMS (fold output — what the nine-case dispatch produced) */
 /* Each claim has a typed `prov` field describing HOW it came from its source.
    The panel renders based on prov.kind:
@@ -6724,6 +6742,9 @@ function renderSources() {
       if (!confirm('Remove this source from the library?')) return;
       await storage.deleteSource(id);
       delete SOURCE_TEXT[id];
+      delete SOURCE_TABLE[id];
+      delete SOURCE_PROFILE[id];
+      delete SOURCE_INDEX[id];
       await appendEventAndRefold({
         op: 'SRC_DEL',
         site: `source:${id}`,
@@ -12596,6 +12617,10 @@ async function handleUpload(files) {
       if (await drainConsistencyEvas() > 0) installFoldResult(await fold());
       await runRewriteEngine();
 
+      // With USER_SOURCES[id] now populated by the fold, build the
+      // structured indexes for CSV/TSV sources. No-op for other kinds.
+      indexStructuredSource(id);
+
       added++;
       if (annotations.length) {
         console.log(`[entities] ${file.name}: ${annotations.length} annotations emitted`);
@@ -13121,6 +13146,8 @@ async function handleAutoArchiveUpload(files) {
       installFoldResult(await fold());
       if (await drainConsistencyEvas() > 0) installFoldResult(await fold());
       await runRewriteEngine();
+
+      indexStructuredSource(id);
 
       added++;
       const archiveUrl = proveo?.archive?.url;
@@ -14724,8 +14751,19 @@ function citeableSources() {
 }
 
 function ensureSourceText(id) {
-  if (SOURCE_TEXT[id]) return Promise.resolve(SOURCE_TEXT[id]);
-  return storage.readSource(id).then(t => { SOURCE_TEXT[id] = t || ''; return SOURCE_TEXT[id]; });
+  if (SOURCE_TEXT[id]) {
+    // Cache hit — but if the structured indexes are missing (first read
+    // since page load for a previously-stored source), build them now.
+    if (sourceIsTable(USER_SOURCES[id]) && !SOURCE_TABLE[id]) {
+      indexStructuredSource(id);
+    }
+    return Promise.resolve(SOURCE_TEXT[id]);
+  }
+  return storage.readSource(id).then(t => {
+    SOURCE_TEXT[id] = t || '';
+    indexStructuredSource(id);
+    return SOURCE_TEXT[id];
+  });
 }
 
 function splitSentences(text) {
@@ -18129,6 +18167,267 @@ function parseDelimited(text, delimiter) {
     rows.pop();
   }
   return rows;
+}
+
+/* ======================================================================
+   STRUCTURED SOURCE INDEXING (Prompt 4.1)
+   ----------------------------------------------------------------------
+   Populates SOURCE_TABLE / SOURCE_PROFILE / SOURCE_INDEX for CSV/TSV
+   sources at load time. Downstream compute primitives (queryTable,
+   profileTable, searchText) read from these stores — the raw text is
+   never re-parsed per query.
+====================================================================== */
+
+/* Per-cell type detection — operates on the trimmed raw string, never
+   on header names. Empty cells are caller-handled as nulls. */
+function classifyCellType(s) {
+  if (/^-?\$[\d,]+(\.\d+)?$/.test(s) || /^-?[\d,]+(\.\d+)?\s*(USD|EUR|GBP)$/i.test(s)) return 'currency';
+  if (/^-?[\d,]+(\.\d+)?%$/.test(s)) return 'percent';
+  if (/^\d{4}-\d{2}-\d{2}(T[\d:.]+(Z|[+\-]\d{2}:?\d{2})?)?$/.test(s)) return 'date';
+  if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(s)) return 'date';
+  if (/^-?\d+(\.\d+)?$/.test(s)) return 'number';
+  if (/^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)) return 'number';
+  if (/^(true|false|yes|no)$/i.test(s)) return 'boolean';
+  return 'string';
+}
+
+/* Parse a raw cell string into its typed representation. Currency and
+   percent keep the original string alongside the numeric value so
+   round-trip display is exact. Returns null for empty cells. */
+function parseTypedCell(raw, type) {
+  if (raw == null) return null;
+  const s = String(raw).trim();
+  if (s === '') return null;
+  switch (type) {
+    case 'number': {
+      const n = Number(s.replace(/,/g, ''));
+      return Number.isFinite(n) ? n : null;
+    }
+    case 'currency':
+    case 'percent': {
+      const n = Number(s.replace(/[^0-9.\-]/g, ''));
+      return Number.isFinite(n) ? { n, raw: s } : { n: null, raw: s };
+    }
+    case 'date': {
+      const t = Date.parse(s);
+      return Number.isFinite(t) ? { iso: new Date(t).toISOString(), raw: s } : { iso: null, raw: s };
+    }
+    case 'boolean': {
+      return /^(true|yes)$/i.test(s);
+    }
+    case 'mixed':
+    case 'string':
+    default:
+      return s;
+  }
+}
+
+/* Aggregate per-cell classifications into a column-level type. Empty
+   cells don't count toward the purity threshold — they're nulls. A
+   clear winner (≥80% of non-null cells) wins; otherwise 'mixed'. */
+function pickColumnType(classes) {
+  const counts = Object.create(null);
+  let total = 0;
+  for (const c of classes) {
+    counts[c] = (counts[c] || 0) + 1;
+    total++;
+  }
+  if (!total) return 'string';
+  let best = 'string', bestN = 0;
+  for (const [k, v] of Object.entries(counts)) {
+    if (v > bestN) { best = k; bestN = v; }
+  }
+  return bestN / total >= 0.8 ? best : 'mixed';
+}
+
+/* Build SOURCE_TABLE[id] for a CSV/TSV source. Uses parseDelimited so
+   multi-line quoted fields work correctly; delimiter is picked from the
+   file extension. Rows are typed per column. */
+function buildSourceTable(text, delimiter) {
+  const rawRows = parseDelimited(String(text || ''), delimiter);
+  if (!rawRows.length) return { columns: [], rows: [], rowCount: 0 };
+  const header = rawRows[0].map(h => String(h == null ? '' : h).trim());
+  const body = rawRows.slice(1);
+  const colCount = header.length;
+
+  // Classify every non-empty cell; track nulls separately.
+  const colClasses = header.map(() => []);
+  const colNulls = header.map(() => 0);
+  for (let r = 0; r < body.length; r++) {
+    const row = body[r];
+    for (let c = 0; c < colCount; c++) {
+      const raw = row[c];
+      const s = raw == null ? '' : String(raw).trim();
+      if (s === '') { colNulls[c]++; continue; }
+      colClasses[c].push(classifyCellType(s));
+    }
+  }
+  const columns = header.map((name, c) => ({
+    name,
+    type: pickColumnType(colClasses[c]),
+    nulls: colNulls[c]
+  }));
+
+  // Parse row values under the picked column type. Cells that don't
+  // match the column type (in a mixed column, or a stray non-numeric
+  // in a number column) fall back to the raw trimmed string — the
+  // downstream aggregator decides whether to coerce or skip.
+  const rows = new Array(body.length);
+  for (let r = 0; r < body.length; r++) {
+    const src = body[r];
+    const out = new Array(colCount);
+    for (let c = 0; c < colCount; c++) {
+      const raw = src[c];
+      const s = raw == null ? '' : String(raw).trim();
+      if (s === '') { out[c] = null; continue; }
+      const colType = columns[c].type;
+      const cellType = classifyCellType(s);
+      if (colType === 'mixed' || cellType !== colType) {
+        // Mismatch: keep the raw string for downstream coercion/skip.
+        out[c] = s;
+      } else {
+        out[c] = parseTypedCell(s, colType);
+      }
+    }
+    rows[r] = out;
+  }
+  return { columns, rows, rowCount: rows.length };
+}
+
+/* One-shot profile per column: nulls, distinct, min, max, mean, median,
+   p95. Numeric columns also get a 10-bin histogram across [min, max]. */
+function computeSourceProfile(table) {
+  const profile = {};
+  if (!table || !table.columns) return profile;
+  const rows = table.rows;
+  for (let c = 0; c < table.columns.length; c++) {
+    const col = table.columns[c];
+    const isNumeric = col.type === 'number' || col.type === 'currency' || col.type === 'percent';
+    let nulls = 0;
+    const distinct = new Set();
+    const nums = isNumeric ? [] : null;
+    let sMin = null, sMax = null;
+    for (let r = 0; r < rows.length; r++) {
+      const v = rows[r][c];
+      if (v == null) { nulls++; continue; }
+      if (isNumeric) {
+        const n = typeof v === 'object' ? v.n : v;
+        if (typeof n === 'number' && Number.isFinite(n)) {
+          nums.push(n);
+          distinct.add(n);
+        } else if (typeof v === 'string') {
+          distinct.add(v);
+        }
+      } else {
+        const key = (v && typeof v === 'object')
+          ? (v.raw != null ? v.raw : (v.iso != null ? v.iso : JSON.stringify(v)))
+          : String(v);
+        distinct.add(key);
+        if (sMin == null || key < sMin) sMin = key;
+        if (sMax == null || key > sMax) sMax = key;
+      }
+    }
+    if (isNumeric && nums.length) {
+      nums.sort((a, b) => a - b);
+      const n = nums.length;
+      const sum = nums.reduce((a, b) => a + b, 0);
+      const mean = sum / n;
+      const median = n % 2 ? nums[(n - 1) >> 1] : (nums[n / 2 - 1] + nums[n / 2]) / 2;
+      const p95 = nums[Math.min(n - 1, Math.floor(n * 0.95))];
+      const min = nums[0], max = nums[n - 1];
+      const bins = new Array(10).fill(0);
+      if (max > min) {
+        const width = (max - min) / 10;
+        for (const v of nums) {
+          let idx = Math.floor((v - min) / width);
+          if (idx >= 10) idx = 9;
+          if (idx < 0) idx = 0;
+          bins[idx]++;
+        }
+      } else {
+        bins[0] = n;
+      }
+      profile[col.name] = {
+        nulls, distinct: distinct.size,
+        min, max, mean, median, p95,
+        histogram: bins
+      };
+    } else {
+      profile[col.name] = {
+        nulls, distinct: distinct.size,
+        min: sMin, max: sMax,
+        mean: null, median: null, p95: null
+      };
+    }
+  }
+  return profile;
+}
+
+/* Lightweight BM25 index over the raw text, chunked per line. Used by
+   searchText and countMentions in Prompt 4.2. Line-level chunking lets
+   us surface a natural `loc` ({ lineStart, lineEnd }) on every hit. */
+function bm25Tokenize(s) {
+  return (String(s || '').toLowerCase().match(/[a-z0-9]+/g) || []).filter(t => t.length > 1);
+}
+
+function buildBM25Index(text) {
+  const lines = String(text || '').split('\n');
+  const docs = [];
+  const df = new Map();
+  let totalDl = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const toks = bm25Tokenize(line);
+    if (!toks.length) {
+      docs.push({ line: i + 1, text: line, tf: new Map(), dl: 0 });
+      continue;
+    }
+    const tf = new Map();
+    for (const t of toks) tf.set(t, (tf.get(t) || 0) + 1);
+    for (const t of tf.keys()) df.set(t, (df.get(t) || 0) + 1);
+    totalDl += toks.length;
+    docs.push({ line: i + 1, text: line, tf, dl: toks.length });
+  }
+  const N = docs.length;
+  const avgdl = N ? totalDl / N : 0;
+  return { N, avgdl, k1: 1.5, b: 0.75, df, docs };
+}
+
+/* True if the source should be table-indexed. Both .csv and .tsv ride
+   the 'csv' kind tag; we inspect the filename to pick a delimiter. */
+function sourceIsTable(src) {
+  if (!src) return false;
+  const name = src.name || '';
+  const ext = (name.match(/\.([^.]+)$/) || [])[1]?.toLowerCase();
+  return src.kind === 'csv' || ext === 'csv' || ext === 'tsv';
+}
+
+function delimiterForSourceName(name) {
+  const ext = (String(name || '').match(/\.([^.]+)$/) || [])[1]?.toLowerCase();
+  return ext === 'tsv' ? '\t' : ',';
+}
+
+/* Orchestrator. Called whenever a source's text becomes available.
+   Populates all three stores for CSV/TSV sources; no-op otherwise.
+   Safe to call repeatedly — later calls overwrite prior indexes
+   (useful when a source is re-uploaded under the same id). */
+function indexStructuredSource(id) {
+  if (!id) return;
+  const text = SOURCE_TEXT[id];
+  if (text == null) return;
+  const src = USER_SOURCES[id];
+  if (!sourceIsTable(src)) return;
+  try {
+    const delim = delimiterForSourceName(src.name);
+    SOURCE_TABLE[id] = buildSourceTable(text, delim);
+    SOURCE_PROFILE[id] = computeSourceProfile(SOURCE_TABLE[id]);
+    SOURCE_INDEX[id] = buildBM25Index(text);
+  } catch (err) {
+    console.warn('[index] failed for', id, err);
+    delete SOURCE_TABLE[id];
+    delete SOURCE_PROFILE[id];
+    delete SOURCE_INDEX[id];
+  }
 }
 
 function classifyCell(v) {
