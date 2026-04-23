@@ -8392,6 +8392,7 @@ async function callChatAgent(apiKey, opts) {
     system,
     messages
   };
+  const tools = [];
   if (useWeb) {
     const max = Number.isFinite(webMaxUses) ? Math.max(1, Math.min(20, webMaxUses)) : 3;
     const webSearch = { type: 'web_search_20260209', name: 'web_search', max_uses: max };
@@ -8404,8 +8405,17 @@ async function callChatAgent(apiKey, opts) {
       webSearch.blocked_domains = blockedDomains;
       webFetch.blocked_domains = blockedDomains;
     }
-    body.tools = [webSearch, webFetch];
+    tools.push(webSearch, webFetch);
   }
+  // Custom client tools for graph-shaped retrieval. Enabled when
+  // scope is Graph (default) or Semantic. Scope=Full sends the old
+  // 180KB injection instead and skips these tools for one turn
+  // (Prompt 7.4).
+  const scope = (typeof CLAUDE_CHAT_SCOPE !== 'undefined' ? CLAUDE_CHAT_SCOPE : 'graph');
+  if (scope !== 'full' && CLIENT_TOOL_REGISTRY && CLIENT_TOOL_REGISTRY.length) {
+    for (const t of CLIENT_TOOL_REGISTRY) tools.push(t.definition);
+  }
+  if (tools.length) body.tools = tools;
 
   // web_fetch is still beta-gated; web_search went GA at 20260209. Send
   // the beta header only when web tools are enabled so requests without
@@ -8418,14 +8428,18 @@ async function callChatAgent(apiKey, opts) {
   };
   if (useWeb) headers['anthropic-beta'] = 'web-fetch-2026-09-10';
 
-  // Loop on `pause_turn` so server-tool turns (web_search / web_fetch)
-  // can resume. The model returns pause_turn when it used a server tool
-  // but needs another turn to produce final text; we echo the assistant
-  // content back and let it continue. Cap the loop so a pathological run
-  // can't spin forever.
+  // Two continuation paths through the loop:
+  //   pause_turn  — a server tool (web_search / web_fetch) ran mid-turn
+  //                  and needs another round-trip. Echo the assistant
+  //                  content back and let the server continue.
+  //   tool_use    — the model called one of our client tools
+  //                  (query_graph et al.). Execute it here, feed the
+  //                  tool_result back in a user turn, and loop.
+  // Cap at 8 iterations so neither flow can spin forever.
   const allContent = [];
   let lastStopReason = null;
-  for (let i = 0; i < 4; i++) {
+  const retrievalLog = (opts && opts.retrievalLog) || null;
+  for (let i = 0; i < 8; i++) {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers,
@@ -8444,8 +8458,49 @@ async function callChatAgent(apiKey, opts) {
     const content = Array.isArray(data.content) ? data.content : [];
     for (const b of content) allContent.push(b);
     lastStopReason = data.stop_reason || null;
-    if (lastStopReason !== 'pause_turn') break;
-    body.messages = body.messages.concat([{ role: 'assistant', content }]);
+
+    if (lastStopReason === 'pause_turn') {
+      body.messages = body.messages.concat([{ role: 'assistant', content }]);
+      continue;
+    }
+    if (lastStopReason === 'tool_use') {
+      // Collect client-tool calls, execute them, and build the
+      // user-turn tool_result blocks. Server tools have already
+      // been dispatched by the API; their results come back as
+      // separate blocks and don't need our handling.
+      const clientCalls = content.filter(b => b && b.type === 'tool_use' && CLIENT_TOOL_NAMES.has(b.name));
+      if (!clientCalls.length) break;
+      const toolResults = [];
+      for (const call of clientCalls) {
+        let resultStr = '';
+        try {
+          const out = await executeClientTool(call.name, call.input || {});
+          if (retrievalLog) retrievalLog.push({
+            tool: call.name,
+            args: call.input || {},
+            resultSize: (JSON.stringify(out) || '').length,
+            segmentIds: collectSegmentIdsFromToolResult(out)
+          });
+          resultStr = JSON.stringify(out);
+          if (resultStr.length > 64000) {
+            resultStr = JSON.stringify({ error: 'result too large', size: resultStr.length, truncated: true });
+          }
+        } catch (err) {
+          resultStr = JSON.stringify({ error: String(err && err.message || err) });
+        }
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: call.id,
+          content: resultStr
+        });
+      }
+      body.messages = body.messages.concat([
+        { role: 'assistant', content },
+        { role: 'user', content: toolResults }
+      ]);
+      continue;
+    }
+    break;
   }
 
   const textBlocks = allContent.filter(b => b && b.type === 'text');
@@ -14658,6 +14713,223 @@ async function runCrossSourceJoins(incomingSourceId) {
 
   return { mentionEdges, aggregateEdges };
 }
+
+/* ======================================================================
+   CLIENT CHAT TOOLS (Prompt 7.2 — query_graph)
+   ----------------------------------------------------------------------
+   Registered alongside the server tools in body.tools. The chat loop
+   detects stop_reason === 'tool_use', dispatches each client-tool
+   call to executeClientTool, and feeds the result back on the next
+   user turn. Keeps the retrieval surface explicit: the model sees
+   only the routing header in the system prompt and has to ask
+   for anything deeper.
+====================================================================== */
+
+const CLIENT_TOOL_REGISTRY = [];
+const CLIENT_TOOL_NAMES = new Set();
+
+function registerClientTool(entry) {
+  if (!entry || !entry.definition || typeof entry.execute !== 'function') return;
+  CLIENT_TOOL_REGISTRY.push(entry);
+  CLIENT_TOOL_NAMES.add(entry.definition.name);
+}
+
+async function executeClientTool(name, input) {
+  const entry = CLIENT_TOOL_REGISTRY.find(t => t.definition.name === name);
+  if (!entry) return { error: 'unknown tool: ' + name };
+  return await entry.execute(input || {});
+}
+
+/* Collect segment ids from a tool result for provenance logging
+   (Prompt 7.4 reads these into m.provenance.retrieval[]). Walks
+   the result shape without assuming which tool produced it. */
+function collectSegmentIdsFromToolResult(out) {
+  if (!out || typeof out !== 'object') return [];
+  const found = new Set();
+  const visit = (v) => {
+    if (!v) return;
+    if (Array.isArray(v)) { for (const x of v) visit(x); return; }
+    if (typeof v !== 'object') return;
+    if (typeof v.segmentId === 'string') found.add(v.segmentId);
+    if (typeof v.evidenceSegmentId === 'string') found.add(v.evidenceSegmentId);
+    if (typeof v.id === 'string' && v.id.includes(':') && /:(st|sec|p|cl|r|row)/.test(v.id)) found.add(v.id);
+    for (const val of Object.values(v)) visit(val);
+  };
+  visit(out);
+  return [...found];
+}
+
+/* ---------- query_graph ---------- */
+
+const QUERY_GRAPH_TOOL_DEF = {
+  name: 'query_graph',
+  description: 'Query the merged entity / relationship graph built from the loaded sources. Use for questions about relationships, memberships, cross-source connections, or structural claims (who paid whom, what references what, which sources mention an entity). Returns a subgraph with nodes and edges; pass return="evidence" to attach source segment text to each edge.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      match: {
+        type: 'object',
+        description: 'Starting node filter. At least one property should be set; empty match matches every node (usually too broad).',
+        properties: {
+          type: { type: 'string', description: 'Node type (person, org, vendor, program, motion, bill, amount, date, geo, concept, source, etc.)' },
+          name: { type: 'string', description: 'Substring match against node.displayName or surfaceForms (case-insensitive).' },
+          id: { type: 'string', description: 'Exact match on canonical node id.' },
+          sourceIds: { type: 'array', items: { type: 'string' }, description: 'Restrict to nodes whose supporting segments come from these source ids.' },
+          face: {
+            type: 'object',
+            description: 'Restrict to nodes whose dominant face cell matches (e.g. { act: "INS" }).',
+            properties: {
+              act: { type: 'string' },
+              site: { type: 'string' },
+              resolution: { type: 'string' }
+            }
+          }
+        }
+      },
+      traverse: {
+        type: 'object',
+        description: 'Optional walk from matched nodes outward.',
+        properties: {
+          predicates: { type: 'array', items: { type: 'string' }, description: 'Only follow edges with these predicates. Empty = follow any.' },
+          depth: { type: 'integer', description: 'Hops outward (default 1). Capped at 3.' },
+          direction: { type: 'string', enum: ['out', 'in', 'both'], description: 'Edge direction to follow (default "both").' }
+        }
+      },
+      return: { type: 'string', enum: ['nodes', 'edges', 'subgraph', 'evidence'], description: 'Shape of result. "evidence" attaches segment text/loc to each edge.' }
+    },
+    required: ['match']
+  }
+};
+
+/* Does a node pass a match filter? */
+function nodeMatches(node, match) {
+  if (!node || !match) return false;
+  if (match.id && node.id !== match.id) return false;
+  if (match.type && node.type !== match.type) return false;
+  if (match.name) {
+    const needle = String(match.name).toLowerCase();
+    const candidates = [node.displayName, ...(node.surfaceForms || [])].map(s => String(s || '').toLowerCase());
+    if (!candidates.some(c => c.includes(needle))) return false;
+  }
+  if (Array.isArray(match.sourceIds) && match.sourceIds.length) {
+    const segSources = new Set((node.supportingSegments || []).map(sourceIdOfSegment));
+    if (!match.sourceIds.some(sid => segSources.has(sid))) return false;
+  }
+  if (match.face && typeof match.face === 'object') {
+    const dist = node.transformationLabels || {};
+    for (const [face, cell] of Object.entries(match.face)) {
+      const cells = dist[face] || {};
+      const entries = Object.entries(cells);
+      if (!entries.length) return false;
+      entries.sort((a, b) => b[1] - a[1]);
+      if (entries[0][0] !== cell) return false;
+    }
+  }
+  return true;
+}
+
+function nodeForEdgeRef(ref) {
+  if (!ref) return null;
+  if (ref.id && GRAPH_NODES.has(ref.id)) return GRAPH_NODES.get(ref.id);
+  return null;
+}
+
+async function executeQueryGraph(input) {
+  const match = input.match || {};
+  const traverse = input.traverse || {};
+  const wantEvidence = input.return === 'evidence';
+  const returnShape = input.return || 'subgraph';
+  const predicates = Array.isArray(traverse.predicates) ? new Set(traverse.predicates) : null;
+  const direction = traverse.direction || 'both';
+  const depth = Math.max(0, Math.min(3, Number.isFinite(traverse.depth) ? traverse.depth | 0 : 1));
+
+  // Start set: all nodes matching the filter.
+  const seeds = [];
+  for (const node of GRAPH_NODES.values()) {
+    if (nodeMatches(node, match)) seeds.push(node.id);
+  }
+  const visitedNodes = new Set(seeds);
+  const visitedEdges = new Set();
+  // Group edges by subject.id and object.id for cheap adjacency.
+  // (O(E) per call; fine for our corpus scale.)
+  const edgesBySubject = new Map();
+  const edgesByObject = new Map();
+  for (const edge of GRAPH_EDGES.values()) {
+    const sid = edge.subject && edge.subject.id;
+    const oid = edge.object && edge.object.id;
+    if (sid) {
+      if (!edgesBySubject.has(sid)) edgesBySubject.set(sid, []);
+      edgesBySubject.get(sid).push(edge);
+    }
+    if (oid) {
+      if (!edgesByObject.has(oid)) edgesByObject.set(oid, []);
+      edgesByObject.get(oid).push(edge);
+    }
+  }
+
+  let frontier = seeds.slice();
+  for (let hop = 0; hop < depth; hop++) {
+    const next = [];
+    for (const nodeId of frontier) {
+      const out = (direction === 'in') ? [] : (edgesBySubject.get(nodeId) || []);
+      const in_ = (direction === 'out') ? [] : (edgesByObject.get(nodeId) || []);
+      for (const edge of [...out, ...in_]) {
+        if (predicates && !predicates.has(edge.predicate)) continue;
+        visitedEdges.add(edge.id);
+        const otherId = (edge.subject && edge.subject.id === nodeId)
+          ? (edge.object && edge.object.id)
+          : (edge.subject && edge.subject.id);
+        if (otherId && !visitedNodes.has(otherId)) {
+          visitedNodes.add(otherId);
+          next.push(otherId);
+        }
+      }
+    }
+    frontier = next;
+    if (!frontier.length) break;
+  }
+
+  // Shape the output.
+  const nodes = [...visitedNodes].map(id => GRAPH_NODES.get(id)).filter(Boolean).map(n => ({
+    id: n.id,
+    type: n.type,
+    displayName: n.displayName,
+    surfaceForms: n.surfaceForms,
+    supportingSegmentCount: (n.supportingSegments || []).length,
+    transformationLabels: n.transformationLabels || null
+  }));
+  const edges = [...visitedEdges].map(id => GRAPH_EDGES.get(id)).filter(Boolean).map(e => {
+    const base = {
+      id: e.id,
+      subject: e.subject,
+      predicate: e.predicate,
+      object: e.object,
+      sourceId: e.sourceId,
+      confidence: e.confidence,
+      extractors: e.extractors,
+      attrs: e.attrs || null
+    };
+    if (wantEvidence && e.evidenceSegmentId) {
+      const sid = sourceIdOfSegment(e.evidenceSegmentId);
+      const seg = (SOURCE_SEGMENTS[sid] || []).find(s => s.id === e.evidenceSegmentId);
+      base.evidence = seg
+        ? { segmentId: seg.id, text: seg.text, loc: seg.loc, kind: seg.kind, labels: (SEG_LABELS[sid] || {})[seg.id] || null }
+        : { segmentId: e.evidenceSegmentId, text: null };
+      base.evidenceSpan = e.evidenceSpan || null;
+    }
+    return base;
+  });
+
+  if (returnShape === 'nodes') return { nodes, total: nodes.length };
+  if (returnShape === 'edges') return { edges, total: edges.length };
+  // subgraph or evidence (evidence is subgraph + hydrated evidence fields on edges)
+  return { nodes, edges, match: match, traverse: { depth, direction, predicates: predicates ? [...predicates] : null } };
+}
+
+registerClientTool({
+  definition: QUERY_GRAPH_TOOL_DEF,
+  execute: executeQueryGraph
+});
 
 
 /* Kicks off a fold; resolves with the three EO views plus the
