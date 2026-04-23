@@ -8080,7 +8080,12 @@ async function runAssistantTurn(userText) {
   if (sendBtn) sendBtn.disabled = true;
 
   try {
-    const blocks = await gatherChatSourceBlocks();
+    // Prompt 7.1 default: ship compact routing headers, not full
+    // text. Scope=Full (Prompt 7.4) flips this back to the 180KB
+    // injection for the one turn where the model needs a total view.
+    const blocks = await gatherChatSourceBlocks({
+      fullText: (typeof CLAUDE_CHAT_SCOPE !== 'undefined' && CLAUDE_CHAT_SCOPE === 'full')
+    });
     const priorTurns = CHAT_HISTORY
       .filter((m, i) => i !== pendingIdx && !m.__seed && !m.__pending)
       .slice(-10)
@@ -8192,20 +8197,105 @@ async function regenerateAssistantMessage(origIdx) {
   await runAssistantTurn(userText);
 }
 
-async function gatherChatSourceBlocks() {
+/* Rough human-readable size for a source header. PDF pages from
+   the extraction audit, CSV row count from SOURCE_TABLE, TXT lines
+   or KB, otherwise the fold-provided meta string. */
+function roughSizeForSource(s) {
+  if (!s) return '';
+  if (s.kind === 'pdf') {
+    // Extraction audit attached at import time.
+    const pages = s.pages || (s.extraction && s.extraction.page_count);
+    if (Number.isFinite(pages)) return '~' + pages + ' page' + (pages === 1 ? '' : 's');
+  }
+  if (s.kind === 'csv' || s.kind === 'tsv') {
+    const tbl = SOURCE_TABLE[s.id];
+    if (tbl && Number.isFinite(tbl.rowCount)) return tbl.rowCount.toLocaleString() + ' rows';
+  }
+  if (s.kind === 'txt' || s.kind === 'md') {
+    if (Number.isFinite(s.lines)) return s.lines.toLocaleString() + ' lines';
+  }
+  return String(s.meta || '');
+}
+
+/* Top-3 entity categories for a source — counts subject/object
+   types across the source's edges, excludes structural types. */
+const STRUCTURAL_TYPES = new Set(['source', 'segment', 'page', 'row', 'identifier', 'dimension', 'boolean']);
+function topEntityCategoriesForSource(sourceId, limit = 3) {
+  const counts = new Map();
+  for (const edge of GRAPH_EDGES.values()) {
+    if (edge.sourceId !== sourceId) continue;
+    for (const ref of [edge.subject, edge.object]) {
+      if (!ref || !ref.type) continue;
+      if (STRUCTURAL_TYPES.has(ref.type)) continue;
+      counts.set(ref.type, (counts.get(ref.type) || 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([type, count]) => ({ type, count }));
+}
+
+/* Face-label distribution for a source, aggregated from its root
+   segment's distribution (populated by 5.3's bottom-up pass). Falls
+   back to aggregating across every segment if the root lacks a
+   distribution (e.g. a source with no classification yet). */
+function faceDistributionForSource(sourceId, { topK = 5 } = {}) {
+  const labels = SEG_LABELS[sourceId];
+  if (!labels) return null;
+  const segs = SOURCE_SEGMENTS[sourceId] || [];
+  const root = segs.find(s => s.kind === 'source');
+  const rootLabel = root && labels[root.id];
+  let dist;
+  if (rootLabel && rootLabel.distribution) {
+    dist = rootLabel.distribution;
+  } else if (typeof aggregateFaceDistribution === 'function') {
+    dist = aggregateFaceDistribution(sourceId, segs.map(s => s.id));
+  } else {
+    return null;
+  }
+  const trim = (face) => {
+    const entries = Object.entries(face || {});
+    entries.sort((a, b) => b[1] - a[1]);
+    const out = {};
+    for (const [cell, share] of entries.slice(0, topK)) out[cell] = Math.round(share * 100) / 100;
+    return out;
+  };
+  return {
+    act: trim(dist.act),
+    site: trim(dist.site),
+    resolution: trim(dist.resolution)
+  };
+}
+
+async function gatherChatSourceBlocks({ fullText = false } = {}) {
   const list = allSources().filter(s => isSourceIncluded(s.id));
-  const TOTAL_CAP = 180000;   // ~45k tokens of raw corpus text
-  const PER_SOURCE_CAP = 40000;
   const out = [];
+  // Full-text mode kept for the Scope=Full escape hatch (Prompt 7.4).
+  // Default mode ships only a compact routing header per source —
+  // roughly 500 bytes each — so a four-source workspace lands ~2KB
+  // in system prompt instead of ~180KB.
+  const TOTAL_CAP = 180000;
+  const PER_SOURCE_CAP = 40000;
   let total = 0;
   for (const s of list) {
+    const header = {
+      id: s.id,
+      name: s.name,
+      kind: s.kind,
+      rough_size: roughSizeForSource(s),
+      top_entity_categories: topEntityCategoriesForSource(s.id),
+      face_distribution: faceDistributionForSource(s.id)
+    };
+    if (!fullText) {
+      out.push(header);
+      continue;
+    }
+    // Full-text mode: include text body (capped).
     let text = '';
     try {
-      if (typeof SOURCE_SAMPLES !== 'undefined' && SOURCE_SAMPLES[s.id]) {
-        text = SOURCE_SAMPLES[s.id] || '';
-      } else {
-        text = (await ensureSourceText(s.id)) || '';
-      }
+      if (typeof SOURCE_SAMPLES !== 'undefined' && SOURCE_SAMPLES[s.id]) text = SOURCE_SAMPLES[s.id] || '';
+      else text = (await ensureSourceText(s.id)) || '';
     } catch { text = ''; }
     text = String(text || '');
     if (text.length > PER_SOURCE_CAP) text = text.slice(0, PER_SOURCE_CAP) + '\n…[truncated]';
@@ -8214,7 +8304,7 @@ async function gatherChatSourceBlocks() {
       text = text.slice(0, room) + (room ? '\n…[truncated]' : '');
     }
     total += text.length;
-    out.push({ id: s.id, name: s.name, kind: s.kind, meta: s.meta || '', text });
+    out.push({ ...header, meta: s.meta || '', text });
     if (total >= TOTAL_CAP) break;
   }
   return out;
@@ -8233,13 +8323,37 @@ async function callChatAgent(apiKey, opts) {
   } = opts || {};
 
   const totalSources = Array.isArray(allSources()) ? allSources().length : 0;
-  const sourcesMd = sourceBlocks.length
-    ? sourceBlocks.map((b, i) =>
-        `### SOURCE ${i + 1}: ${b.name} (${b.kind}${b.meta ? ' · ' + b.meta : ''})\n${b.text || '(no text available)'}`
-      ).join('\n\n---\n\n')
-    : (totalSources === 0
-        ? '(no sources are loaded in the workspace)'
-        : '(all sources are excluded for this chat — the user has un-toggled every source in the Chat panel)');
+  // Two render modes. Full-text mode is the Scope=Full escape hatch
+  // (Prompt 7.4) — every block carries a .text payload and we
+  // include it verbatim. Header mode is the default: each block is
+  // a routing summary (id, kind, rough_size, top entity categories,
+  // face distribution) the model uses to pick retrieval tools with.
+  const hasFullText = sourceBlocks.length && sourceBlocks.some(b => typeof b.text === 'string');
+  let sourcesMd;
+  if (!sourceBlocks.length) {
+    sourcesMd = totalSources === 0
+      ? '(no sources are loaded in the workspace)'
+      : '(all sources are excluded for this chat — the user has un-toggled every source in the Chat panel)';
+  } else if (hasFullText) {
+    sourcesMd = sourceBlocks.map((b, i) =>
+      `### SOURCE ${i + 1}: ${b.name} (${b.kind}${b.meta ? ' · ' + b.meta : ''})\n${b.text || '(no text available)'}`
+    ).join('\n\n---\n\n');
+  } else {
+    sourcesMd = [
+      'Per-source routing headers (no text included — use retrieval tools for content).',
+      ...sourceBlocks.map((b, i) => {
+        const topCats = (b.top_entity_categories || []).map(c => c.type + '(' + c.count + ')').join(', ') || '—';
+        const fd = b.face_distribution;
+        const faceSummary = fd
+          ? ['act', 'site', 'resolution'].map(f => {
+              const cells = Object.entries(fd[f] || {}).map(([k, v]) => k + ':' + v).join(', ');
+              return f + '={' + cells + '}';
+            }).join(' ')
+          : '—';
+        return `### SOURCE ${i + 1}: ${b.name} (id=${b.id}, kind=${b.kind}, ${b.rough_size || '—'})\n  top_entities: ${topCats}\n  faces: ${faceSummary}`;
+      })
+    ].join('\n');
+  }
 
   const userPrefix = (typeof systemPrompt === 'string' && systemPrompt.trim())
     ? systemPrompt.trim()
