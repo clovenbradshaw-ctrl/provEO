@@ -5293,6 +5293,83 @@
     font-size: 10px;
     color: var(--color-text-secondary);
   }
+  .graph-filters {
+    padding: 8px 14px;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    font-size: 11px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .graph-filter-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .graph-filter-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    width: 24px;
+    flex-shrink: 0;
+  }
+  .graph-filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+  }
+  .graph-chip {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    padding: 1px 6px;
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: 10px;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: background 0.1s, border-color 0.1s, color 0.1s;
+  }
+  .graph-chip:hover { background: var(--color-bg-tertiary); }
+  .graph-chip.on {
+    background: var(--color-text-primary);
+    color: var(--color-bg-primary);
+    border-color: var(--color-text-primary);
+  }
+  .graph-chip.any {
+    font-style: italic;
+    color: var(--color-text-tertiary);
+  }
+  .graph-chip.any.on { font-style: normal; }
+  .graph-search-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-top: 2px;
+  }
+  .graph-search-input {
+    flex: 1;
+    font-size: 11.5px;
+    padding: 3px 7px;
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: 3px;
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+  }
+  .graph-search-mode, .graph-reset-btn {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    padding: 3px 7px;
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+  }
+  .graph-search-mode.on { color: var(--color-text-primary); border-color: var(--color-text-secondary); }
+  .graph-search-mode:hover, .graph-reset-btn:hover { color: var(--color-text-primary); }
 </style>
 </head>
 <body>
@@ -6233,6 +6310,25 @@
         </select>
       </label>
       <button class="graph-drawer-close" id="graph-drawer-close" type="button" title="Close (G)">×</button>
+    </div>
+  </div>
+  <div class="graph-filters" id="graph-filters">
+    <div class="graph-filter-row" data-face="act">
+      <span class="graph-filter-label">Act</span>
+      <div class="graph-filter-chips" data-face="act"></div>
+    </div>
+    <div class="graph-filter-row" data-face="site">
+      <span class="graph-filter-label">Site</span>
+      <div class="graph-filter-chips" data-face="site"></div>
+    </div>
+    <div class="graph-filter-row" data-face="resolution">
+      <span class="graph-filter-label">Res</span>
+      <div class="graph-filter-chips" data-face="resolution"></div>
+    </div>
+    <div class="graph-search-row">
+      <input type="search" id="graph-search-input" class="graph-search-input" placeholder="Search nodes…" spellcheck="false" />
+      <button class="graph-search-mode" id="graph-search-mode" type="button" title="Toggle search mode (name / semantic)">name</button>
+      <button class="graph-reset-btn" id="graph-reset-btn" type="button" title="Clear all filters">reset</button>
     </div>
   </div>
   <div class="graph-drawer-body">
@@ -15607,6 +15703,8 @@ async function openGraphDrawer() {
   // preserves drag positions. (First render randomizes for a clean
   // initial layout.)
   GRAPH_LAYOUT_OPTS.randomize = false;
+  // Apply any persisted filter view (8.2) after the initial layout.
+  try { applyGraphFilters(); } catch {}
 }
 
 function closeGraphDrawer() {
@@ -15649,6 +15747,7 @@ function refreshGraphDrawer({ preserveLayout = true } = {}) {
   if (stats) stats.textContent = `${nodes.length} nodes · ${edges.length} edges`;
   const empty = $('#graph-empty');
   if (empty) empty.hidden = nodes.length > 0;
+  try { applyGraphFilters(); } catch {}
 }
 
 /* Wire up the Graph toggle, close button, cluster-select, and the
@@ -15678,10 +15777,244 @@ function initGraphDrawer() {
   window.addEventListener('GRAPH_UPDATED', () => refreshGraphDrawer({ preserveLayout: true }));
 }
 
+/* ======================================================================
+   GRAPH FILTER BAR + SEARCH (Prompt 8.2)
+   ----------------------------------------------------------------------
+   Three face rows of pill chips (Act / Site / Resolution) plus an
+   "Any" reset per face. Within a face: OR. Across faces: AND. A
+   search input toggles between name-substring mode (default) and
+   semantic-kNN mode — the latter re-uses the MiniLM embedder from
+   Prompt 5.2, embeds the query, k-NN over SEG_EMBEDDINGS, maps
+   back to nodes via supportingSegments.
+
+   Filter state persists in sessionStorage so re-opening the drawer
+   within a session keeps the view; nothing persists across reloads.
+====================================================================== */
+
+const GRAPH_FACE_CELLS = {
+  act: ['NUL', 'SEG', 'ALT', 'SEN', 'CON', 'SUP', 'INS', 'SYN', 'REC'],
+  site: ['Void', 'Entity', 'Kind', 'Field', 'Link', 'Network', 'Atmosphere', 'Lens', 'Paradigm'],
+  resolution: ['Clearing', 'Dissecting', 'Unraveling', 'Tending', 'Binding', 'Tracing', 'Cultivating', 'Making', 'Composing']
+};
+const GRAPH_FILTER_STORAGE_KEY = 'nl.graphFilters.v1';
+
+/* Shape:
+   { act: Set<cell>, site: Set<cell>, resolution: Set<cell>,
+     search: { q: string, mode: 'name'|'semantic', semanticIds: Set<nodeId>? } }
+   Empty Sets = "Any" = no filter on that face. */
+const GRAPH_FILTERS = {
+  act: new Set(),
+  site: new Set(),
+  resolution: new Set(),
+  search: { q: '', mode: 'name', semanticIds: null }
+};
+
+function saveGraphFilters() {
+  try {
+    const obj = {
+      act: [...GRAPH_FILTERS.act],
+      site: [...GRAPH_FILTERS.site],
+      resolution: [...GRAPH_FILTERS.resolution],
+      search: { q: GRAPH_FILTERS.search.q || '', mode: GRAPH_FILTERS.search.mode || 'name' }
+    };
+    sessionStorage.setItem(GRAPH_FILTER_STORAGE_KEY, JSON.stringify(obj));
+  } catch {}
+}
+function loadGraphFilters() {
+  try {
+    const raw = sessionStorage.getItem(GRAPH_FILTER_STORAGE_KEY);
+    if (!raw) return;
+    const obj = JSON.parse(raw);
+    GRAPH_FILTERS.act = new Set(Array.isArray(obj.act) ? obj.act : []);
+    GRAPH_FILTERS.site = new Set(Array.isArray(obj.site) ? obj.site : []);
+    GRAPH_FILTERS.resolution = new Set(Array.isArray(obj.resolution) ? obj.resolution : []);
+    GRAPH_FILTERS.search = { q: obj.search?.q || '', mode: (obj.search?.mode === 'semantic' ? 'semantic' : 'name'), semanticIds: null };
+  } catch {}
+}
+
+/* Build the chip row inside a face's container. "Any" chip is
+   always first; it's lit when the cell set for that face is empty
+   (no filter). Clicking "Any" clears the face; clicking a cell
+   toggles its membership. */
+function renderGraphFilterChips() {
+  for (const face of ['act', 'site', 'resolution']) {
+    const host = document.querySelector('.graph-filter-chips[data-face="' + face + '"]');
+    if (!host) continue;
+    const chosen = GRAPH_FILTERS[face];
+    const pieces = [];
+    pieces.push(`<button class="graph-chip any${chosen.size === 0 ? ' on' : ''}" data-face="${face}" data-cell="__any__">Any</button>`);
+    for (const cell of GRAPH_FACE_CELLS[face]) {
+      pieces.push(`<button class="graph-chip${chosen.has(cell) ? ' on' : ''}" data-face="${face}" data-cell="${cell}">${cell}</button>`);
+    }
+    host.innerHTML = pieces.join('');
+  }
+  // Search mode button state
+  const mb = document.getElementById('graph-search-mode');
+  if (mb) {
+    mb.textContent = GRAPH_FILTERS.search.mode;
+    mb.classList.toggle('on', GRAPH_FILTERS.search.mode === 'semantic');
+  }
+  const inp = document.getElementById('graph-search-input');
+  if (inp && inp.value !== GRAPH_FILTERS.search.q) inp.value = GRAPH_FILTERS.search.q;
+}
+
+function graphNodeFaceCell(nodeData, face) {
+  // nodeData is the cytoscape data dict from buildGraphElements.
+  if (!nodeData) return 'unclassified';
+  if (face === 'act') return nodeData.actCell || 'unclassified';
+  if (face === 'site') return nodeData.siteCell || 'unclassified';
+  if (face === 'resolution') return nodeData.resolutionCell || 'unclassified';
+  return 'unclassified';
+}
+
+/* Does a node pass the current face filters? Within a face: OR.
+   Across faces: AND. Empty cell set on a face = pass. */
+function nodePassesFaceFilters(nodeData) {
+  for (const face of ['act', 'site', 'resolution']) {
+    const chosen = GRAPH_FILTERS[face];
+    if (chosen.size === 0) continue;
+    const cell = graphNodeFaceCell(nodeData, face);
+    if (!chosen.has(cell)) return false;
+  }
+  return true;
+}
+
+function nodePassesSearchFilter(nodeData) {
+  const { q, mode, semanticIds } = GRAPH_FILTERS.search;
+  if (!q) return true;
+  if (mode === 'semantic') {
+    if (!semanticIds) return true; // still computing
+    return semanticIds.has(nodeData.id);
+  }
+  const needle = q.toLowerCase();
+  if (String(nodeData.label || '').toLowerCase().includes(needle)) return true;
+  const forms = Array.isArray(nodeData.surfaceForms) ? nodeData.surfaceForms : [];
+  return forms.some(sf => String(sf).toLowerCase().includes(needle));
+}
+
+function applyGraphFilters() {
+  if (!_cyInstance) return;
+  const visibleNodeIds = new Set();
+  _cyInstance.nodes().forEach(n => {
+    const data = n.data();
+    const pass = nodePassesFaceFilters(data) && nodePassesSearchFilter(data);
+    if (pass) { n.style('display', 'element'); visibleNodeIds.add(n.id()); }
+    else { n.style('display', 'none'); }
+  });
+  // Edges visible only when both endpoints are visible.
+  _cyInstance.edges().forEach(e => {
+    const s = e.source().id(), t = e.target().id();
+    const show = visibleNodeIds.has(s) && visibleNodeIds.has(t);
+    e.style('display', show ? 'element' : 'none');
+  });
+  // Update footer stats to reflect filter.
+  const stats = document.getElementById('graph-stats');
+  if (stats) {
+    const total = _cyInstance.nodes().length;
+    stats.textContent = visibleNodeIds.size === total
+      ? `${total} nodes · ${_cyInstance.edges().length} edges`
+      : `${visibleNodeIds.size}/${total} nodes visible`;
+  }
+}
+
+/* Compute semantic search result — k-NN over SEG_EMBEDDINGS, then
+   map hit segments back to GRAPH_NODES via supportingSegments.
+   Returns a Set of nodeIds. */
+async function computeSemanticSearchNodes(query, k = 40) {
+  const vec = await embed(query);
+  const pool = [];
+  for (const [segId, v] of Object.entries(SEG_EMBEDDINGS)) pool.push({ id: segId, embedding: v });
+  if (!pool.length) return new Set();
+  const hits = topKCosine(vec, pool, k);
+  const hitSegIds = new Set(hits.map(h => h.id));
+  const matched = new Set();
+  for (const [nodeId, node] of GRAPH_NODES) {
+    for (const segId of (node.supportingSegments || [])) {
+      if (hitSegIds.has(segId)) { matched.add(nodeId); break; }
+    }
+  }
+  return matched;
+}
+
+function debounce(fn, ms) {
+  let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+async function handleGraphSearchChange() {
+  const inp = document.getElementById('graph-search-input');
+  const q = inp ? inp.value.trim() : '';
+  GRAPH_FILTERS.search.q = q;
+  GRAPH_FILTERS.search.semanticIds = null;
+  if (q && GRAPH_FILTERS.search.mode === 'semantic') {
+    try {
+      GRAPH_FILTERS.search.semanticIds = await computeSemanticSearchNodes(q);
+    } catch (err) {
+      console.warn('[graph] semantic search failed', err);
+      GRAPH_FILTERS.search.semanticIds = new Set();
+    }
+  }
+  saveGraphFilters();
+  applyGraphFilters();
+}
+const debouncedHandleGraphSearch = debounce(handleGraphSearchChange, 180);
+
+function initGraphFilters() {
+  loadGraphFilters();
+  renderGraphFilterChips();
+  const filters = document.getElementById('graph-filters');
+  if (!filters) return;
+  filters.addEventListener('click', (ev) => {
+    const chip = ev.target.closest('.graph-chip');
+    if (!chip) return;
+    const face = chip.dataset.face;
+    const cell = chip.dataset.cell;
+    if (!face || !cell) return;
+    if (cell === '__any__') {
+      GRAPH_FILTERS[face].clear();
+    } else {
+      if (GRAPH_FILTERS[face].has(cell)) GRAPH_FILTERS[face].delete(cell);
+      else GRAPH_FILTERS[face].add(cell);
+    }
+    renderGraphFilterChips();
+    saveGraphFilters();
+    applyGraphFilters();
+  });
+  const inp = document.getElementById('graph-search-input');
+  if (inp) {
+    inp.addEventListener('input', debouncedHandleGraphSearch);
+    inp.value = GRAPH_FILTERS.search.q || '';
+  }
+  const modeBtn = document.getElementById('graph-search-mode');
+  if (modeBtn) {
+    modeBtn.addEventListener('click', () => {
+      GRAPH_FILTERS.search.mode = GRAPH_FILTERS.search.mode === 'semantic' ? 'name' : 'semantic';
+      renderGraphFilterChips();
+      handleGraphSearchChange();
+    });
+  }
+  const resetBtn = document.getElementById('graph-reset-btn');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      GRAPH_FILTERS.act.clear();
+      GRAPH_FILTERS.site.clear();
+      GRAPH_FILTERS.resolution.clear();
+      GRAPH_FILTERS.search.q = '';
+      GRAPH_FILTERS.search.semanticIds = null;
+      const inp2 = document.getElementById('graph-search-input');
+      if (inp2) inp2.value = '';
+      renderGraphFilterChips();
+      saveGraphFilters();
+      applyGraphFilters();
+    });
+  }
+}
+
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initGraphDrawer);
+  document.addEventListener('DOMContentLoaded', initGraphFilters);
 } else {
   initGraphDrawer();
+  initGraphFilters();
 }
 
 /* Kicks off a fold; resolves with the three EO views plus the
