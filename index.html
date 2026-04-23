@@ -6207,17 +6207,41 @@
         </div>
       </div>
       <div class="ws-section">
-        <div class="ws-section-title">Claude API</div>
-        <div class="ws-section-sub">Powers Chat answers grounded in your sources and the per-claim Research button. The key is stored only in this browser's localStorage and sent directly to api.anthropic.com with <span style="font-family:var(--font-mono)">anthropic-dangerous-direct-browser-access</span>. Web search, the system message, and per-source toggles live in the right-hand panel of the Chat tab.</div>
+        <div class="ws-section-title">AI model</div>
+        <div class="ws-section-sub">Powers Chat answers grounded in your sources and the per-claim Research button. Claude is the default; you can also point provEO at a local model running on your laptop (Ollama, LM Studio, llama.cpp, or any OpenAI-compatible endpoint). Local models are steered to call provEO's retrieval tools before answering, so small models stay grounded in the loaded sources instead of guessing from training.</div>
         <div class="ws-form-row">
-          <label for="claude-api-key">API key</label>
+          <label for="llm-provider">Provider</label>
+          <select id="llm-provider" class="ws-input">
+            <option value="anthropic">Claude (Anthropic API)</option>
+            <option value="ollama">Ollama (localhost)</option>
+            <option value="lmstudio">LM Studio (localhost)</option>
+            <option value="llamacpp">llama.cpp server (localhost)</option>
+            <option value="openai-compatible">Custom OpenAI-compatible endpoint</option>
+          </select>
+        </div>
+        <div class="ws-form-row" id="llm-model-row">
+          <label for="llm-model">Model</label>
+          <select id="llm-model" class="ws-input"></select>
+        </div>
+        <div class="ws-form-row" id="llm-model-custom-row" hidden>
+          <label for="llm-model-custom">Model id</label>
+          <input id="llm-model-custom" class="ws-input" type="text" placeholder="e.g. qwen2.5:7b" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="ws-form-row" id="llm-baseurl-row" hidden>
+          <label for="llm-baseurl">Server URL</label>
+          <input id="llm-baseurl" class="ws-input" type="text" placeholder="http://localhost:11434/v1" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="ws-form-row">
+          <label for="claude-api-key"><span id="llm-key-label">API key</span></label>
           <input id="claude-api-key" class="ws-input" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">
         </div>
         <div class="ws-btn-row">
-          <button class="btn-sm btn-sm-primary" id="claude-api-save">Save key</button>
-          <button class="btn-sm" id="claude-api-clear">Clear</button>
+          <button class="btn-sm btn-sm-primary" id="claude-api-save">Save settings</button>
+          <button class="btn-sm" id="claude-api-clear">Clear key</button>
+          <button class="btn-sm" id="llm-test" type="button">Test connection</button>
           <span id="claude-api-status" class="cite-pick-note"></span>
         </div>
+        <div class="ws-section-sub" id="llm-setup-hint" style="margin-top:8px"></div>
       </div>
       <div class="ws-section">
         <div class="ws-section-title">Chat memory</div>
@@ -6550,12 +6574,12 @@
     <div class="ws-section">
       <div class="ws-form-row">
         <label for="research-query">Research query</label>
-        <input id="research-query" class="ws-input" type="text" placeholder="What should Claude look for on the web?">
+        <input id="research-query" class="ws-input" type="text" placeholder="What should the agent look for?">
       </div>
       <div class="ws-form-row" id="research-endpoint-row">
-        <label for="research-api-key">Claude API key</label>
+        <label for="research-api-key">Claude API key (Anthropic only)</label>
         <input id="research-api-key" class="ws-input" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">
-        <div style="font-family:var(--font-mono); font-size:10.5px; color:var(--color-text-secondary); margin-top:4px;">Stored only in this browser's localStorage. Sent directly to api.anthropic.com with anthropic-dangerous-direct-browser-access.</div>
+        <div style="font-family:var(--font-mono); font-size:10.5px; color:var(--color-text-secondary); margin-top:4px;">For local models, configure the provider in Workspace → AI model instead. Local-model research runs without live web and returns absences when the loaded sources don't substantiate a claim.</div>
       </div>
       <div class="ws-form-row">
         <label>Options</label>
@@ -8699,11 +8723,11 @@ async function sendChatMessage() {
 async function runAssistantTurn(userText) {
   const sendBtn = $('#chat-send');
 
-  if (!CLAUDE_API_KEY) {
+  if (!llmIsReady()) {
     CHAT_HISTORY.push({
       role: 'system',
-      meta: 'no api key',
-      html: `Add your Claude API key in <strong>Workspace → Claude API</strong> to chat against the loaded sources. Until then, I can't answer.`,
+      meta: 'ai model not configured',
+      html: llmReadyErrorMessage(),
       evidence: null
     });
     renderChat();
@@ -8711,10 +8735,14 @@ async function runAssistantTurn(userText) {
     return;
   }
 
-  const webOn = !!CLAUDE_CHAT_WEB && CHAT_WEB_MAX > 0;
+  const provider = activeLlmProvider();
+  const webOn = !!CLAUDE_CHAT_WEB && CHAT_WEB_MAX > 0 && provider.supportsServerWeb;
+  const pendingLabel = provider.kind === 'openai'
+    ? `${activeLlmModel() || provider.id} · sources`
+    : (webOn ? 'claude · sources + web tools' : 'claude · sources');
   const pendingIdx = CHAT_HISTORY.push({
     role: 'system',
-    meta: webOn ? 'claude · sources + web tools' : 'claude · sources',
+    meta: pendingLabel,
     html: `<span class="chat-pending">Thinking…</span>`,
     evidence: null,
     __pending: true
@@ -8764,7 +8792,7 @@ async function runAssistantTurn(userText) {
   } catch (err) {
     CHAT_HISTORY[pendingIdx] = {
       role: 'system',
-      meta: 'claude · error',
+      meta: (provider.kind === 'openai' ? provider.id : 'claude') + ' · error',
       html: `Request failed: ${escapeHtml(err && err.message || String(err))}`,
       evidence: null
     };
@@ -8981,7 +9009,18 @@ async function gatherChatSourceBlocks({ fullText = false } = {}) {
   return out;
 }
 
+/* Top-level chat dispatcher. Routes to the Anthropic path (which
+   still drives the Research Agent and all of Claude's web tools)
+   or to the OpenAI-compatible path for local models. */
 async function callChatAgent(apiKey, opts) {
+  const provider = activeLlmProvider();
+  if (provider.kind === 'openai') {
+    return callChatAgent_openai(activeLlmApiKey(), opts);
+  }
+  return callChatAgent_anthropic(apiKey, opts);
+}
+
+async function callChatAgent_anthropic(apiKey, opts) {
   const {
     userText,
     priorTurns,
@@ -9233,6 +9272,209 @@ async function callChatAgent(apiKey, opts) {
   if (webFetches.length) metaBits.push(`${webFetches.length} web fetch${webFetches.length === 1 ? '' : 'es'}`);
   if (!webQueries.length && !webFetches.length && useWeb) metaBits.push('web tools available');
   return { meta: metaBits.join(' · '), html };
+}
+
+/* Anthropic-style tool defs use { name, description, input_schema }.
+   OpenAI-compatible servers expect { type: "function", function:
+   { name, description, parameters } }. */
+function anthropicToolToOpenAI(def) {
+  return {
+    type: 'function',
+    function: {
+      name: def.name,
+      description: def.description || '',
+      parameters: def.input_schema || { type: 'object', properties: {} }
+    }
+  };
+}
+
+/* Chat driver for OpenAI-compatible servers (Ollama / LM Studio /
+   llama.cpp / vLLM / anything exposing /v1/chat/completions).
+   Server-side web tools are not available on these, so we only
+   register the local "experience engine" tools. The prelude
+   forces retrieval-grounded answers. */
+async function callChatAgent_openai(apiKey, opts) {
+  const {
+    userText,
+    priorTurns,
+    sourceBlocks,
+    systemPrompt,
+    retrievalLog
+  } = opts || {};
+
+  const provider = activeLlmProvider();
+  const baseUrl = activeLlmBaseUrl();
+  const model = activeLlmModel();
+
+  const totalSources = Array.isArray(allSources()) ? allSources().length : 0;
+  const hasFullText = sourceBlocks.length && sourceBlocks.some(b => typeof b.text === 'string');
+  let sourcesMd;
+  if (!sourceBlocks.length) {
+    sourcesMd = totalSources === 0
+      ? '(no sources are loaded in the workspace)'
+      : '(all sources are excluded for this chat — the user has un-toggled every source in the Chat panel)';
+  } else if (hasFullText) {
+    sourcesMd = sourceBlocks.map((b, i) =>
+      `### SOURCE ${i + 1}: ${b.name} (${b.kind}${b.meta ? ' · ' + b.meta : ''})\n${b.text || '(no text available)'}`
+    ).join('\n\n---\n\n');
+  } else {
+    sourcesMd = [
+      'Per-source routing headers (no text included — use retrieval tools for content).',
+      ...sourceBlocks.map((b, i) => {
+        const topCats = (b.top_entity_categories || []).map(c => c.type + '(' + c.count + ')').join(', ') || '—';
+        const fd = b.face_distribution;
+        const faceSummary = fd
+          ? ['act', 'site', 'resolution'].map(f => {
+              const cells = Object.entries(fd[f] || {}).map(([k, v]) => k + ':' + v).join(', ');
+              return f + '={' + cells + '}';
+            }).join(' ')
+          : '—';
+        return `### SOURCE ${i + 1}: ${b.name} (id=${b.id}, kind=${b.kind}, ${b.rough_size || '—'})\n  top_entities: ${topCats}\n  faces: ${faceSummary}`;
+      })
+    ].join('\n');
+  }
+
+  const userPrefix = (typeof systemPrompt === 'string' && systemPrompt.trim())
+    ? systemPrompt.trim()
+    : CHAT_SYSTEM_PROMPT_DEFAULT;
+
+  const systemText = [
+    LOCAL_MODEL_CHAT_PRELUDE,
+    '',
+    userPrefix,
+    '',
+    'Do NOT call any external web tools — they are unavailable in this environment. Use only the retrieval tools listed below and the local sources.',
+    '',
+    '=== LOCAL SOURCES ===',
+    sourcesMd
+  ].join('\n');
+
+  const messages = [{ role: 'system', content: systemText }];
+  for (const t of priorTurns) {
+    if (!t) continue;
+    if (t.role === 'user') {
+      messages.push({ role: 'user', content: String(t.text || '') });
+    } else if (t.role === 'system') {
+      const plain = stripHtmlToText(t.html || '');
+      if (plain) messages.push({ role: 'assistant', content: plain });
+    }
+  }
+  messages.push({ role: 'user', content: userText });
+
+  // Register all experience-engine tools regardless of scope —
+  // local models benefit from having the widest retrieval surface
+  // available. Scope=full still skips tools (full-text dump only).
+  const scope = (typeof CLAUDE_CHAT_SCOPE !== 'undefined' ? CLAUDE_CHAT_SCOPE : 'graph');
+  const tools = [];
+  if (scope !== 'full' && CLIENT_TOOL_REGISTRY && CLIENT_TOOL_REGISTRY.length) {
+    for (const t of CLIENT_TOOL_REGISTRY) {
+      tools.push(anthropicToolToOpenAI(t.definition));
+    }
+  }
+
+  const headers = { 'content-type': 'application/json' };
+  if (apiKey) headers['authorization'] = 'Bearer ' + apiKey;
+
+  const endpoint = baseUrl + '/chat/completions';
+  const body = {
+    model,
+    messages,
+    temperature: 0,
+    max_tokens: 4096
+  };
+  if (tools.length) {
+    body.tools = tools;
+    body.tool_choice = 'auto';
+  }
+
+  const allAssistantText = [];
+  let lastFinish = null;
+  let toolCallCount = 0;
+  for (let i = 0; i < 8; i++) {
+    let resp;
+    try {
+      resp = await fetch(endpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body)
+      });
+    } catch (netErr) {
+      throw new Error(`could not reach ${provider.label} at ${endpoint} — ${netErr.message || netErr}. Is the server running and CORS enabled?`);
+    }
+    if (!resp.ok) {
+      let detail = '';
+      try {
+        const raw = await resp.text();
+        const asJson = (() => { try { return JSON.parse(raw); } catch { return null; } })();
+        detail = (asJson && asJson.error && (asJson.error.message || asJson.error)) || raw.slice(0, 240);
+        if (typeof detail !== 'string') detail = JSON.stringify(detail).slice(0, 240);
+      } catch {}
+      throw new Error(`${provider.label} http ${resp.status}${detail ? ' — ' + detail : ''}`);
+    }
+    const data = await resp.json();
+    const choice = (data.choices && data.choices[0]) || {};
+    const msg = choice.message || {};
+    lastFinish = choice.finish_reason || null;
+    if (typeof msg.content === 'string' && msg.content) allAssistantText.push(msg.content);
+
+    const toolCalls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];
+    if (!toolCalls.length) break;
+
+    // Execute any client-tool calls and feed results back.
+    messages.push({
+      role: 'assistant',
+      content: msg.content || '',
+      tool_calls: toolCalls
+    });
+    for (const call of toolCalls) {
+      toolCallCount++;
+      const fn = call.function || {};
+      const name = fn.name || '';
+      let args = {};
+      if (typeof fn.arguments === 'string') {
+        try { args = JSON.parse(fn.arguments); } catch { args = {}; }
+      } else if (fn.arguments && typeof fn.arguments === 'object') {
+        args = fn.arguments;
+      }
+      let resultStr;
+      if (!CLIENT_TOOL_NAMES.has(name)) {
+        resultStr = JSON.stringify({ error: 'unknown tool: ' + name });
+      } else {
+        try {
+          const out = await executeClientTool(name, args);
+          const size = (JSON.stringify(out) || '').length;
+          const segmentIds = collectSegmentIdsFromToolResult(out);
+          if (retrievalLog) retrievalLog.push({
+            tool: name, args, resultSize: size, segmentIds
+          });
+          resultStr = JSON.stringify(out);
+          if (resultStr.length > 64000) {
+            resultStr = JSON.stringify({ error: 'result too large', size: resultStr.length, truncated: true });
+          }
+        } catch (err) {
+          resultStr = JSON.stringify({ error: String(err && err.message || err) });
+        }
+      }
+      messages.push({
+        role: 'tool',
+        tool_call_id: call.id,
+        content: resultStr
+      });
+    }
+    body.messages = messages;
+  }
+
+  const joined = allAssistantText.join('\n').trim();
+  if (!joined) {
+    const reason = lastFinish ? ` (finish: ${lastFinish})` : '';
+    throw new Error(`${provider.label} returned no text content${reason}`);
+  }
+  const html = renderMarkdown(joined);
+  const modelLabel = (model && model.split(':')[0]) || provider.id;
+  const metaBits = [`${modelLabel} · ${sourceBlocks.length} source${sourceBlocks.length === 1 ? '' : 's'}`];
+  if (toolCallCount) metaBits.push(`${toolCallCount} tool call${toolCallCount === 1 ? '' : 's'}`);
+  metaBits.push('local · grounded');
+  return { meta: metaBits.join(' · '), html, citations: [] };
 }
 
 function textToHtml(text) {
@@ -18999,6 +19241,202 @@ let CLAUDE_CHAT_SCOPE = (() => {
 // Matches agents/proveo-research.yaml — keep these in sync.
 const CLAUDE_API_MODEL = 'claude-sonnet-4-6';
 
+/* ==============================================================
+   LLM PROVIDER REGISTRY
+   --------------------------------------------------------------
+   provEO can talk to Claude (the default) *or* a local model
+   served over an OpenAI-compatible HTTP endpoint. The three most
+   common laptop stacks — Ollama, LM Studio, llama.cpp's server —
+   all expose /v1/chat/completions with roughly the same shape, so
+   one adapter covers them all. Users can also point at any custom
+   URL.
+   A few ground rules for local models:
+     • they are much smaller than a frontier model, so we force
+       tool use for grounding (search_segments / query_graph /
+       read_span / describe_source — the "experience engine")
+       rather than trusting training knowledge;
+     • temperature is 0 for deterministic retrieval-grounded
+       answers;
+     • server-side web tools are not available, so the flag stays
+       local-tools-only.
+   ============================================================== */
+
+const LLM_PROVIDERS = {
+  anthropic: {
+    id: 'anthropic',
+    label: 'Claude (Anthropic API)',
+    kind: 'anthropic',
+    needsKey: true,
+    supportsServerWeb: true,
+    defaultBaseUrl: 'https://api.anthropic.com',
+    models: [
+      { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (default)' },
+      { id: 'claude-opus-4-7',   label: 'Claude Opus 4.7' },
+      { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' }
+    ]
+  },
+  ollama: {
+    id: 'ollama',
+    label: 'Ollama (localhost)',
+    kind: 'openai',
+    needsKey: false,
+    supportsServerWeb: false,
+    defaultBaseUrl: 'http://localhost:11434/v1',
+    setupHint: 'Install Ollama, run `OLLAMA_ORIGINS=* ollama serve`, then `ollama pull <model>`. Keeps everything on your laptop.',
+    models: [
+      { id: 'llama3.2:3b',      label: 'Llama 3.2 · 3B  — fastest, ~2 GB RAM' },
+      { id: 'llama3.1:8b',      label: 'Llama 3.1 · 8B  — solid generalist, ~5 GB' },
+      { id: 'qwen2.5:3b',       label: 'Qwen 2.5 · 3B   — strong tool-use for size' },
+      { id: 'qwen2.5:7b',       label: 'Qwen 2.5 · 7B   — best small tool-use' },
+      { id: 'qwen2.5:14b',      label: 'Qwen 2.5 · 14B  — if you have 16 GB RAM' },
+      { id: 'mistral-nemo:12b', label: 'Mistral Nemo · 12B — 128K context' },
+      { id: 'phi3.5:3.8b',      label: 'Phi-3.5 · 3.8B  — lean, accurate' },
+      { id: 'gemma2:9b',        label: 'Gemma 2 · 9B    — Google-trained' },
+      { id: 'deepseek-r1:7b',   label: 'DeepSeek-R1 · 7B — reasoning-tuned' },
+      { id: 'deepseek-r1:14b',  label: 'DeepSeek-R1 · 14B — deeper reasoning' }
+    ]
+  },
+  lmstudio: {
+    id: 'lmstudio',
+    label: 'LM Studio (localhost)',
+    kind: 'openai',
+    needsKey: false,
+    supportsServerWeb: false,
+    defaultBaseUrl: 'http://localhost:1234/v1',
+    setupHint: 'Open LM Studio → Developer → Start Server. Default port is 1234. Enable CORS in server settings.',
+    models: [
+      { id: 'loaded',                      label: 'Whatever model is loaded in LM Studio' },
+      { id: 'meta-llama-3.1-8b-instruct',  label: 'Llama 3.1 8B Instruct' },
+      { id: 'qwen2.5-7b-instruct',         label: 'Qwen 2.5 7B Instruct' },
+      { id: 'mistral-nemo-instruct-2407',  label: 'Mistral Nemo 12B Instruct' },
+      { id: 'phi-3.5-mini-instruct',       label: 'Phi-3.5 Mini Instruct' }
+    ]
+  },
+  llamacpp: {
+    id: 'llamacpp',
+    label: 'llama.cpp server (localhost)',
+    kind: 'openai',
+    needsKey: false,
+    supportsServerWeb: false,
+    defaultBaseUrl: 'http://localhost:8080/v1',
+    setupHint: 'Run `llama-server -m <model.gguf> --port 8080 --host 127.0.0.1`. Any GGUF on disk works.',
+    models: [
+      { id: 'local', label: 'Current model loaded on llama-server' }
+    ]
+  },
+  'openai-compatible': {
+    id: 'openai-compatible',
+    label: 'Custom OpenAI-compatible endpoint',
+    kind: 'openai',
+    needsKey: true,
+    supportsServerWeb: false,
+    defaultBaseUrl: 'http://localhost:8000/v1',
+    setupHint: 'Point at any server that speaks /v1/chat/completions — vLLM, TGI, OpenRouter, together.ai, etc.',
+    models: [
+      { id: 'custom', label: 'Custom model id (edit below)' }
+    ]
+  }
+};
+
+const LS_LLM_PROVIDER  = 'nl.llmProvider.v1';
+const LS_LLM_MODEL     = 'nl.llmModel.v1';
+const LS_LLM_BASE_URL  = 'nl.llmBaseUrl.v1';
+const LS_LLM_API_KEY   = 'nl.llmApiKey.v1';
+
+let LLM_PROVIDER = (() => {
+  try {
+    const v = localStorage.getItem(LS_LLM_PROVIDER);
+    return (v && LLM_PROVIDERS[v]) ? v : 'anthropic';
+  } catch { return 'anthropic'; }
+})();
+let LLM_MODEL = (() => {
+  try { return localStorage.getItem(LS_LLM_MODEL) || ''; }
+  catch { return ''; }
+})();
+let LLM_BASE_URL = (() => {
+  try { return localStorage.getItem(LS_LLM_BASE_URL) || ''; }
+  catch { return ''; }
+})();
+let LLM_API_KEY = (() => {
+  try { return localStorage.getItem(LS_LLM_API_KEY) || ''; }
+  catch { return ''; }
+})();
+
+function activeLlmProvider() {
+  return LLM_PROVIDERS[LLM_PROVIDER] || LLM_PROVIDERS.anthropic;
+}
+function activeLlmModel() {
+  const p = activeLlmProvider();
+  if (LLM_MODEL) return LLM_MODEL;
+  if (p.id === 'anthropic') return CLAUDE_API_MODEL;
+  return (p.models && p.models[0] && p.models[0].id) || '';
+}
+function activeLlmBaseUrl() {
+  if (LLM_BASE_URL) return LLM_BASE_URL.replace(/\/+$/, '');
+  return activeLlmProvider().defaultBaseUrl.replace(/\/+$/, '');
+}
+function activeLlmApiKey() {
+  // Anthropic has its own storage key for backwards compatibility.
+  if (activeLlmProvider().id === 'anthropic') return CLAUDE_API_KEY;
+  return LLM_API_KEY;
+}
+function llmIsReady() {
+  const p = activeLlmProvider();
+  if (p.needsKey && !activeLlmApiKey()) return false;
+  return true;
+}
+function llmReadyErrorMessage() {
+  const p = activeLlmProvider();
+  if (p.id === 'anthropic') {
+    return `Add your Claude API key in <strong>Workspace → AI model</strong> to chat against the loaded sources. Until then, I can't answer.`;
+  }
+  if (p.needsKey) {
+    return `Add an API key for <strong>${escapeHtml(p.label)}</strong> in <strong>Workspace → AI model</strong>. Until then, I can't answer.`;
+  }
+  return `Start your local model server (${escapeHtml(p.label)}) and confirm the URL in <strong>Workspace → AI model</strong> before chatting.`;
+}
+
+/* Grounding-first system prompt for local models. Smaller models
+   hallucinate if you let them free-associate, so we insist on
+   retrieval via the experience-engine tools (query_graph,
+   search_segments, read_span, describe_source) before any
+   factual answer. */
+const LOCAL_MODEL_CHAT_PRELUDE = [
+  "You are PROVeo Chat running against a LOCAL model on the user's laptop.",
+  "The user's *experience engine* is a set of retrieval tools over their local event log and source corpus. Your job is to USE those tools, not to answer from training.",
+  "",
+  "Discipline:",
+  "1. For any factual question, call `search_segments` or `query_graph` FIRST, then `read_span` / `describe_source` to confirm. Do not answer from memory.",
+  "2. Quote the exact passage you are relying on, and name the source id.",
+  "3. If the retrieval tools return nothing relevant, say so plainly: \"The loaded sources do not answer this.\" Do not invent filler.",
+  "4. Prefer short, direct answers. No hedging, no preamble, no promotional framing.",
+  "5. If the question is ambiguous, ask one clarifying question before retrieving."
+].join('\n');
+
+/* Research JSON envelope prompt for local models. Same contract
+   as the Anthropic path, but phrased so a smaller model stays
+   inside the JSON schema. */
+const LOCAL_MODEL_RESEARCH_SYSTEM = [
+  'You are the provEO Research Agent running on a local model.',
+  'You do NOT have live web access. Work only from the local sources',
+  'and the cell context the user provides. When nothing substantiates',
+  'a claim, return an absence (never fabricate a URL).',
+  '',
+  '# Output (JSON ONLY — no prose, no code fences)',
+  '{',
+  '  "query":    "...",',
+  '  "findings": [ { "claim": "...", "type": "mechanical|extracted|uncertain", "confidence": 0.0, "provenance": { "source_url": "...", "mode": "retrieved|inferred|measured|reported", "timestamp": "ISO-8601", "context": "..." } } ],',
+  '  "absences": [ { "expected": "...", "state": "never-set|cleared|unknown", "note": "..." } ],',
+  '  "pipeline": [ "what you checked, what you rejected, why" ]',
+  '}',
+  '',
+  '# Rules',
+  '1. Ground every finding in a URL already present in the local sources. If no URL, return an absence (state: "unknown").',
+  '2. Do not guess URLs or paper titles. No training-data citations.',
+  '3. If two local sources conflict, emit both as separate findings and flag it in `pipeline`.',
+  '4. Return ONLY the JSON object — no markdown fences, no commentary.'
+].join('\n');
+
 /* ---------- CHAT CONTROL STATE (system prompt, per-source include, web knobs) ---------- */
 
 const CHAT_SYSTEM_PROMPT_DEFAULT = [
@@ -19220,10 +19658,19 @@ const PROVEO_RESEARCH_SYSTEM = [
   '   framing in any field.'
 ].join('\n');
 
-/* Calls api.anthropic.com directly with the user's API key, runs the
-   provEO Research Agent, and returns the parsed envelope
-     { query, findings, absences, pipeline }. */
-async function callResearchAgent(apiKey, { query, claimText, claimId }) {
+/* Dispatcher for the provEO Research Agent. The Anthropic path
+   ships with real web_search; the local-model path runs the same
+   JSON envelope contract but without web access, so it reports
+   absences honestly instead of inventing URLs. */
+async function callResearchAgent(apiKey, opts) {
+  const provider = activeLlmProvider();
+  if (provider.kind === 'openai') {
+    return callResearchAgent_openai(activeLlmApiKey(), opts);
+  }
+  return callResearchAgent_anthropic(apiKey, opts);
+}
+
+async function callResearchAgent_anthropic(apiKey, { query, claimText, claimId }) {
   const userMsg = [
     `provEO cell context — claim_id: ${claimId || '(none)'}`,
     `Claim text: ${claimText || '(not provided)'}`,
@@ -19263,6 +19710,73 @@ async function callResearchAgent(apiKey, { query, claimText, claimId }) {
   const joined = textBlocks.join('\n').trim();
   if (!joined) throw new Error('agent returned no text content');
   const match = joined.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error('agent response did not contain JSON');
+  let parsed;
+  try { parsed = JSON.parse(match[0]); }
+  catch (e) { throw new Error('agent JSON parse failed: ' + (e.message || e)); }
+  if (!parsed || !Array.isArray(parsed.findings)) throw new Error('agent response missing findings[]');
+  return {
+    query: typeof parsed.query === 'string' ? parsed.query : query,
+    findings: parsed.findings,
+    absences: Array.isArray(parsed.absences) ? parsed.absences : [],
+    pipeline: Array.isArray(parsed.pipeline) ? parsed.pipeline : []
+  };
+}
+
+/* Research driver for OpenAI-compatible local endpoints. No live
+   web — the model must ground findings in URLs already present in
+   the local sources, or return an absence. */
+async function callResearchAgent_openai(apiKey, { query, claimText, claimId }) {
+  const provider = activeLlmProvider();
+  const baseUrl = activeLlmBaseUrl();
+  const model = activeLlmModel();
+
+  const userMsg = [
+    `provEO cell context — claim_id: ${claimId || '(none)'}`,
+    `Claim text: ${claimText || '(not provided)'}`,
+    `Research query: ${query}`,
+    '',
+    'Return ONLY the JSON envelope described above. No prose wrapper. No code fences.'
+  ].join('\n');
+
+  const headers = { 'content-type': 'application/json' };
+  if (apiKey) headers['authorization'] = 'Bearer ' + apiKey;
+
+  const body = {
+    model,
+    temperature: 0,
+    max_tokens: 4096,
+    messages: [
+      { role: 'system', content: LOCAL_MODEL_RESEARCH_SYSTEM },
+      { role: 'user', content: userMsg }
+    ],
+    response_format: { type: 'json_object' }
+  };
+
+  let resp;
+  try {
+    resp = await fetch(baseUrl + '/chat/completions', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body)
+    });
+  } catch (netErr) {
+    throw new Error(`could not reach ${provider.label} at ${baseUrl} — ${netErr.message || netErr}`);
+  }
+  if (!resp.ok) {
+    let detail = '';
+    try {
+      const raw = await resp.text();
+      const asJson = (() => { try { return JSON.parse(raw); } catch { return null; } })();
+      detail = (asJson && asJson.error && (asJson.error.message || asJson.error)) || raw.slice(0, 240);
+      if (typeof detail !== 'string') detail = JSON.stringify(detail).slice(0, 240);
+    } catch {}
+    throw new Error(`${provider.label} http ${resp.status}${detail ? ' — ' + detail : ''}`);
+  }
+  const data = await resp.json();
+  const text = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+  if (!text.trim()) throw new Error('agent returned no text content');
+  const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('agent response did not contain JSON');
   let parsed;
   try { parsed = JSON.parse(match[0]); }
@@ -19505,13 +20019,18 @@ async function runClaudeResearch() {
     return;
   }
   if (errEl) { errEl.hidden = true; errEl.textContent = ''; }
-  const apiKey = (keyEl && keyEl.value || '').trim();
-  if (apiKey && apiKey !== CLAUDE_API_KEY) {
-    CLAUDE_API_KEY = apiKey;
-    try { localStorage.setItem(LS_CLAUDE_API_KEY, apiKey); } catch {}
+  const typedKey = (keyEl && keyEl.value || '').trim();
+  const provider = activeLlmProvider();
+  // Inline key entry in the research modal still writes to the
+  // Claude key slot (the field predates the provider picker). For
+  // non-Anthropic providers, configure from Workspace → AI model.
+  if (typedKey && provider.id === 'anthropic' && typedKey !== CLAUDE_API_KEY) {
+    CLAUDE_API_KEY = typedKey;
+    try { localStorage.setItem(LS_CLAUDE_API_KEY, typedKey); } catch {}
   }
+  const apiKey = activeLlmApiKey();
   const allowDemo = !!(demoEl && demoEl.checked);
-  setResearchStatus('Running provEO Research Agent…', null);
+  setResearchStatus(`Running provEO Research Agent on ${provider.label}…`, null);
   researchState.results = [];
   researchState.cardStates = {};
   researchState.proposalByCard = {};
@@ -19522,7 +20041,7 @@ async function runClaudeResearch() {
   let results = null;
   let usedDemo = false;
   try {
-    if (!apiKey) throw new Error('no API key configured');
+    if (provider.needsKey && !apiKey) throw new Error(`no API key configured for ${provider.label}`);
     const envelope = await callResearchAgent(apiKey, {
       query, claimText: researchState.claimText, claimId: researchState.claimId
     });
@@ -26466,9 +26985,9 @@ function saveProveoSettings() {
 function loadProveoSettingsIntoModal() {
   const radios = $$('input[name="upload-dest"]');
   radios.forEach(r => { r.checked = (r.value === UPLOAD_DEST_DEFAULT); });
-  const keyInput = $('#claude-api-key');
-  if (keyInput) keyInput.value = CLAUDE_API_KEY || '';
-  setClaudeApiStatus(CLAUDE_API_KEY ? 'Key set.' : '');
+  const providerEl = $('#llm-provider');
+  if (providerEl) providerEl.value = LLM_PROVIDER;
+  refreshLlmModalUI();
   const memPass = $('#chat-memory-pass');
   if (memPass) memPass.value = getChatMemoryPass();
   updateChatMemoryStatus(getChatMemoryPass() ? 'Enabled.' : '');
@@ -26479,22 +26998,206 @@ function setClaudeApiStatus(msg) {
   if (el) el.textContent = msg || '';
 }
 
-function saveClaudeApiSettings() {
+/* Reshapes the AI-model panel for the currently-selected provider:
+   populates the model dropdown, shows/hides the custom model id
+   and base-URL fields, relabels the API key row, and prefills
+   saved values from localStorage. */
+function refreshLlmModalUI() {
+  const providerId = ($('#llm-provider') && $('#llm-provider').value) || LLM_PROVIDER;
+  const provider = LLM_PROVIDERS[providerId] || LLM_PROVIDERS.anthropic;
+
+  // Model dropdown: show curated list + "custom" fallback.
+  const modelSel = $('#llm-model');
+  const customRow = $('#llm-model-custom-row');
+  const customInput = $('#llm-model-custom');
+  if (modelSel) {
+    modelSel.innerHTML = '';
+    for (const m of (provider.models || [])) {
+      const opt = document.createElement('option');
+      opt.value = m.id; opt.textContent = m.label;
+      modelSel.appendChild(opt);
+    }
+    const customOpt = document.createElement('option');
+    customOpt.value = '__custom__'; customOpt.textContent = 'Custom model id…';
+    modelSel.appendChild(customOpt);
+
+    const current = (providerId === LLM_PROVIDER && LLM_MODEL) ? LLM_MODEL : '';
+    const known = (provider.models || []).some(m => m.id === current);
+    if (current && known) {
+      modelSel.value = current;
+      if (customRow) customRow.hidden = true;
+      if (customInput) customInput.value = '';
+    } else if (current && !known) {
+      modelSel.value = '__custom__';
+      if (customRow) customRow.hidden = false;
+      if (customInput) customInput.value = current;
+    } else {
+      modelSel.selectedIndex = 0;
+      if (customRow) customRow.hidden = true;
+      if (customInput) customInput.value = '';
+    }
+  }
+
+  // Base URL row: hidden for Anthropic.
+  const urlRow = $('#llm-baseurl-row');
+  const urlInput = $('#llm-baseurl');
+  if (urlRow) urlRow.hidden = (provider.kind === 'anthropic');
+  if (urlInput) {
+    urlInput.placeholder = provider.defaultBaseUrl;
+    const saved = (providerId === LLM_PROVIDER) ? LLM_BASE_URL : '';
+    urlInput.value = saved;
+  }
+
+  // API key row.
   const keyInput = $('#claude-api-key');
-  const key = keyInput ? keyInput.value.trim() : '';
-  CLAUDE_API_KEY = key;
-  try { localStorage.setItem(LS_CLAUDE_API_KEY, key); } catch {}
-  setClaudeApiStatus(key ? 'Saved.' : 'Cleared.');
-  showToast(key ? 'claude api key saved' : 'claude api key cleared');
+  const keyLabel = $('#llm-key-label');
+  if (keyLabel) keyLabel.textContent = provider.needsKey ? 'API key' : 'API key (optional)';
+  if (keyInput) {
+    keyInput.placeholder = provider.id === 'anthropic' ? 'sk-ant-…' : (provider.needsKey ? 'sk-…' : 'leave blank for local servers');
+    if (provider.id === 'anthropic') {
+      keyInput.value = CLAUDE_API_KEY || '';
+    } else {
+      keyInput.value = (providerId === LLM_PROVIDER ? LLM_API_KEY : '') || '';
+    }
+  }
+
+  const hintEl = $('#llm-setup-hint');
+  if (hintEl) hintEl.textContent = provider.setupHint || '';
+
+  const currentKey = (provider.id === 'anthropic') ? CLAUDE_API_KEY : LLM_API_KEY;
+  setClaudeApiStatus(
+    providerId === LLM_PROVIDER
+      ? (currentKey ? 'Saved.' : (provider.needsKey ? '' : 'Using server without key.'))
+      : 'Unsaved — click Save settings.'
+  );
+}
+
+function saveClaudeApiSettings() {
+  const providerEl = $('#llm-provider');
+  const providerId = (providerEl && providerEl.value) || 'anthropic';
+  const provider = LLM_PROVIDERS[providerId] || LLM_PROVIDERS.anthropic;
+
+  LLM_PROVIDER = providerId;
+  try { localStorage.setItem(LS_LLM_PROVIDER, providerId); } catch {}
+
+  // Model.
+  const modelSel = $('#llm-model');
+  let modelVal = (modelSel && modelSel.value) || '';
+  if (modelVal === '__custom__') {
+    const customInput = $('#llm-model-custom');
+    modelVal = (customInput && customInput.value.trim()) || '';
+  }
+  LLM_MODEL = modelVal;
+  try {
+    if (modelVal) localStorage.setItem(LS_LLM_MODEL, modelVal);
+    else localStorage.removeItem(LS_LLM_MODEL);
+  } catch {}
+
+  // Base URL.
+  const urlInput = $('#llm-baseurl');
+  const baseUrl = (urlInput && urlInput.value.trim()) || '';
+  LLM_BASE_URL = baseUrl;
+  try {
+    if (baseUrl) localStorage.setItem(LS_LLM_BASE_URL, baseUrl);
+    else localStorage.removeItem(LS_LLM_BASE_URL);
+  } catch {}
+
+  // Key storage — Anthropic still uses its legacy slot so existing
+  // code paths continue to work; everything else goes into the
+  // generic LLM slot.
+  const keyInput = $('#claude-api-key');
+  const key = (keyInput && keyInput.value.trim()) || '';
+  if (provider.id === 'anthropic') {
+    CLAUDE_API_KEY = key;
+    try { localStorage.setItem(LS_CLAUDE_API_KEY, key); } catch {}
+  } else {
+    LLM_API_KEY = key;
+    try {
+      if (key) localStorage.setItem(LS_LLM_API_KEY, key);
+      else localStorage.removeItem(LS_LLM_API_KEY);
+    } catch {}
+  }
+
+  setClaudeApiStatus('Saved.');
+  showToast(`ai model: ${provider.label}`);
 }
 
 function clearClaudeApiKey() {
-  CLAUDE_API_KEY = '';
-  try { localStorage.removeItem(LS_CLAUDE_API_KEY); } catch {}
+  const provider = activeLlmProvider();
+  if (provider.id === 'anthropic') {
+    CLAUDE_API_KEY = '';
+    try { localStorage.removeItem(LS_CLAUDE_API_KEY); } catch {}
+  } else {
+    LLM_API_KEY = '';
+    try { localStorage.removeItem(LS_LLM_API_KEY); } catch {}
+  }
   const keyInput = $('#claude-api-key');
   if (keyInput) keyInput.value = '';
   setClaudeApiStatus('Cleared.');
-  showToast('claude api key cleared');
+  showToast('api key cleared');
+}
+
+async function testLlmConnection() {
+  const providerEl = $('#llm-provider');
+  const providerId = (providerEl && providerEl.value) || LLM_PROVIDER;
+  const provider = LLM_PROVIDERS[providerId] || LLM_PROVIDERS.anthropic;
+  const urlInput = $('#llm-baseurl');
+  const baseUrl = ((urlInput && urlInput.value.trim()) || provider.defaultBaseUrl).replace(/\/+$/, '');
+  const modelSel = $('#llm-model');
+  const customInput = $('#llm-model-custom');
+  let model = (modelSel && modelSel.value) || '';
+  if (model === '__custom__') model = (customInput && customInput.value.trim()) || '';
+  if (!model) model = (provider.models && provider.models[0] && provider.models[0].id) || '';
+  const keyInput = $('#claude-api-key');
+  const key = (keyInput && keyInput.value.trim()) || '';
+
+  setClaudeApiStatus('Testing…');
+  try {
+    if (provider.kind === 'anthropic') {
+      if (!key) throw new Error('API key required.');
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': key,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: model || CLAUDE_API_MODEL,
+          max_tokens: 16,
+          messages: [{ role: 'user', content: 'ping' }]
+        })
+      });
+      if (!resp.ok) {
+        const raw = await resp.text().catch(() => '');
+        throw new Error(`http ${resp.status}${raw ? ' — ' + raw.slice(0, 200) : ''}`);
+      }
+      setClaudeApiStatus('OK — Claude reachable.');
+      return;
+    }
+    const headers = { 'content-type': 'application/json' };
+    if (key) headers['authorization'] = 'Bearer ' + key;
+    const resp = await fetch(baseUrl + '/chat/completions', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: 'ping' }],
+        max_tokens: 16,
+        temperature: 0
+      })
+    });
+    if (!resp.ok) {
+      const raw = await resp.text().catch(() => '');
+      throw new Error(`http ${resp.status}${raw ? ' — ' + raw.slice(0, 200) : ''}`);
+    }
+    const data = await resp.json().catch(() => null);
+    const got = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    setClaudeApiStatus(got ? `OK — ${provider.label} replied.` : `OK — reachable, but empty reply (model may not be loaded).`);
+  } catch (err) {
+    setClaudeApiStatus(`Failed: ${err && err.message || err}`);
+  }
 }
 
 /* Sends a source to the PROVeo webhook. Returns the parsed JSON response. */
@@ -27228,6 +27931,15 @@ function wireWorkspace() {
   if (claudeSaveBtn) claudeSaveBtn.addEventListener('click', saveClaudeApiSettings);
   const claudeClearBtn = $('#claude-api-clear');
   if (claudeClearBtn) claudeClearBtn.addEventListener('click', clearClaudeApiKey);
+  const llmProviderEl = $('#llm-provider');
+  if (llmProviderEl) llmProviderEl.addEventListener('change', refreshLlmModalUI);
+  const llmModelEl = $('#llm-model');
+  if (llmModelEl) llmModelEl.addEventListener('change', () => {
+    const customRow = $('#llm-model-custom-row');
+    if (customRow) customRow.hidden = (llmModelEl.value !== '__custom__');
+  });
+  const llmTestBtn = $('#llm-test');
+  if (llmTestBtn) llmTestBtn.addEventListener('click', testLlmConnection);
   wireChatMemoryControls();
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !$('#ws-modal').hidden) closeWorkspaceModal();
