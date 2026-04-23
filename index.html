@@ -1940,6 +1940,17 @@
     display: flex;
     justify-content: space-between;
   }
+  .quote-open-source {
+    cursor: pointer;
+    color: var(--color-text-secondary);
+    transition: color 0.12s;
+  }
+  .quote-open-source:hover,
+  .quote-open-source:focus-visible {
+    color: var(--color-text-primary);
+    outline: none;
+    text-decoration: underline;
+  }
 
   /* Cell view — CSV row/col tuple with neighbors */
   .cell-view {
@@ -7692,17 +7703,24 @@ function showClaim(id, opts = {}) {
   });
 
   // wire up source-chip → open source viewer at cited span
+  const openFromEl = (el) => {
+    const name = el.dataset.srcName;
+    const sid = resolveSourceIdByName(name);
+    if (!sid) { showToast('Source not in library'); return; }
+    const scrollTo = el.dataset.scrollKind === 'cell'
+      ? { kind: 'cell', row: Number(el.dataset.row), col: el.dataset.col }
+      : el.dataset.scrollKind === 'quote'
+        ? { kind: 'quote', highlight: el.dataset.hl }
+        : null;
+    showSourceViewer(sid, { scrollTo });
+  };
   $$('.source-chip[data-src-name]', $('#rp-body')).forEach(chip => {
-    chip.addEventListener('click', () => {
-      const name = chip.dataset.srcName;
-      const sid = resolveSourceIdByName(name);
-      if (!sid) { showToast('Source not in library'); return; }
-      const scrollTo = chip.dataset.scrollKind === 'cell'
-        ? { kind: 'cell', row: Number(chip.dataset.row), col: chip.dataset.col }
-        : chip.dataset.scrollKind === 'quote'
-          ? { kind: 'quote', highlight: chip.dataset.hl }
-          : null;
-      showSourceViewer(sid, { scrollTo });
+    chip.addEventListener('click', () => openFromEl(chip));
+  });
+  $$('.quote-open-source[data-src-name]', $('#rp-body')).forEach(link => {
+    link.addEventListener('click', () => openFromEl(link));
+    link.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openFromEl(link); }
     });
   });
 }
@@ -7780,7 +7798,7 @@ function renderQuoteProv(p, topLevel) {
         <span>${escapeHtml(p.before)}</span><span class="highlight">${escapeHtml(p.highlight)}</span><span>${escapeHtml(p.after)}</span>
         <div class="quote-meta">
           <span>${escapeHtml(p.spanLabel)}</span>
-          <span>open in source →</span>
+          <span class="quote-open-source" role="button" tabindex="0" data-src-name="${escapeHtml(p.src)}" data-scroll-kind="quote" data-hl="${escapeHtml(p.highlight || '')}">open in source →</span>
         </div>
       </div>
       ${ocrNotice}
