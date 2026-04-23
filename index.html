@@ -6334,6 +6334,18 @@
             </div>
           </div>
         </div>
+        <div class="ws-form-row">
+          <label>Cloud backup</label>
+          <div class="ws-section-sub" style="margin:0 0 6px">
+            Encrypted state (event log + entity table) is pushed to <span style="font-family:var(--font-mono)">eo-blob</span> about 30&nbsp;s after your last change. Only members of this Matrix room can read it; the last 5 versions are retained.
+          </div>
+          <div class="ws-section-sub" id="ws-backup-status" style="margin:0 0 8px">No backup yet for this workspace</div>
+          <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap">
+            <button class="btn-sm btn-sm-primary" id="ws-backup-now" title="Push an encrypted snapshot right now, bypassing the 30s debounce">Back up now</button>
+            <button class="btn-sm" id="ws-backup-versions" title="List backup versions held by the server">View versions…</button>
+          </div>
+          <div id="ws-backup-versions-list" hidden style="margin-top:10px; padding:10px; border:0.5px dashed var(--color-border-tertiary); border-radius:4px; max-height:180px; overflow:auto"></div>
+        </div>
         <label class="ws-toggle">
           <input type="checkbox" id="toggle-sample-in"> Show built-in sample article &amp; sources
         </label>
@@ -10733,6 +10745,7 @@ async function appendEvent(e) {
     ...e
   };
   await storage.append(JSON.stringify(full));
+  try { if (typeof scheduleBackup === 'function') scheduleBackup('event'); } catch {}
   return full;
 }
 
@@ -10815,6 +10828,7 @@ async function ensureEntitiesSeeded() {
 
 async function saveEntitiesTable() {
   await storage.saveEntities(ENTITIES);
+  try { if (typeof scheduleBackup === 'function') scheduleBackup('entities'); } catch {}
 }
 
 async function addEntityAlias(entityId, alias) {
@@ -22607,6 +22621,15 @@ function wireDocFolder() {
 }
 
 function setSyncStatus(state, label) {
+  // Collab (matrix live state) calls still use this signature. Backup
+  // state merges in via _renderSyncDot, defined alongside BlobClient.
+  try {
+    _syncCollab = { state, label };
+    _renderSyncDot();
+    return;
+  } catch {
+    // BlobClient block not yet initialized — fall through to raw update.
+  }
   const dot = $('#tbar-sync-dot');
   const lab = $('#tbar-sync-label');
   if (!dot || !lab) return;
@@ -23464,6 +23487,40 @@ const collabCrypto = {
     return JSON.parse(new TextDecoder().decode(plaintext));
   },
 
+  /* Envelope shape expected by the eo-blob webhook:
+     { v, iv, ct, content_hash, key_id, plaintext_size }.
+     Differs from the device-to-device envelope (no alg/fp); content_hash is
+     hex-sha256 of the plaintext bytes and key_id is the short fingerprint. */
+  async encryptForBlob(plaintextStr) {
+    if (!this.key) throw new Error('no key established');
+    const pt = new TextEncoder().encode(plaintextStr);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, this.key, pt);
+    const hashBuf = await crypto.subtle.digest('SHA-256', pt);
+    return {
+      v: 1,
+      iv: toB64(iv),
+      ct: toB64(ct),
+      content_hash: toHex(hashBuf),
+      key_id: this.fingerprint,
+      plaintext_size: pt.byteLength
+    };
+  },
+
+  async decryptForBlob(envelope) {
+    if (!envelope || !envelope.iv || !envelope.ct) throw new Error('not a blob envelope');
+    if (envelope.v && envelope.v !== 1) throw new Error('unknown envelope version: ' + envelope.v);
+    if (envelope.key_id && envelope.key_id !== this.fingerprint) throw new Error('key fingerprint mismatch');
+    const iv = fromB64(envelope.iv);
+    const ct = fromB64(envelope.ct);
+    const ptBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, this.key, ct);
+    if (envelope.content_hash) {
+      const hashBuf = await crypto.subtle.digest('SHA-256', ptBuf);
+      if (toHex(hashBuf) !== envelope.content_hash) throw new Error('content_hash mismatch');
+    }
+    return new TextDecoder().decode(ptBuf);
+  },
+
   /* A message body is "sealed" if it has alg+fp+iv+ct fields. Anything
      else is treated as plaintext for back-compat with unencrypted peers. */
   isSealed(content) {
@@ -24089,6 +24146,282 @@ const matrixCollab = {
     if (changed) renderPresence();
   }
 };
+
+/* ---------- CLOUD BACKUP (eo-blob) ----------
+   Pushes an encrypted snapshot of the event log + entity table to the n8n
+   webhook. The Matrix room is the access boundary: only room members can
+   read the blob. Retention is 5 versions per data_id; version numbers are
+   monotonic and never reused. Debounced auto-push + manual "Back up now". */
+
+const BLOB_URL = 'https://n8n.intelechia.com/webhook/eo-blob';
+const BLOB_TARGET = 'app.eodb';
+const BLOB_LOCAL_ID = 'state.v1';
+const BLOB_DEBOUNCE_MS = 30_000;
+const BLOB_RECENT_WINDOW_MS = 5 * 60_000;
+const BLOB_MAX_RETRIES = 3;
+const BLOB_BACKOFF_BASE_MS = 2000;
+const BLOB_DATA_ID_RE = /^[A-Za-z0-9_:-]{1,128}$/;
+
+class BlobError extends Error {
+  constructor(code, message, detail) {
+    super(message);
+    this.code = code;       // BAD_REQUEST | BAD_TOKEN | FORBIDDEN | NOT_FOUND | SERVER | NETWORK | PRECONDITION
+    this.detail = detail || null;
+  }
+}
+
+const BlobClient = {
+  async roomPrefix(roomId) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(roomId));
+    return 'r_' + toHex(buf).slice(0, 8);
+  },
+
+  async roomScopedDataId(roomId, localId) {
+    const prefix = await this.roomPrefix(roomId);
+    const id = prefix + ':' + localId;
+    if (!BLOB_DATA_ID_RE.test(id)) {
+      throw new BlobError('PRECONDITION', 'data_id fails regex: ' + id);
+    }
+    return id;
+  },
+
+  _requireAuth() {
+    if (!matrix.accessToken) throw new BlobError('PRECONDITION', 'not signed in to Matrix');
+    if (!matrix.activeRoomId) throw new BlobError('PRECONDITION', 'no active workspace');
+    return { token: matrix.accessToken, roomId: matrix.activeRoomId };
+  },
+
+  async _fetchWithRetry(body, { headers = {} } = {}) {
+    let attempt = 0;
+    for (;;) {
+      let resp;
+      try {
+        resp = await fetch(BLOB_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify(body)
+        });
+      } catch (e) {
+        if (attempt >= BLOB_MAX_RETRIES) throw new BlobError('NETWORK', 'network error', String(e && e.message || e));
+        await new Promise(r => setTimeout(r, BLOB_BACKOFF_BASE_MS * Math.pow(2, attempt)));
+        attempt++;
+        continue;
+      }
+      if (resp.ok) {
+        try { return await resp.json(); }
+        catch (e) { throw new BlobError('SERVER', 'malformed response'); }
+      }
+      let errBody = null;
+      try { errBody = await resp.json(); } catch {}
+      if (resp.status === 400) throw new BlobError('BAD_REQUEST', (errBody && errBody.error) || 'bad request', errBody);
+      if (resp.status === 401) throw new BlobError('BAD_TOKEN', (errBody && errBody.error) || 'invalid matrix_token', errBody);
+      if (resp.status === 403) throw new BlobError('FORBIDDEN', (errBody && errBody.error) || 'not a room member', errBody);
+      if (resp.status === 404) throw new BlobError('NOT_FOUND', (errBody && errBody.error) || 'not found', errBody);
+      if (attempt >= BLOB_MAX_RETRIES) throw new BlobError('SERVER', 'server error ' + resp.status, errBody);
+      await new Promise(r => setTimeout(r, BLOB_BACKOFF_BASE_MS * Math.pow(2, attempt)));
+      attempt++;
+    }
+  },
+
+  async store(localId, plaintextStr, { label } = {}) {
+    const { token, roomId } = this._requireAuth();
+    if (!collabCrypto.enabled()) throw new BlobError('PRECONDITION', 'no encryption key set');
+    const data_id = await this.roomScopedDataId(roomId, localId);
+    const envelope = await collabCrypto.encryptForBlob(plaintextStr);
+    const headers = {};
+    if (label) headers['X-EO-Writer'] = label;
+    return this._fetchWithRetry({
+      matrix_token: token,
+      op: 'store',
+      room_id: roomId,
+      data_id,
+      envelope,
+      target: BLOB_TARGET,
+      label: label || null
+    }, { headers });
+  },
+
+  async retrieve(localId, version = 'latest') {
+    const { token, roomId } = this._requireAuth();
+    if (!collabCrypto.enabled()) throw new BlobError('PRECONDITION', 'no encryption key set');
+    const data_id = await this.roomScopedDataId(roomId, localId);
+    const body = { matrix_token: token, op: 'get', room_id: roomId, data_id };
+    if (version !== 'latest' && version != null) body.version = version;
+    const resp = await this._fetchWithRetry(body);
+    const plaintext = await collabCrypto.decryptForBlob(resp.envelope);
+    return { plaintext, version: resp.version, uri: resp.uri, meta: resp.meta };
+  },
+
+  async listVersions(localId) {
+    const { token, roomId } = this._requireAuth();
+    const data_id = await this.roomScopedDataId(roomId, localId);
+    return this._fetchWithRetry({ matrix_token: token, op: 'versions', room_id: roomId, data_id });
+  }
+};
+
+/* Scheduler state. All reads/writes go through these; UI rendering pulls
+   from _bkState + _bkLastSuccessAt. Map keyed by roomId so switching
+   workspaces doesn't leak the prior room's hash. */
+let _bkTimer = null;
+let _bkRoomId = null;
+let _bkInFlight = false;
+const _bkLastPushedHash = new Map();   // roomId -> hex sha-256 of last pushed serialized blob
+const _bkLastSuccessAt = new Map();    // roomId -> ms timestamp
+let _bkState = 'idle';                 // 'idle' | 'pushing' | 'recent' | 'paused' | 'error'
+let _bkStateDetail = null;             // human-readable detail for paused/error
+let _bkRecentTimer = null;
+
+function _bkResetForRoom() {
+  if (_bkTimer) { clearTimeout(_bkTimer); _bkTimer = null; }
+  _bkRoomId = matrix.activeRoomId || null;
+  _setBackupState('idle', null);
+  renderBackupStatus();
+}
+
+function _bkClearAll() {
+  if (_bkTimer) { clearTimeout(_bkTimer); _bkTimer = null; }
+  if (_bkRecentTimer) { clearTimeout(_bkRecentTimer); _bkRecentTimer = null; }
+  _bkRoomId = null;
+  _bkLastPushedHash.clear();
+  _bkLastSuccessAt.clear();
+  _setBackupState('paused', 'sign in');
+  renderBackupStatus();
+}
+
+function _setBackupState(state, detail) {
+  _bkState = state;
+  _bkStateDetail = detail || null;
+  _renderSyncDot();
+}
+
+function scheduleBackup(reason) {
+  if (!matrix.accessToken)     { _setBackupState('paused', 'sign in'); renderBackupStatus(); return; }
+  if (!matrix.activeRoomId)    { _setBackupState('paused', 'no workspace'); renderBackupStatus(); return; }
+  if (!collabCrypto.enabled()) { _setBackupState('paused', 'set passphrase'); renderBackupStatus(); return; }
+  _bkRoomId = matrix.activeRoomId;
+  if (_bkTimer) clearTimeout(_bkTimer);
+  _bkTimer = setTimeout(() => { _bkTimer = null; runBackup({ reason }).catch(() => {}); }, BLOB_DEBOUNCE_MS);
+}
+
+async function _collectBackupPayload() {
+  const lines = await storage.readAll();   // returns string[] (one JSON per line)
+  const events = [];
+  for (const raw of (Array.isArray(lines) ? lines : [])) {
+    const t = (raw || '').trim();
+    if (!t) continue;
+    try { events.push(JSON.parse(t)); } catch {}
+  }
+  let entities = null;
+  try { entities = await storage.readEntities(); } catch {}
+  return { schema: 1, ts: new Date().toISOString(), log: events, entities };
+}
+
+async function _hashHex(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return toHex(buf);
+}
+
+async function runBackup({ manual = false, reason = 'auto' } = {}) {
+  if (_bkInFlight) return null;
+  if (!matrix.accessToken)     { _setBackupState('paused', 'sign in'); renderBackupStatus(); if (manual) showToast?.('Sign in to Matrix first'); return null; }
+  if (!matrix.activeRoomId)    { _setBackupState('paused', 'no workspace'); renderBackupStatus(); if (manual) showToast?.('Select a workspace first'); return null; }
+  if (!collabCrypto.enabled()) { _setBackupState('paused', 'set passphrase'); renderBackupStatus(); if (manual) showToast?.('Set a workspace passphrase first'); return null; }
+  const roomAtStart = matrix.activeRoomId;
+  if (_bkRoomId && _bkRoomId !== roomAtStart) return null;   // workspace switched mid-debounce
+
+  _bkInFlight = true;
+  _setBackupState('pushing');
+  renderBackupStatus();
+  try {
+    const payload = await _collectBackupPayload();
+    const serialized = JSON.stringify(payload);
+    const hash = await _hashHex(serialized);
+    if (!manual && _bkLastPushedHash.get(roomAtStart) === hash) {
+      _setBackupState(_bkLastSuccessAt.has(roomAtStart) ? 'recent' : 'idle');
+      renderBackupStatus();
+      return { skipped: true };
+    }
+    if (matrix.activeRoomId !== roomAtStart) return null;    // raced a workspace switch
+
+    const res = await BlobClient.store(BLOB_LOCAL_ID, serialized, { label: matrix.userId || 'unknown' });
+    _bkLastPushedHash.set(roomAtStart, hash);
+    _bkLastSuccessAt.set(roomAtStart, Date.now());
+    _setBackupState('recent');
+    if (_bkRecentTimer) clearTimeout(_bkRecentTimer);
+    _bkRecentTimer = setTimeout(() => {
+      if (_bkState === 'recent') _setBackupState('idle');
+      renderBackupStatus();
+    }, BLOB_RECENT_WINDOW_MS);
+    renderBackupStatus();
+    return res;
+  } catch (e) {
+    const code = (e instanceof BlobError) ? e.code : 'SERVER';
+    if (code === 'BAD_TOKEN')        { _setBackupState('paused', 'sign in'); showToast?.('Matrix session expired — sign in again'); }
+    else if (code === 'FORBIDDEN')   { _setBackupState('paused', 'not a member'); showToast?.('Not a member of this room — backup paused'); }
+    else if (code === 'BAD_REQUEST') { _setBackupState('error', 'bad request'); showToast?.('Backup rejected: bad request'); }
+    else if (code === 'PRECONDITION'){ _setBackupState('paused', e.message || 'precondition'); }
+    else                             { _setBackupState('error', 'server'); showToast?.('Backup server unreachable — will retry on next event'); }
+    renderBackupStatus();
+    return null;
+  } finally {
+    _bkInFlight = false;
+  }
+}
+
+function _fmtRelative(ms) {
+  if (!ms) return '';
+  const d = Date.now() - ms;
+  if (d < 60_000) return 'just now';
+  if (d < 3_600_000) return Math.floor(d / 60_000) + 'm ago';
+  if (d < 86_400_000) return Math.floor(d / 3_600_000) + 'h ago';
+  return Math.floor(d / 86_400_000) + 'd ago';
+}
+
+function renderBackupStatus() {
+  const el = document.getElementById('ws-backup-status');
+  if (!el) return;
+  let text = '';
+  if (_bkState === 'paused')       text = 'Backup paused — ' + (_bkStateDetail || 'unavailable');
+  else if (_bkState === 'pushing') text = 'Backing up…';
+  else if (_bkState === 'error')   text = 'Backup failed — ' + (_bkStateDetail || 'server error') + ' (retrying on next change)';
+  else if (_bkState === 'recent' && matrix.activeRoomId) {
+    text = 'Last backed up ' + _fmtRelative(_bkLastSuccessAt.get(matrix.activeRoomId));
+  } else if (matrix.activeRoomId && _bkLastSuccessAt.has(matrix.activeRoomId)) {
+    text = 'Last backed up ' + _fmtRelative(_bkLastSuccessAt.get(matrix.activeRoomId));
+  } else {
+    text = 'No backup yet for this workspace';
+  }
+  el.textContent = text;
+}
+
+/* Merged sync-dot renderer. setSyncStatus (matrix collab) still calls in
+   with ('synced'|'syncing'|'offline', label); setBackupState can raise or
+   fall back to the collab state based on the precedence below. */
+let _syncCollab = { state: 'offline', label: 'local' };
+
+function _renderSyncDot() {
+  const dot = document.getElementById('tbar-sync-dot');
+  const lab = document.getElementById('tbar-sync-label');
+  if (!dot || !lab) return;
+  let state = _syncCollab.state;
+  let label = _syncCollab.label;
+  if (_bkState === 'pushing' && _syncCollab.state !== 'syncing') {
+    state = 'syncing';
+    label = 'backing up…';
+  } else if (_syncCollab.state === 'synced' || _syncCollab.state === 'syncing') {
+    // pass through — live collab takes precedence over "backed up Xm ago"
+  } else if (_bkState === 'recent') {
+    state = 'synced';
+    const at = matrix.activeRoomId ? _bkLastSuccessAt.get(matrix.activeRoomId) : 0;
+    label = 'backed up ' + _fmtRelative(at);
+  } else if (_bkState === 'paused' && _bkStateDetail) {
+    // leave the offline dot from collab but append a hint
+    label = (label || '') + ' · backup: ' + _bkStateDetail;
+  }
+  dot.classList.remove('synced', 'syncing', 'offline');
+  dot.classList.add(state);
+  lab.textContent = label;
+}
 
 function getBodyCaretOffset() {
   const body = $('#article-body');
@@ -27471,6 +27804,7 @@ async function matrixLogout() {
   matrixCollab.detach();
   collabCrypto.clear();
   renderE2eeStatus();
+  try { if (typeof _bkClearAll === 'function') _bkClearAll(); } catch {}
   try { if (matrix.client) await matrix.client.logout(); } catch (e) { console.warn('[matrix] logout failed', e); }
   try { if (matrix.client) matrix.client.stopClient(); } catch {}
   matrix.client = null;
@@ -27519,6 +27853,7 @@ async function selectWorkspaceRoom(roomId, { silent = false } = {}) {
   // matrixCollab.attach now handles encryption setup on its own
   // (passphrase override → stored auto-key → request-or-mint).
   matrixCollab.attach(roomId).catch(err => console.warn('[collab] attach failed', err));
+  try { if (typeof _bkResetForRoom === 'function') _bkResetForRoom(); } catch {}
   if (!silent) showToast(`workspace: ${room.name || roomId}`);
 }
 
@@ -27589,6 +27924,7 @@ function renderWorkspaceModal() {
       const linkEl = $('#ws-invite-link');
       if (linkEl) linkEl.value = buildInviteLink(matrix.activeRoomId);
       renderPendingInvites();
+      try { if (typeof renderBackupStatus === 'function') renderBackupStatus(); } catch {}
     } else {
       sec.hidden = true;
     }
@@ -28004,6 +28340,39 @@ function wireWorkspace() {
   });
   $('#ws-invite-copy')?.addEventListener('click', copyInviteLink);
   $('#ws-invite-link')?.addEventListener('focus', (e) => e.target.select());
+
+  // Cloud backup controls
+  $('#ws-backup-now')?.addEventListener('click', async () => {
+    const btn = $('#ws-backup-now');
+    if (btn) btn.disabled = true;
+    try { await runBackup({ manual: true }); }
+    finally { if (btn) btn.disabled = false; renderBackupStatus(); }
+  });
+  $('#ws-backup-versions')?.addEventListener('click', async () => {
+    const list = $('#ws-backup-versions-list');
+    if (!list) return;
+    list.hidden = false;
+    list.textContent = 'Loading…';
+    try {
+      const resp = await BlobClient.listVersions(BLOB_LOCAL_ID);
+      const rows = (resp && resp.versions) || [];
+      if (!rows.length) { list.textContent = 'No versions on the server yet.'; return; }
+      list.innerHTML = rows.map(r => {
+        const m = r.meta || {};
+        const when = m.created_at ? escapeHtml(m.created_at) : '';
+        const who = m.writer ? escapeHtml(m.writer) : '';
+        const size = (m.plaintext_size != null) ? (m.plaintext_size + ' B') : '';
+        return `<div style="display:flex; gap:8px; align-items:center; padding:4px 0; border-bottom:0.5px dashed var(--color-border-tertiary); font-family:var(--font-mono); font-size:12px">
+          <span style="font-weight:600">v${r.version}</span>
+          <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${when}${who ? ' · ' + who : ''}${size ? ' · ' + size : ''}</span>
+          <button class="btn-sm" disabled title="Restore coming in v2">Restore</button>
+        </div>`;
+      }).join('');
+    } catch (e) {
+      const code = (e && e.code) || 'ERR';
+      list.textContent = 'Error: ' + code + ' — ' + (e && e.message || e);
+    }
+  });
 
   // E2EE controls
   const passEl = $('#ws-e2ee-pass');
