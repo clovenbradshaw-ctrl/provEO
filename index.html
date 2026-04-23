@@ -5370,6 +5370,187 @@
   }
   .graph-search-mode.on { color: var(--color-text-primary); border-color: var(--color-text-secondary); }
   .graph-search-mode:hover, .graph-reset-btn:hover { color: var(--color-text-primary); }
+
+  .graph-rail {
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    width: 300px;
+    background: var(--color-bg-primary);
+    border-left: 0.5px solid var(--color-border-tertiary);
+    display: flex;
+    flex-direction: column;
+    font-size: 12px;
+    box-shadow: -4px 0 16px rgba(0,0,0,0.05);
+  }
+  .graph-rail[hidden] { display: none; }
+  .graph-rail-head {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+  }
+  .graph-rail-close {
+    margin-left: auto;
+    background: transparent;
+    border: 0;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+  }
+  .graph-rail-close:hover { color: var(--color-text-primary); }
+  .graph-rail-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 12px;
+  }
+  .rail-displayname {
+    font-size: 13.5px;
+    font-weight: 500;
+    margin-bottom: 3px;
+    word-break: break-word;
+  }
+  .rail-type {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-text-secondary);
+    margin-bottom: 8px;
+  }
+  .rail-section {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 0.5px solid var(--color-border-tertiary);
+  }
+  .rail-section-title {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    margin-bottom: 6px;
+  }
+  .rail-surfaceform {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    padding: 1px 5px;
+    margin: 2px 3px 0 0;
+    background: var(--color-bg-tertiary);
+    border-radius: 2px;
+  }
+  .rail-dist-bar {
+    display: flex;
+    height: 14px;
+    border-radius: 2px;
+    overflow: hidden;
+    border: 0.5px solid var(--color-border-tertiary);
+    margin-bottom: 4px;
+  }
+  .rail-dist-bar-seg {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .rail-dist-row {
+    margin-bottom: 8px;
+  }
+  .rail-dist-row-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-text-secondary);
+    margin-bottom: 2px;
+  }
+  .rail-dist-legend {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--color-text-secondary);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+  }
+  .rail-window {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-text-secondary);
+    margin-bottom: 6px;
+  }
+  .rail-segment {
+    padding: 6px 0;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    cursor: pointer;
+  }
+  .rail-segment:hover { background: var(--color-bg-tertiary); }
+  .rail-segment-source {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-text-secondary);
+  }
+  .rail-segment-snippet {
+    font-size: 11px;
+    margin-top: 2px;
+    color: var(--color-text-primary);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .rail-evidence {
+    font-size: 11.5px;
+    padding: 6px 8px;
+    background: var(--color-bg-tertiary);
+    border-radius: 3px;
+    line-height: 1.45;
+  }
+  .rail-evidence mark {
+    background: #fff3a8;
+    color: inherit;
+    padding: 0 2px;
+  }
+  .rail-meta-kv {
+    display: grid;
+    grid-template-columns: 70px 1fr;
+    gap: 2px 8px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    margin-bottom: 6px;
+  }
+  .rail-meta-kv dt { color: var(--color-text-secondary); }
+  .rail-meta-kv dd { margin: 0; }
+  .rail-anchor {
+    padding: 4px 0;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+  }
+  .rail-anchor-label {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--color-text-secondary);
+    margin-bottom: 2px;
+  }
+  .rail-anchor-text {
+    font-size: 11px;
+  }
+  .rail-ask-btn {
+    margin-top: 10px;
+    padding: 6px 10px;
+    font-size: 11.5px;
+    border: 0.5px solid var(--color-text-secondary);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--color-text-primary);
+    cursor: pointer;
+    width: 100%;
+  }
+  .rail-ask-btn:hover { background: var(--color-bg-tertiary); }
 </style>
 </head>
 <body>
@@ -6339,6 +6520,13 @@
     <div class="graph-loading" id="graph-loading" hidden>
       Loading cytoscape…
     </div>
+    <aside class="graph-rail" id="graph-rail" hidden>
+      <div class="graph-rail-head">
+        <span id="graph-rail-title">Detail</span>
+        <button class="graph-rail-close" id="graph-rail-close" type="button" title="Close detail">×</button>
+      </div>
+      <div class="graph-rail-body" id="graph-rail-body"></div>
+    </aside>
   </div>
   <div class="graph-drawer-foot" id="graph-drawer-foot">
     <span id="graph-stats" class="graph-stats"></span>
@@ -15705,6 +15893,10 @@ async function openGraphDrawer() {
   GRAPH_LAYOUT_OPTS.randomize = false;
   // Apply any persisted filter view (8.2) after the initial layout.
   try { applyGraphFilters(); } catch {}
+  // Bind the selection handler for the right rail (8.3). Rebinding
+  // on every openGraphDrawer keeps the handler attached to the live
+  // cytoscape instance — _cyInstance is replaced when re-rendered.
+  try { bindGraphRailSelection(); } catch {}
 }
 
 function closeGraphDrawer() {
@@ -16009,12 +16201,252 @@ function initGraphFilters() {
   }
 }
 
+/* ======================================================================
+   GRAPH RIGHT RAIL (Prompt 8.3)
+   ----------------------------------------------------------------------
+   Detail surface for node / edge selections. Nodes show their face
+   distribution (stacked bars with the window size as a separate
+   line — rendering it as a bar without the window count would
+   silently violate Rule 7). Edges show predicate + source/target +
+   extractors + evidence with the span highlighted, plus a
+   "why this label" expansion that surfaces the five k-NN anchor
+   texts that voted for the supporting segment's face cells.
+
+   Shift-click multi-select shows a count and an "Ask about these"
+   button; the button wires up in 8.4 (chat integration).
+====================================================================== */
+
+function escapeForHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function renderRailDistributionBar(face, dist, { limit = 4 } = {}) {
+  if (!dist || typeof dist !== 'object') {
+    return '<div class="rail-dist-legend">—</div>';
+  }
+  const entries = Object.entries(dist).sort((a, b) => b[1] - a[1]).slice(0, limit);
+  if (!entries.length) return '<div class="rail-dist-legend">—</div>';
+  const palette = ['#6a6a6a', '#9a7d3c', '#558c75', '#7a5c9c', '#8a5e52'];
+  const segs = entries.map(([cell, share], i) => {
+    const pct = Math.max(0.01, share) * 100;
+    return `<span class="rail-dist-bar-seg" style="width:${pct.toFixed(1)}%;background:${palette[i % palette.length]}" title="${escapeForHtml(cell)}: ${Math.round(share * 100)}%">${escapeForHtml(cell)}</span>`;
+  }).join('');
+  const legend = entries.map(([cell, share]) => `${escapeForHtml(cell)} ${Math.round(share * 100)}%`).join(' · ');
+  return `<div class="rail-dist-bar">${segs}</div><div class="rail-dist-legend">${legend}</div>`;
+}
+
+function openRailForNode(nodeId) {
+  const rail = document.getElementById('graph-rail');
+  const body = document.getElementById('graph-rail-body');
+  const title = document.getElementById('graph-rail-title');
+  const node = GRAPH_NODES.get(nodeId);
+  if (!node || !rail || !body) return;
+  if (title) title.textContent = 'Node';
+  const dist = node.transformationLabels || { act: {}, site: {}, resolution: {} };
+  const windowSize = (node.supportingSegments || []).length;
+  const distSection = `
+    <div class="rail-section">
+      <div class="rail-section-title">Face distribution</div>
+      <div class="rail-window">Aggregated over ${windowSize} segment${windowSize === 1 ? '' : 's'}.</div>
+      <div class="rail-dist-row"><div class="rail-dist-row-label">Act</div>${renderRailDistributionBar('act', dist.act)}</div>
+      <div class="rail-dist-row"><div class="rail-dist-row-label">Site</div>${renderRailDistributionBar('site', dist.site)}</div>
+      <div class="rail-dist-row"><div class="rail-dist-row-label">Resolution</div>${renderRailDistributionBar('resolution', dist.resolution)}</div>
+    </div>`;
+  const surfaceHtml = (node.surfaceForms || []).slice(0, 20)
+    .map(sf => `<span class="rail-surfaceform">${escapeForHtml(sf)}</span>`)
+    .join('');
+  const surfaceSection = surfaceHtml
+    ? `<div class="rail-section"><div class="rail-section-title">Surface forms (${(node.surfaceForms || []).length})</div>${surfaceHtml}</div>`
+    : '';
+  const segmentItems = (node.supportingSegments || []).slice(0, 50).map(segId => {
+    const sid = sourceIdOfSegment(segId);
+    const seg = (SOURCE_SEGMENTS[sid] || []).find(s => s.id === segId);
+    const srcName = (USER_SOURCES[sid] && USER_SOURCES[sid].name) || sid;
+    const labels = (SEG_LABELS[sid] || {})[segId];
+    const locStr = seg && seg.loc
+      ? (seg.loc.pageStart != null ? `p. ${seg.loc.pageStart}` : (seg.loc.lineStart != null ? `line ${seg.loc.lineStart}` : (seg.loc.rowStart != null ? `row ${seg.loc.rowStart}` : '')))
+      : '';
+    const labelStr = labels
+      ? `<span style="color:var(--color-text-secondary)"> · ${escapeForHtml(labels.act || '')}/${escapeForHtml(labels.site || '')}/${escapeForHtml(labels.resolution || '')}</span>`
+      : '';
+    const snippet = seg ? escapeForHtml(String(seg.text || '').slice(0, 160)) : '(segment unavailable)';
+    return `<div class="rail-segment" data-segment-id="${escapeForHtml(segId)}">
+      <div class="rail-segment-source">${escapeForHtml(srcName)} · ${escapeForHtml(locStr)}${labelStr}</div>
+      <div class="rail-segment-snippet">${snippet}</div>
+    </div>`;
+  }).join('');
+  const segSection = segmentItems
+    ? `<div class="rail-section"><div class="rail-section-title">Supporting segments (${(node.supportingSegments || []).length})</div>${segmentItems}</div>`
+    : '';
+  body.innerHTML = `
+    <div class="rail-displayname">${escapeForHtml(node.displayName || node.id)}</div>
+    <div class="rail-type">${escapeForHtml(node.type || 'entity')}</div>
+    ${distSection}
+    ${surfaceSection}
+    ${segSection}`;
+  rail.hidden = false;
+  body.querySelectorAll('[data-segment-id]').forEach(el => {
+    el.addEventListener('click', () => {
+      const segId = el.dataset.segmentId;
+      const sid = sourceIdOfSegment(segId);
+      if (sid && typeof showSourceViewer === 'function') {
+        try { showSourceViewer(sid); } catch (err) { console.warn('[rail] showSourceViewer failed', err); }
+      }
+    });
+  });
+}
+
+function openRailForEdge(edgeId) {
+  const rail = document.getElementById('graph-rail');
+  const body = document.getElementById('graph-rail-body');
+  const title = document.getElementById('graph-rail-title');
+  const edge = GRAPH_EDGES.get(edgeId);
+  if (!edge || !rail || !body) return;
+  if (title) title.textContent = 'Edge';
+  const sid = edge.subject && edge.subject.id;
+  const oid = edge.object && edge.object.id;
+  const subjNode = sid ? GRAPH_NODES.get(sid) : null;
+  const objNode = oid ? GRAPH_NODES.get(oid) : null;
+  const subjName = (subjNode && subjNode.displayName) || (edge.subject && edge.subject.name) || sid || '?';
+  const objName = (objNode && objNode.displayName) || (edge.object && edge.object.name) || oid || '?';
+  const extractorsStr = (edge.extractors || []).map(escapeForHtml).join(', ');
+  const srcName = edge.sourceId && USER_SOURCES[edge.sourceId] ? USER_SOURCES[edge.sourceId].name : edge.sourceId;
+  const metaKv = `
+    <dl class="rail-meta-kv">
+      <dt>subject</dt><dd>${escapeForHtml(subjName)}</dd>
+      <dt>predicate</dt><dd>${escapeForHtml(edge.predicate || '')}</dd>
+      <dt>object</dt><dd>${escapeForHtml(objName)}</dd>
+      <dt>source</dt><dd>${escapeForHtml(srcName || '?')}</dd>
+      <dt>confidence</dt><dd>${escapeForHtml(edge.confidence || 'medium')}</dd>
+      <dt>extractors</dt><dd>${extractorsStr}</dd>
+    </dl>`;
+
+  // Evidence: resolve segment, highlight span if present.
+  let evidenceBlock = '';
+  if (edge.evidenceSegmentId) {
+    const esid = sourceIdOfSegment(edge.evidenceSegmentId);
+    const seg = (SOURCE_SEGMENTS[esid] || []).find(s => s.id === edge.evidenceSegmentId);
+    if (seg) {
+      const raw = String(seg.text || '');
+      let html = escapeForHtml(raw);
+      if (edge.evidenceSpan && raw.includes(edge.evidenceSpan)) {
+        const i = raw.indexOf(edge.evidenceSpan);
+        html = escapeForHtml(raw.slice(0, i)) +
+               '<mark>' + escapeForHtml(edge.evidenceSpan) + '</mark>' +
+               escapeForHtml(raw.slice(i + edge.evidenceSpan.length));
+      }
+      evidenceBlock = `<div class="rail-section">
+        <div class="rail-section-title">Evidence — ${escapeForHtml(seg.kind || '')}</div>
+        <div class="rail-evidence">${html}</div>
+      </div>`;
+    }
+  }
+  if (edge.attrs && !evidenceBlock) {
+    evidenceBlock = `<div class="rail-section">
+      <div class="rail-section-title">Attrs</div>
+      <pre style="font-size:10px;white-space:pre-wrap;">${escapeForHtml(JSON.stringify(edge.attrs, null, 2))}</pre>
+    </div>`;
+  }
+
+  // "Why this label" — k-NN anchors from the evidence segment's
+  // classification, if present.
+  let whyBlock = '';
+  if (edge.evidenceSegmentId) {
+    const esid = sourceIdOfSegment(edge.evidenceSegmentId);
+    const labels = (SEG_LABELS[esid] || {})[edge.evidenceSegmentId];
+    const anchorIds = labels && labels.knn && (labels.knn.act || labels.knn.site || labels.knn.resolution);
+    if (Array.isArray(anchorIds) && anchorIds.length) {
+      const items = anchorIds.slice(0, 5).map(aid => {
+        const a = typeof anchorById === 'function' ? anchorById(aid) : null;
+        if (!a) return '';
+        return `<div class="rail-anchor">
+          <div class="rail-anchor-label">${escapeForHtml(a.act || '')}/${escapeForHtml(a.site || '')}/${escapeForHtml(a.resolution || '')}</div>
+          <div class="rail-anchor-text">${escapeForHtml(a.text)}</div>
+        </div>`;
+      }).join('');
+      if (items) {
+        whyBlock = `<div class="rail-section">
+          <div class="rail-section-title">Why this label · 5 nearest anchors</div>
+          ${items}
+        </div>`;
+      }
+    }
+  }
+
+  body.innerHTML = `
+    <div class="rail-displayname">${escapeForHtml(subjName)} <span style="color:var(--color-text-secondary)">—${escapeForHtml(edge.predicate || '')}→</span> ${escapeForHtml(objName)}</div>
+    ${metaKv}
+    ${evidenceBlock}
+    ${whyBlock}`;
+  rail.hidden = false;
+}
+
+function openRailForMultiSelect(nodeIds) {
+  const rail = document.getElementById('graph-rail');
+  const body = document.getElementById('graph-rail-body');
+  const title = document.getElementById('graph-rail-title');
+  if (!rail || !body) return;
+  if (title) title.textContent = 'Selection';
+  const names = nodeIds.slice(0, 8).map(id => {
+    const n = GRAPH_NODES.get(id);
+    return n ? n.displayName : id;
+  });
+  const more = nodeIds.length > names.length ? ` · +${nodeIds.length - names.length} more` : '';
+  body.innerHTML = `
+    <div class="rail-displayname">${nodeIds.length} nodes selected</div>
+    <div class="rail-type">${names.map(escapeForHtml).join(', ')}${escapeForHtml(more)}</div>
+    <button class="rail-ask-btn" id="rail-ask-btn" data-entity-ids="${escapeForHtml(JSON.stringify(nodeIds))}">Ask about these</button>`;
+  rail.hidden = false;
+  // 8.4 wires up the ask-btn to draft a chat input. Until then,
+  // clicking falls through to a console log so the affordance isn't
+  // a dead end in testing.
+  const askBtn = document.getElementById('rail-ask-btn');
+  if (askBtn) askBtn.addEventListener('click', () => {
+    if (typeof graphAskAboutEntities === 'function') graphAskAboutEntities(nodeIds);
+    else console.info('[rail] ask-about', nodeIds);
+  });
+}
+
+function closeGraphRail() {
+  const rail = document.getElementById('graph-rail');
+  if (rail) rail.hidden = true;
+}
+
+function bindGraphRailSelection() {
+  if (!_cyInstance) return;
+  _cyInstance.off('select unselect');
+  _cyInstance.on('select unselect', () => {
+    const selNodes = _cyInstance.nodes(':selected');
+    const selEdges = _cyInstance.edges(':selected');
+    if (selNodes.length > 1) {
+      openRailForMultiSelect(selNodes.map(n => n.id()));
+    } else if (selNodes.length === 1) {
+      openRailForNode(selNodes[0].id());
+    } else if (selEdges.length === 1) {
+      openRailForEdge(selEdges[0].id());
+    } else {
+      closeGraphRail();
+    }
+  });
+}
+
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initGraphDrawer);
   document.addEventListener('DOMContentLoaded', initGraphFilters);
+  document.addEventListener('DOMContentLoaded', () => {
+    const closeBtn = document.getElementById('graph-rail-close');
+    if (closeBtn) closeBtn.addEventListener('click', closeGraphRail);
+  });
 } else {
   initGraphDrawer();
   initGraphFilters();
+  const closeBtn = document.getElementById('graph-rail-close');
+  if (closeBtn) closeBtn.addEventListener('click', closeGraphRail);
 }
 
 /* Kicks off a fold; resolves with the three EO views plus the
