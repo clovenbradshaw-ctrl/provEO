@@ -5738,7 +5738,7 @@
       <button class="mtab" data-mode="chat">Chat</button>
       <button class="mtab" data-mode="source-explorer">Sources</button>
       <button class="mtab" data-mode="entity-explorer">Entities</button>
-      <button class="mtab" data-mode="rooms">Projects</button>
+      <button class="mtab" data-mode="rooms">Workspaces</button>
     </div>
     <div class="topright">
       <span id="boot-status" style="font-family: var(--font-mono); font-size: 10.5px; color: var(--color-text-secondary); margin-right: 4px;">booting…</span>
@@ -5995,15 +5995,15 @@
       </aside>
     </section>
 
-    <!-- ===== ROOMS / PROJECTS EXPLORER MODE ===== -->
+    <!-- ===== WORKSPACES EXPLORER MODE ===== -->
     <section class="mode-panel explorer" id="mode-rooms">
       <aside class="explorer-filters">
-        <div class="spanel-head"><span>Projects</span></div>
+        <div class="spanel-head"><span>Workspaces</span></div>
         <div class="room-explorer-new">
-          <button class="sadd" id="room-new-btn" type="button" title="Create a new Matrix room as a project">+ new project</button>
-          <button class="sadd" id="room-local-btn" type="button" title="Work locally without a Matrix room">◻ local workspace</button>
+          <button class="sadd" id="room-new-btn" type="button" title="Create a new shared workspace">+ new workspace</button>
+          <button class="sadd" id="room-local-btn" type="button" title="Work locally, in this browser only">◻ local workspace</button>
         </div>
-        <input class="explorer-search" id="room-explorer-q" type="text" placeholder="Search rooms…" autocomplete="off">
+        <input class="explorer-search" id="room-explorer-q" type="text" placeholder="Search workspaces…" autocomplete="off">
         <div class="explorer-filter-group" id="room-explorer-status"></div>
         <div class="room-explorer-hint" id="room-explorer-hint"></div>
       </aside>
@@ -6012,7 +6012,7 @@
         <div class="rp-empty">
           <div class="rp-empty-hint"><div class="rp-empty-inner">
             <div class="rp-empty-glyph">◩</div>
-            <div class="rp-empty-text">Select a project to inspect its members, encryption, and invite link</div>
+            <div class="rp-empty-text">Select a workspace to inspect its members, encryption, and invite link</div>
           </div></div>
         </div>
         <div class="rp-content" id="room-explorer-detail-body"></div>
@@ -7796,16 +7796,10 @@ function showClaim(id, opts = {}) {
   }
 
   if (provPath.length === 0) {
-    // Grounded claims also offer relationship verbs: Contrast with…, Concur
-    // with…. Both enter link mode; clicking another claim emits a LINK.
-    const relVerbs = claim.type === 'grounded' ? `
-      <button class="qa" data-linkmode="conflict" data-id="${id}">Contrast with…</button>
-      <button class="qa" data-linkmode="concur"   data-id="${id}">Concur with…</button>
-    ` : '';
     const researchBtn = `<button class="qa" data-research-claim="${id}" title="Ask Claude to search the web for corroborating evidence and snapshot it to Archive.org"><span style="font-family:var(--font-serif)">🔍</span> Research with Claude</button>`;
     body += `
       <div class="divider"></div>
-      <div class="prov-actions">${verbHtml(claim, id)}${relVerbs}${researchBtn}</div>
+      <div class="prov-actions">${verbHtml(claim, id)}${researchBtn}</div>
     `;
   }
 
@@ -8247,24 +8241,20 @@ function provLocator(claim) {
 const VERBS = {
   grounded: [
     { label: 'Confirm',      action: 'confirm',     class: 'qa-confirm' },
-    { label: 'Re-anchor',    action: 'reanchor' },
     { label: 'Retract',      action: 'retract',     class: 'qa-release' }
   ],
   conflict: [
     { label: 'Resolve → A',  action: 'resolve_a',   class: 'qa-confirm' },
     { label: 'Resolve → B',  action: 'resolve_b',   class: 'qa-confirm' },
-    { label: 'Hold both',    action: 'hold' },
-    { label: 'Dissolve',     action: 'dissolve',    class: 'qa-release' }
+    { label: 'Retract',      action: 'dissolve',    class: 'qa-release' }
   ],
   concur: [
-    { label: 'Confirm concur', action: 'confirm',   class: 'qa-confirm' },
-    { label: 'Hold both',      action: 'hold' },
-    { label: 'Dissolve',       action: 'dissolve',  class: 'qa-release' }
+    { label: 'Confirm',      action: 'confirm',     class: 'qa-confirm' },
+    { label: 'Retract',      action: 'dissolve',    class: 'qa-release' }
   ],
   absent: [
-    { label: 'Confirm NUL',   action: 'confirm_nul', class: 'qa-confirm' },
-    { label: 'Fill',          action: 'fill' },
-    { label: 'Stop watching', action: 'stop',        class: 'qa-release' }
+    { label: 'Confirm',      action: 'confirm_nul', class: 'qa-confirm' },
+    { label: 'Retract',      action: 'stop',        class: 'qa-release' }
   ]
 };
 
@@ -18432,10 +18422,10 @@ async function createNewProjectRoom({ nameHint } = {}) {
     showToast('sign in to Matrix first');
     return null;
   }
-  const raw = prompt('Name for the new project (Matrix room):', nameHint || 'New project');
+  const raw = prompt('Name for the new workspace:', nameHint || 'New workspace');
   if (raw === null) return null;
   const name = (raw || '').trim();
-  if (!name) { showToast('project name required'); return null; }
+  if (!name) { showToast('workspace name required'); return null; }
   try {
     const res = await matrix.client.createRoom({
       name,
@@ -18444,6 +18434,7 @@ async function createNewProjectRoom({ nameHint } = {}) {
     });
     const newRoomId = res && (res.room_id || res.roomId);
     if (!newRoomId) throw new Error('no room_id returned');
+    markRoomAsProveoWorkspace(newRoomId);
     // Give the SDK a moment to see the new room, then refresh + select.
     setTimeout(async () => {
       refreshRooms();
@@ -18451,16 +18442,16 @@ async function createNewProjectRoom({ nameHint } = {}) {
       renderWorkspaceModal();
       if ($('#mode-rooms')?.classList.contains('active')) renderRoomExplorer();
     }, 400);
-    showToast(`created project "${name}"`);
+    showToast(`created workspace "${name}"`);
     return newRoomId;
   } catch (e) {
     console.warn('[create-room] failed', e);
     const errEl = $('#ws-create-err');
     if (errEl) {
       errEl.hidden = false;
-      errEl.textContent = (e && (e.errcode ? `${e.errcode}: ` : '') + (e.message || 'could not create room')) || 'could not create room';
+      errEl.textContent = (e && (e.errcode ? `${e.errcode}: ` : '') + (e.message || 'could not create workspace')) || 'could not create workspace';
     }
-    showToast('could not create project');
+    showToast('could not create workspace');
     return null;
   }
 }
@@ -18493,9 +18484,9 @@ function renderRoomExplorer() {
   // Hint text depends on whether the user has signed in to Matrix
   if (hintEl) {
     if (!matrix.userId) {
-      hintEl.innerHTML = 'Sign in via <strong>Workspace ▾</strong> in the top bar to see and create Matrix projects. A project is a Matrix room whose members become collaborators.';
+      hintEl.innerHTML = 'Sign in via <strong>Workspace ▾</strong> in the top bar to see and create shared workspaces. Members of a workspace become collaborators.';
     } else {
-      hintEl.innerHTML = 'A <strong>project</strong> is a Matrix room. Members of the room become collaborators. Click a project to activate it.';
+      hintEl.innerHTML = 'Click a workspace to activate it. Members of a workspace become collaborators.';
     }
   }
 
@@ -18550,7 +18541,11 @@ function renderRoomExplorer() {
     `);
   }
 
+  // Only show rooms that have been used as PROVeo workspaces — plain Matrix
+  // chats on the same homeserver shouldn't clutter the Workspaces tab.
+  const proveoRooms = loadProveoRooms();
   const rooms = (matrix.rooms || []).filter(r => {
+    if (!proveoRooms.has(r.id)) return false;
     if (q && !(r.name.toLowerCase().includes(q) || r.id.toLowerCase().includes(q))) return false;
     if (filter === 'active') return r.id === matrix.activeRoomId;
     if (filter === 'local') return false;
@@ -18573,7 +18568,7 @@ function renderRoomExplorer() {
 
   listEl.innerHTML = rows.length
     ? rows.join('')
-    : `<div class="source-empty" style="padding:24px">No projects match. ${matrix.userId ? 'Click <strong>+ new project</strong> to create one.' : 'Sign in to Matrix to see your projects.'}</div>`;
+    : `<div class="source-empty" style="padding:24px">No workspaces match. ${matrix.userId ? 'Click <strong>+ new workspace</strong> to create one.' : 'Sign in to Matrix to see your workspaces.'}</div>`;
 
   $$('#room-explorer-list [data-room-row]').forEach(el => {
     el.addEventListener('click', async () => {
@@ -18632,7 +18627,7 @@ function renderRoomExplorerDetail(key) {
       </div>
       <div class="rpbody" style="padding:14px 16px">
         <div class="ws-section-sub" style="margin:0 0 10px">
-          No Matrix room is active. Everything you create stays in this browser (OPFS) and does not sync to any collaborator.
+          No shared workspace is active. Everything you create stays in this browser (OPFS) and does not sync to any collaborator.
         </div>
         <div class="ws-section-sub" style="margin:0 0 6px"><strong>Sources in this workspace</strong></div>
         <div class="ws-section-sub">${Object.keys(USER_SOURCES || {}).length} user-added source${Object.keys(USER_SOURCES || {}).length === 1 ? '' : 's'}</div>
@@ -18666,7 +18661,7 @@ function renderRoomExplorerDetail(key) {
       </div>
       <div class="ws-btn-row" style="gap:8px">
         <button class="btn-sm btn-sm-primary" id="room-detail-open">Open Workspace settings</button>
-        ${key === matrix.activeRoomId ? '' : `<button class="btn-sm" id="room-detail-activate">Activate this project</button>`}
+        ${key === matrix.activeRoomId ? '' : `<button class="btn-sm" id="room-detail-activate">Activate this workspace</button>`}
       </div>
     </div>
   `;
@@ -27347,6 +27342,32 @@ function setSampleData(on) {
 ====================================================================== */
 const LS_MX_SESSION = 'nl.mxSession.v1';
 const LS_MX_ROOM = 'nl.mxRoom.v1';
+const LS_PROVEO_ROOMS = 'proveo.knownRooms.v1';
+
+/* Set of Matrix room IDs that PROVeo has ever used as a workspace. Populated
+   when the user creates a new project room via createNewProjectRoom or when
+   they activate an existing room via selectWorkspaceRoom. Other rooms on the
+   homeserver (regular Matrix chats) are hidden from the Workspaces tab. */
+function loadProveoRooms() {
+  try {
+    const raw = localStorage.getItem(LS_PROVEO_ROOMS);
+    const arr = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch { return new Set(); }
+}
+function saveProveoRooms(set) {
+  try { localStorage.setItem(LS_PROVEO_ROOMS, JSON.stringify([...set])); } catch {}
+}
+function markRoomAsProveoWorkspace(roomId) {
+  if (!roomId) return;
+  const set = loadProveoRooms();
+  if (set.has(roomId)) return;
+  set.add(roomId);
+  saveProveoRooms(set);
+}
+function isProveoWorkspaceRoom(roomId) {
+  return loadProveoRooms().has(roomId);
+}
 
 const matrix = {
   client: null,
@@ -27482,6 +27503,7 @@ async function selectWorkspaceRoom(roomId, { silent = false } = {}) {
   if (!matrix.client) return;
   const room = matrix.client.getRoom(roomId);
   if (!room) return;
+  markRoomAsProveoWorkspace(roomId);
   matrix.activeRoomId = roomId;
   const joined = room.getJoinedMembers ? room.getJoinedMembers() : [];
   matrix.members = joined.map(m => ({
