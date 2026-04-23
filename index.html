@@ -2395,6 +2395,83 @@
   }
   .chat-bubble p { margin-bottom: 10px; }
   .chat-bubble p:last-child { margin-bottom: 0; }
+  .chat-bubble h1,
+  .chat-bubble h2,
+  .chat-bubble h3 {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    line-height: 1.3;
+    margin: 14px 0 6px;
+    color: var(--color-text-primary);
+  }
+  .chat-bubble h1 { font-size: 16px; }
+  .chat-bubble h2 { font-size: 14.5px; }
+  .chat-bubble h3 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-secondary);
+  }
+  .chat-bubble h1:first-child,
+  .chat-bubble h2:first-child,
+  .chat-bubble h3:first-child { margin-top: 0; }
+  .chat-bubble ul,
+  .chat-bubble ol {
+    margin: 0 0 10px;
+    padding-left: 22px;
+  }
+  .chat-bubble ul:last-child,
+  .chat-bubble ol:last-child { margin-bottom: 0; }
+  .chat-bubble li { margin-bottom: 3px; }
+  .chat-bubble li > p { margin-bottom: 4px; }
+  .chat-bubble blockquote {
+    margin: 8px 0 10px;
+    padding: 4px 12px;
+    border-left: 2px solid var(--color-border-secondary);
+    color: var(--color-text-secondary);
+    font-style: italic;
+  }
+  .chat-bubble hr {
+    border: 0;
+    border-top: 0.5px dashed var(--color-border-tertiary);
+    margin: 12px 0;
+  }
+  .chat-bubble code {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    background: var(--color-fill-subtle, rgba(0,0,0,0.06));
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+  .chat-bubble pre {
+    background: var(--color-fill-subtle, rgba(0,0,0,0.06));
+    padding: 8px 10px;
+    border-radius: var(--border-radius-md);
+    overflow-x: auto;
+    margin: 8px 0 10px;
+  }
+  .chat-bubble pre code {
+    background: transparent;
+    padding: 0;
+    font-size: 11.5px;
+  }
+  .chat-bubble .md-table {
+    border-collapse: collapse;
+    margin: 8px 0 10px;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    width: 100%;
+  }
+  .chat-bubble .md-table th,
+  .chat-bubble .md-table td {
+    border: 0.5px solid var(--color-border-tertiary);
+    padding: 4px 8px;
+  }
+  .chat-bubble .md-table th {
+    background: var(--color-fill-subtle, rgba(0,0,0,0.04));
+    font-weight: 600;
+  }
+  .chat-bubble a { color: var(--color-text-primary); text-decoration: underline; }
   .chat-pending {
     font-style: italic;
     color: var(--color-text-secondary);
@@ -2464,6 +2541,45 @@
     color: var(--color-text-secondary);
     margin-top: 6px;
   }
+  .chatctl-scope-row {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 0.5px dashed var(--color-border-tertiary);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+  .chatctl-scope-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .chatctl-scope-chip {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    padding: 2px 8px;
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: 12px;
+    cursor: pointer;
+    color: var(--color-text-secondary);
+    user-select: none;
+  }
+  .chatctl-scope-chip input { display: none; }
+  .chatctl-scope-chip.is-on {
+    background: var(--color-background-primary);
+    color: var(--color-text-primary);
+    border-color: var(--color-border-secondary);
+  }
+  .chatctl-scope-help {
+    flex-basis: 100%;
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    margin-top: 2px;
+    line-height: 1.4;
+  }
   .chatctl-empty {
     font-size: 11.5px;
     color: var(--color-text-secondary);
@@ -2495,25 +2611,36 @@
   }
   .chat-toolbar .btn-sm { padding: 3px 8px; }
   .chat-msg-actions {
-    position: absolute;
-    top: 4px;
-    right: 6px;
-    display: none;
+    margin-top: 8px;
+    display: flex;
+    justify-content: flex-end;
     gap: 4px;
+    opacity: 0;
+    transition: opacity 120ms ease;
   }
-  .chat-msg:hover .chat-msg-actions { display: flex; }
-  .chat-msg { position: relative; }
-  .chat-msg-save {
+  .chat-bubble:hover .chat-msg-actions,
+  .chat-bubble:focus-within .chat-msg-actions { opacity: 1; }
+  @media (hover: none) {
+    .chat-msg-actions { opacity: 1; }
+  }
+  .chat-msg-action {
     font-family: var(--font-mono);
     font-size: 10px;
-    padding: 2px 6px;
-    background: var(--color-bg-primary, #fff);
-    border: 0.5px solid var(--color-border-tertiary);
+    padding: 2px 8px;
+    background: transparent;
+    border: 0.5px solid transparent;
     border-radius: 3px;
     color: var(--color-text-secondary);
     cursor: pointer;
+    line-height: 1.4;
   }
-  .chat-msg-save:hover { color: var(--color-text-primary); }
+  .chat-msg-action:hover,
+  .chat-msg-action:focus-visible {
+    color: var(--color-text-primary);
+    border-color: var(--color-border-tertiary);
+    background: var(--color-background-primary);
+  }
+  .chat-msg-action.is-ok { color: var(--color-text-primary); }
   .chat-meta-note {
     font-family: var(--font-sans);
     font-size: 11px;
@@ -7442,16 +7569,22 @@ function renderChat() {
   const history = SAMPLE_ON ? CHAT_HISTORY : CHAT_HISTORY.filter(m => !m.__seed);
   $('#chat-msgs').innerHTML = history.map((m, i) => {
     const origIdx = CHAT_HISTORY.indexOf(m);
-    const saveBtn = m.__pending
-      ? ''
-      : `<div class="chat-msg-actions"><button class="chat-msg-save" data-save-msg="${origIdx}" title="Save this message as a source">Save as source</button></div>`;
+    const showActions = !m.__pending && !m.__seed && (m.role === 'user' || m.role === 'system');
+    const actions = showActions ? `
+      <div class="chat-msg-actions" role="group" aria-label="Message actions">
+        <button class="chat-msg-action" data-copy-msg="${origIdx}" title="Copy message text">Copy</button>
+        <button class="chat-msg-action" data-save-msg="${origIdx}" title="Save this message as a source">Save as source</button>
+      </div>
+    ` : '';
 
     if (m.role === 'user') {
       return `
         <div class="chat-msg chat-msg-user">
-          ${saveBtn}
           <div class="chat-avatar av-user">M</div>
-          <div class="chat-bubble chat-bubble-user">${escapeHtml(m.text)}</div>
+          <div class="chat-bubble chat-bubble-user">
+            <div>${escapeHtml(m.text)}</div>
+            ${actions}
+          </div>
         </div>
       `;
     }
@@ -7483,12 +7616,12 @@ function renderChat() {
 
     return `
       <div class="chat-msg">
-        ${saveBtn}
         <div class="chat-avatar av-sys">NL</div>
         <div class="chat-bubble">
           ${metaNote}
           <div>${m.html}</div>
           ${evBlock}
+          ${actions}
         </div>
       </div>
     `;
@@ -7507,6 +7640,26 @@ function renderChat() {
     btn.addEventListener('click', () => {
       const i = parseInt(btn.getAttribute('data-save-msg'), 10);
       if (Number.isFinite(i)) openChatSaveModal({ mode: 'message', messageIndex: i });
+    });
+  });
+
+  $$('[data-copy-msg]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const i = parseInt(btn.getAttribute('data-copy-msg'), 10);
+      const msg = CHAT_HISTORY[i];
+      if (!msg) return;
+      const text = msg.role === 'user'
+        ? String(msg.text || '')
+        : (msg.text || stripHtmlToText(msg.html || ''));
+      try {
+        await navigator.clipboard.writeText(text);
+        const orig = btn.textContent;
+        btn.textContent = 'Copied';
+        btn.classList.add('is-ok');
+        setTimeout(() => { btn.textContent = orig; btn.classList.remove('is-ok'); }, 1200);
+      } catch {
+        showToast('clipboard unavailable');
+      }
     });
   });
 
@@ -7575,13 +7728,27 @@ function renderChatControls() {
       <div class="ws-section-sub">Only checked sources are sent as context.</div>
       <div class="chatctl-src-list">${sourcesHtml}</div>
       <div class="chatctl-footer">${included} of ${total} included</div>
+      <div class="chatctl-scope-row" role="radiogroup" aria-label="Retrieval scope">
+        <span class="chatctl-scope-label">Scope</span>
+        <label class="chatctl-scope-chip${CLAUDE_CHAT_SCOPE === 'focused' ? ' is-on' : ''}">
+          <input type="radio" name="chatctl-scope" value="focused"${CLAUDE_CHAT_SCOPE === 'focused' ? ' checked' : ''}> Focused
+        </label>
+        <label class="chatctl-scope-chip${CLAUDE_CHAT_SCOPE === 'full' ? ' is-on' : ''}">
+          <input type="radio" name="chatctl-scope" value="full"${CLAUDE_CHAT_SCOPE === 'full' ? ' checked' : ''}> Full
+        </label>
+        <div class="chatctl-scope-help">
+          ${CLAUDE_CHAT_SCOPE === 'focused'
+            ? 'Sends only the few sources whose text matches the question (~10K tokens). Auto-escalates to Full when you ask for an overall view.'
+            : 'Sends every included source up to ~45K tokens per turn. Higher cost; use when you need cross-corpus answers.'}
+        </div>
+      </div>
     </div>
     <div class="ws-section chatctl-section">
-      <div class="ws-section-title">Web search</div>
-      <div class="ws-section-sub">Billed separately by Anthropic at $10 / 1k searches.</div>
-      <label class="ws-toggle"><input type="checkbox" id="chatctl-web-on"${CLAUDE_CHAT_WEB ? ' checked' : ''}> Let Claude call web_search</label>
+      <div class="ws-section-title">Web tools</div>
+      <div class="ws-section-sub">Lets Claude call <code>web_search</code> and <code>web_fetch</code> (URL retrieval). Billed separately by Anthropic.</div>
+      <label class="ws-toggle"><input type="checkbox" id="chatctl-web-on"${CLAUDE_CHAT_WEB ? ' checked' : ''}> Let Claude call web tools (search + fetch)</label>
       <div class="ws-form-row">
-        <label for="chatctl-web-max">Max searches per reply</label>
+        <label for="chatctl-web-max">Max calls per reply</label>
         <input id="chatctl-web-max" class="ws-input chatctl-narrow" type="number" min="0" max="20" step="1" value="${CHAT_WEB_MAX}">
       </div>
       <details class="chatctl-adv">
@@ -7626,6 +7793,15 @@ function renderChatControls() {
         const inc = allSources().filter(s => isSourceIncluded(s.id)).length;
         footer.textContent = `${inc} of ${allSources().length} included`;
       }
+    });
+  });
+  $$('input[name="chatctl-scope"]').forEach(r => {
+    r.addEventListener('change', () => {
+      if (!r.checked) return;
+      const v = r.value === 'full' ? 'full' : 'focused';
+      CLAUDE_CHAT_SCOPE = v;
+      try { localStorage.setItem(LS_CLAUDE_CHAT_SCOPE, v); } catch {}
+      renderChatControls();
     });
   });
   const webOn = $('#chatctl-web-on');
@@ -7688,7 +7864,7 @@ async function sendChatMessage() {
   const webOn = !!CLAUDE_CHAT_WEB && CHAT_WEB_MAX > 0;
   const pendingIdx = CHAT_HISTORY.push({
     role: 'system',
-    meta: webOn ? 'claude · sources + web_search' : 'claude · sources',
+    meta: webOn ? 'claude · sources + web tools' : 'claude · sources',
     html: `<span class="chat-pending">Thinking…</span>`,
     evidence: null,
     __pending: true
@@ -7700,7 +7876,7 @@ async function sendChatMessage() {
   if (sendBtn) sendBtn.disabled = true;
 
   try {
-    const blocks = await gatherChatSourceBlocks();
+    const gathered = await gatherChatSourceBlocks({ userText: text, scope: CLAUDE_CHAT_SCOPE });
     const priorTurns = CHAT_HISTORY
       .filter((m, i) => i !== pendingIdx && !m.__seed && !m.__pending)
       .slice(-10)
@@ -7708,7 +7884,10 @@ async function sendChatMessage() {
     const result = await callChatAgent(CLAUDE_API_KEY, {
       userText: text,
       priorTurns,
-      sourceBlocks: blocks,
+      sourceBlocks: gathered.blocks,
+      sourceHeaders: gathered.headers,
+      scope: gathered.scope,
+      scopeEscalated: gathered.escalated,
       useWeb: webOn,
       systemPrompt: CHAT_SYSTEM_PROMPT,
       webMaxUses: CHAT_WEB_MAX,
@@ -7719,6 +7898,7 @@ async function sendChatMessage() {
       role: 'system',
       meta: result.meta,
       html: result.html,
+      text: result.text || '',
       evidence: null
     };
   } catch (err) {
@@ -7737,32 +7917,106 @@ async function sendChatMessage() {
   }
 }
 
-async function gatherChatSourceBlocks() {
+/* Tokenize a query or text snippet for keyword-overlap scoring. */
+function chatTokenize(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s_-]+/g, ' ')
+    .split(/\s+/)
+    .filter(t => t && t.length >= 3 && !CHAT_STOPWORDS.has(t));
+}
+const CHAT_STOPWORDS = new Set([
+  'the','and','for','with','that','this','from','have','has','was','were','are','you','your',
+  'but','not','what','when','where','who','why','how','any','all','can','could','would','should',
+  'will','about','into','than','then','there','their','its','our','out','one','two','also',
+  'just','more','most','some','such','only','very','over','under','between','among','among'
+]);
+
+/* Heuristic: questions asking for breadth (summaries / overall views / "all" /
+   "every" / "across all sources") escalate from focused to full scope for the
+   single turn so the model sees the whole corpus. */
+function chatNeedsFullScope(text) {
+  return /\b(all|every|overall|entire|whole|summari[sz]e everything|across (all|every))\b/i.test(String(text || ''));
+}
+
+/* Score sources by token overlap with the user query and pick the most
+   relevant. Always returns at least 1 if any sources are present. */
+function pickFocusedSources(query, sources, k) {
+  const tokens = new Set(chatTokenize(query));
+  if (!sources.length) return [];
+  if (!tokens.size) return sources.slice(0, Math.max(1, k || 3));
+  const scored = sources.map(s => {
+    const hay = `${s.name || ''} ${s.meta || ''} ${(s.__preview || '')}`.toLowerCase();
+    let score = 0;
+    for (const t of tokens) if (hay.includes(t)) score++;
+    return { s, score };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  const positives = scored.filter(x => x.score > 0);
+  const pool = positives.length ? positives : scored;
+  return pool.slice(0, Math.max(1, k || 3)).map(x => x.s);
+}
+
+async function gatherChatSourceBlocks(opts) {
+  const userText = (opts && opts.userText) || '';
+  const scopeReq = (opts && opts.scope) || CLAUDE_CHAT_SCOPE || 'focused';
+  const fullEscalation = scopeReq === 'focused' && chatNeedsFullScope(userText);
+  const scope = (scopeReq === 'full' || fullEscalation) ? 'full' : 'focused';
+
   const list = allSources().filter(s => isSourceIncluded(s.id));
-  const TOTAL_CAP = 180000;   // ~45k tokens of raw corpus text
-  const PER_SOURCE_CAP = 40000;
-  const out = [];
-  let total = 0;
-  for (const s of list) {
-    let text = '';
+  if (!list.length) return { blocks: [], scope, escalated: false, headers: [] };
+
+  // Pull text for every included source (cached after first read).
+  const textForSource = async (s) => {
     try {
       if (typeof SOURCE_SAMPLES !== 'undefined' && SOURCE_SAMPLES[s.id]) {
-        text = SOURCE_SAMPLES[s.id] || '';
-      } else {
-        text = (await ensureSourceText(s.id)) || '';
+        return String(SOURCE_SAMPLES[s.id] || '');
       }
-    } catch { text = ''; }
-    text = String(text || '');
+      return String((await ensureSourceText(s.id)) || '');
+    } catch { return ''; }
+  };
+
+  // Stash a small preview on each source for relevance scoring without holding
+  // the full text in scoring memory.
+  const enriched = await Promise.all(list.map(async s => {
+    const text = await textForSource(s);
+    return Object.assign({}, s, { __text: text, __preview: text.slice(0, 4000) });
+  }));
+
+  let selected;
+  let TOTAL_CAP, PER_SOURCE_CAP;
+  if (scope === 'full') {
+    selected = enriched;
+    TOTAL_CAP = 180000;
+    PER_SOURCE_CAP = 40000;
+  } else {
+    selected = pickFocusedSources(userText, enriched, 3);
+    TOTAL_CAP = 40000;     // ~10k tokens — narrow by default
+    PER_SOURCE_CAP = 16000;
+  }
+  const selectedIds = new Set(selected.map(s => s.id));
+
+  const blocks = [];
+  let total = 0;
+  for (const s of selected) {
+    let text = String(s.__text || '');
     if (text.length > PER_SOURCE_CAP) text = text.slice(0, PER_SOURCE_CAP) + '\n…[truncated]';
     if (total + text.length > TOTAL_CAP) {
       const room = Math.max(0, TOTAL_CAP - total);
       text = text.slice(0, room) + (room ? '\n…[truncated]' : '');
     }
     total += text.length;
-    out.push({ id: s.id, name: s.name, kind: s.kind, meta: s.meta || '', text });
+    blocks.push({ id: s.id, name: s.name, kind: s.kind, meta: s.meta || '', text });
     if (total >= TOTAL_CAP) break;
   }
-  return out;
+
+  // Routing headers for excluded-but-available sources, so the model knows
+  // they exist and can ask the user for them if needed.
+  const headers = enriched
+    .filter(s => !selectedIds.has(s.id))
+    .map(s => ({ id: s.id, name: s.name, kind: s.kind, meta: s.meta || '', size: (s.__text || '').length }));
+
+  return { blocks, scope, escalated: fullEscalation, headers };
 }
 
 async function callChatAgent(apiKey, opts) {
@@ -7770,6 +8024,9 @@ async function callChatAgent(apiKey, opts) {
     userText,
     priorTurns,
     sourceBlocks,
+    sourceHeaders,
+    scope,
+    scopeEscalated,
     useWeb,
     systemPrompt,
     webMaxUses,
@@ -7786,11 +8043,31 @@ async function callChatAgent(apiKey, opts) {
         ? '(no sources are loaded in the workspace)'
         : '(all sources are excluded for this chat — the user has un-toggled every source in the Chat panel)');
 
+  // Routing header for sources not included in this turn so the model knows
+  // they exist and can ask for them in plain language.
+  const headerMd = (Array.isArray(sourceHeaders) && sourceHeaders.length)
+    ? '\n\n=== OTHER SOURCES AVAILABLE (not sent this turn) ===\n'
+        + sourceHeaders.map(h =>
+            `- ${h.name} (${h.kind}${h.meta ? ' · ' + h.meta : ''}, ~${Math.round((h.size || 0) / 1024)}KB)`
+          ).join('\n')
+        + '\nIf the question genuinely needs one of these, ask the user to switch retrieval scope to Full or to enable the relevant source.'
+    : '';
+  const scopeNote = scope === 'focused'
+    ? `\n\n(Retrieval scope: focused — only the ${sourceBlocks.length} most relevant source${sourceBlocks.length === 1 ? '' : 's'} sent.)`
+    : (scopeEscalated
+        ? '\n\n(Retrieval scope: full — auto-escalated because the question asked for an overall view.)'
+        : '\n\n(Retrieval scope: full — every included source sent.)');
+
   const userPrefix = (typeof systemPrompt === 'string' && systemPrompt.trim())
     ? systemPrompt.trim()
     : CHAT_SYSTEM_PROMPT_DEFAULT;
+  const userHasUrl = /\bhttps?:\/\/\S+/i.test(String(userText || ''));
   const toolClause = useWeb
-    ? 'You MAY call the web_search tool when the local sources are silent, outdated, or contradicted by public record. Prefer local sources when they are sufficient.'
+    ? [
+        'You MAY call the web_search tool when local sources are silent, outdated, or contradicted by public record.',
+        'When the user provides a URL, you MUST use the web_fetch tool to retrieve that URL directly rather than refusing or asking them to paste content.',
+        'Prefer local sources when they are sufficient.'
+      ].join(' ')
     : 'Do NOT call any tools. Answer from the local sources only; if they are silent, say so.';
 
   const system = [
@@ -7799,7 +8076,7 @@ async function callChatAgent(apiKey, opts) {
     toolClause,
     '',
     '=== LOCAL SOURCES ===',
-    sourcesMd
+    sourcesMd + headerMd + scopeNote
   ].join('\n');
 
   const messages = [];
@@ -7808,7 +8085,7 @@ async function callChatAgent(apiKey, opts) {
     if (t.role === 'user') {
       messages.push({ role: 'user', content: String(t.text || '') });
     } else if (t.role === 'system') {
-      const plain = stripHtmlToText(t.html || '');
+      const plain = t.text || stripHtmlToText(t.html || '');
       if (plain) messages.push({ role: 'assistant', content: plain });
     }
   }
@@ -7820,22 +8097,34 @@ async function callChatAgent(apiKey, opts) {
     system,
     messages
   };
+  const betaFlags = [];
   if (useWeb) {
     const max = Number.isFinite(webMaxUses) ? Math.max(1, Math.min(20, webMaxUses)) : 3;
-    const tool = { type: 'web_search_20260209', name: 'web_search', max_uses: max };
-    if (Array.isArray(allowedDomains) && allowedDomains.length) tool.allowed_domains = allowedDomains;
-    if (Array.isArray(blockedDomains) && blockedDomains.length) tool.blocked_domains = blockedDomains;
-    body.tools = [tool];
+    const tools = [];
+    const search = { type: 'web_search_20260209', name: 'web_search', max_uses: max };
+    if (Array.isArray(allowedDomains) && allowedDomains.length) search.allowed_domains = allowedDomains;
+    if (Array.isArray(blockedDomains) && blockedDomains.length) search.blocked_domains = blockedDomains;
+    tools.push(search);
+    const fetchMax = Math.max(1, Math.min(20, userHasUrl ? Math.max(max, 2) : max));
+    const fetcher = { type: 'web_fetch_20250910', name: 'web_fetch', max_uses: fetchMax };
+    if (Array.isArray(allowedDomains) && allowedDomains.length) fetcher.allowed_domains = allowedDomains;
+    if (Array.isArray(blockedDomains) && blockedDomains.length) fetcher.blocked_domains = blockedDomains;
+    tools.push(fetcher);
+    body.tools = tools;
+    betaFlags.push('web-fetch-2025-09-10');
   }
+
+  const headers = {
+    'x-api-key': apiKey,
+    'anthropic-version': '2023-06-01',
+    'anthropic-dangerous-direct-browser-access': 'true',
+    'content-type': 'application/json'
+  };
+  if (betaFlags.length) headers['anthropic-beta'] = betaFlags.join(',');
 
   const resp = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-      'content-type': 'application/json'
-    },
+    headers,
     body: JSON.stringify(body)
   });
   if (!resp.ok) {
@@ -7852,7 +8141,11 @@ async function callChatAgent(apiKey, opts) {
     ? data.content.filter(b => b && b.type === 'text')
     : [];
   const toolBlocks = Array.isArray(data.content)
-    ? data.content.filter(b => b && (b.type === 'server_tool_use' || b.type === 'web_search_tool_result'))
+    ? data.content.filter(b => b && (
+        b.type === 'server_tool_use'
+        || b.type === 'web_search_tool_result'
+        || b.type === 'web_fetch_tool_result'
+      ))
     : [];
   const joined = textBlocks.map(b => b.text || '').join('\n').trim();
   if (!joined) throw new Error('claude returned no text content');
@@ -7876,8 +8169,17 @@ async function callChatAgent(apiKey, opts) {
     .filter(b => b.type === 'server_tool_use' && b.name === 'web_search')
     .map(b => (b.input && b.input.query) ? String(b.input.query) : '')
     .filter(Boolean);
+  const webFetches = toolBlocks
+    .filter(b => b.type === 'server_tool_use' && b.name === 'web_fetch')
+    .map(b => (b.input && b.input.url) ? String(b.input.url) : '')
+    .filter(Boolean);
+  for (const url of webFetches) {
+    if (seenUrls.has(url)) continue;
+    seenUrls.add(url);
+    citations.push({ url, title: url });
+  }
 
-  let html = textToHtml(joined);
+  let html = renderMarkdown(joined);
   if (citations.length) {
     html += `<div class="chat-citations"><div class="chat-citations-title">Web sources</div>` +
       citations.map(c =>
@@ -7886,9 +8188,12 @@ async function callChatAgent(apiKey, opts) {
   }
 
   const metaBits = [`claude · ${sourceBlocks.length} source${sourceBlocks.length === 1 ? '' : 's'}`];
-  if (webQueries.length) metaBits.push(`${webQueries.length} web search${webQueries.length === 1 ? '' : 'es'}`);
-  else if (useWeb) metaBits.push('web search available');
-  return { meta: metaBits.join(' · '), html };
+  const webBits = [];
+  if (webQueries.length) webBits.push(`${webQueries.length} web search${webQueries.length === 1 ? '' : 'es'}`);
+  if (webFetches.length) webBits.push(`${webFetches.length} url fetch${webFetches.length === 1 ? '' : 'es'}`);
+  if (webBits.length) metaBits.push(webBits.join(' + '));
+  else if (useWeb) metaBits.push('web tools available');
+  return { meta: metaBits.join(' · '), html, text: joined };
 }
 
 function textToHtml(text) {
@@ -7896,6 +8201,154 @@ function textToHtml(text) {
   const paragraphs = esc.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
   if (!paragraphs.length) return '';
   return paragraphs.map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
+}
+
+/* Minimal, sanitizing markdown -> HTML for assistant messages.
+   Supports: ATX headings (h1-h3), bold/italic/strikethrough, inline code,
+   fenced code blocks, ordered/unordered lists, blockquotes, hr,
+   GitHub-flavored tables, and [text](url) links. URLs are filtered to
+   http(s)/mailto only. All other input is escaped before substitution. */
+function renderMarkdown(src) {
+  const raw = String(src || '');
+  if (!raw.trim()) return '';
+
+  // 1. Pull out fenced code blocks first so their bodies escape special handling.
+  const codeBlocks = [];
+  const withoutFences = raw.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (_, lang, body) => {
+    const idx = codeBlocks.length;
+    codeBlocks.push({ lang: String(lang || '').toLowerCase(), body: String(body || '') });
+    return ` FENCE${idx} `;
+  });
+
+  // 2. Escape everything else, then re-introduce safe markup.
+  const escaped = escapeHtml(withoutFences);
+  const lines = escaped.split('\n');
+  const out = [];
+  let i = 0;
+  const safeUrl = (u) => {
+    const v = String(u || '').trim();
+    if (/^(https?:|mailto:)/i.test(v)) return v;
+    if (/^[a-zA-Z0-9._\-/?#]/.test(v) && !/^javascript:|^data:/i.test(v)) return v;
+    return '#';
+  };
+  const inline = (s) => {
+    let t = s;
+    // Inline code first so other inline patterns don't touch its body.
+    t = t.replace(/`([^`\n]+)`/g, (_, code) => `<code>${code}</code>`);
+    // Links [text](url "title"?)
+    t = t.replace(/\[([^\]\n]+)\]\(([^)\s]+)(?:\s+&quot;[^&]*&quot;)?\)/g, (_, label, url) =>
+      `<a href="${safeUrl(url)}" target="_blank" rel="noopener noreferrer">${label}</a>`
+    );
+    // Auto-link bare http(s) URLs.
+    t = t.replace(/(^|[\s(])(https?:\/\/[^\s<>")]+[^\s<>".,;:!?)])/g,
+      (_, pre, u) => `${pre}<a href="${safeUrl(u)}" target="_blank" rel="noopener noreferrer">${u}</a>`
+    );
+    // Bold then italic, longer markers first.
+    t = t.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+    t = t.replace(/__([^_\n]+)__/g, '<strong>$1</strong>');
+    t = t.replace(/(^|[\s(])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+    t = t.replace(/(^|[\s(])_([^_\n]+)_/g, '$1<em>$2</em>');
+    t = t.replace(/~~([^~\n]+)~~/g, '<del>$1</del>');
+    return t;
+  };
+
+  while (i < lines.length) {
+    let line = lines[i];
+
+    // Blank line — flush.
+    if (!line.trim()) { i++; continue; }
+
+    // Fence placeholder.
+    const fenceMatch = line.match(/^ FENCE(\d+) $/);
+    if (fenceMatch) {
+      const blk = codeBlocks[parseInt(fenceMatch[1], 10)];
+      out.push(`<pre><code${blk.lang ? ` class="language-${escapeHtml(blk.lang)}"` : ''}>${escapeHtml(blk.body)}</code></pre>`);
+      i++; continue;
+    }
+
+    // Horizontal rule.
+    if (/^\s{0,3}([-*_])\s*\1\s*\1[\s\1]*$/.test(line)) {
+      out.push('<hr>'); i++; continue;
+    }
+
+    // ATX heading (# / ## / ### ...).
+    const h = line.match(/^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/);
+    if (h) {
+      const level = Math.min(h[1].length, 3); // cap at h3 to fit bubble scale
+      out.push(`<h${level}>${inline(h[2])}</h${level}>`);
+      i++; continue;
+    }
+
+    // Blockquote — consume contiguous '>' lines. Note: '>' has been escaped
+    // to '&gt;' by this point, so match against the escaped form.
+    if (/^\s{0,3}&gt;\s?/.test(line)) {
+      const buf = [];
+      while (i < lines.length && /^\s{0,3}&gt;\s?/.test(lines[i])) {
+        buf.push(lines[i].replace(/^\s{0,3}&gt;\s?/, ''));
+        i++;
+      }
+      out.push(`<blockquote>${inline(buf.join(' ')).replace(/\n/g, '<br>')}</blockquote>`);
+      continue;
+    }
+
+    // GFM table — header line + separator + body rows.
+    if (/\|/.test(line) && i + 1 < lines.length && /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(lines[i + 1])) {
+      const split = (row) => row.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map(c => c.trim());
+      const header = split(line);
+      const aligns = split(lines[i + 1]).map(c => {
+        const left = c.startsWith(':');
+        const right = c.endsWith(':');
+        if (left && right) return 'center';
+        if (right) return 'right';
+        return 'left';
+      });
+      i += 2;
+      const body = [];
+      while (i < lines.length && lines[i].trim() && /\|/.test(lines[i])) {
+        body.push(split(lines[i])); i++;
+      }
+      const th = header.map((c, k) => `<th style="text-align:${aligns[k] || 'left'}">${inline(c)}</th>`).join('');
+      const tbody = body.map(row => {
+        const tds = row.map((c, k) => `<td style="text-align:${aligns[k] || 'left'}">${inline(c)}</td>`).join('');
+        return `<tr>${tds}</tr>`;
+      }).join('');
+      out.push(`<table class="md-table"><thead><tr>${th}</tr></thead><tbody>${tbody}</tbody></table>`);
+      continue;
+    }
+
+    // Lists — group contiguous list items. Mixed types stop a list.
+    const ulMatch = line.match(/^\s*[-*+]\s+(.*)$/);
+    const olMatch = line.match(/^\s*\d+\.\s+(.*)$/);
+    if (ulMatch || olMatch) {
+      const ordered = !!olMatch;
+      const items = [];
+      while (i < lines.length) {
+        const ll = lines[i];
+        const um = ll.match(/^\s*[-*+]\s+(.*)$/);
+        const om = ll.match(/^\s*\d+\.\s+(.*)$/);
+        if (ordered && om) { items.push(om[1]); i++; }
+        else if (!ordered && um) { items.push(um[1]); i++; }
+        else if (ll.trim() === '') { i++; break; }
+        else break;
+      }
+      const tag = ordered ? 'ol' : 'ul';
+      out.push(`<${tag}>${items.map(it => `<li>${inline(it)}</li>`).join('')}</${tag}>`);
+      continue;
+    }
+
+    // Default: paragraph — collect contiguous non-blank lines.
+    const para = [line];
+    i++;
+    while (i < lines.length && lines[i].trim() && !/^ FENCE\d+ $/.test(lines[i])
+        && !/^\s{0,3}#{1,6}\s+/.test(lines[i])
+        && !/^\s{0,3}&gt;/.test(lines[i])
+        && !/^\s*([-*+]|\d+\.)\s+/.test(lines[i])) {
+      para.push(lines[i]); i++;
+    }
+    out.push(`<p>${inline(para.join('<br>'))}</p>`);
+  }
+
+  return out.join('');
 }
 
 function stripHtmlToText(html) {
@@ -12579,9 +13032,9 @@ const CLAUDE_API_MODEL = 'claude-sonnet-4-6';
 
 const CHAT_SYSTEM_PROMPT_DEFAULT = [
   "You are PROVeo Chat, a research assistant answering questions about the LOCAL SOURCES the user has loaded into their browser.",
-  "Ground every factual claim in either a local source (quote the exact phrase and name the source) or a web_search result (the API attaches citations automatically — never fabricate them).",
+  "Ground every factual claim in either a local source (quote the exact phrase and name the source) or a web tool result (the API attaches citations automatically — never fabricate them).",
   "If the local sources do not answer the question, say so plainly before relying on the web.",
-  "Be concise. Use short paragraphs and plain prose — no markdown headings."
+  "Be concise. Markdown is rendered: use ## or ### headings, bullet/numbered lists, **bold**, `inline code`, fenced code blocks, blockquotes, and GitHub-flavored tables when they aid scanning. Skip headings for one- or two-paragraph answers."
 ].join('\n');
 
 const LS_CHAT_SYSTEM = 'nl.chatSystem.v1';
@@ -12620,6 +13073,18 @@ let CHAT_WEB_ALLOW = (() => {
 const LS_CHAT_WEB_BLOCK = 'nl.chatWebBlock.v1';
 let CHAT_WEB_BLOCK = (() => {
   try { return localStorage.getItem(LS_CHAT_WEB_BLOCK) || ''; } catch { return ''; }
+})();
+
+/* Retrieval scope: 'focused' (default) sends only the few sources whose text
+   overlaps the user question, keeping payloads small. 'full' restores the
+   previous behavior of sending up to 180KB of every included source. */
+const LS_CLAUDE_CHAT_SCOPE = 'nl.claudeChatScope.v1';
+const CHAT_SCOPE_VALUES = ['focused', 'full'];
+let CLAUDE_CHAT_SCOPE = (() => {
+  try {
+    const v = localStorage.getItem(LS_CLAUDE_CHAT_SCOPE);
+    return CHAT_SCOPE_VALUES.includes(v) ? v : 'focused';
+  } catch { return 'focused'; }
 })();
 
 function splitDomains(raw) {
