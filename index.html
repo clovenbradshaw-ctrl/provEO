@@ -21911,10 +21911,12 @@ function citationFromClaim(claim) {
 }
 
 /* Sync the registry with whatever claims are currently rendered in the
-   body. This is the migration path for legacy <span class="g"> markup:
-   every span with a data-id becomes a registry entry derived from its
-   claim, and any registry entry whose claim is no longer in CLAIMS is
-   dropped. Safe to run idempotently. */
+   body. Every span with a data-id becomes a registry entry derived from
+   its claim. Any registry entry whose claim is retracted/missing, or
+   whose span is no longer present in the body, is dropped — deletion
+   from the body IS the retraction action for that citation in this
+   output. The deletion is logged to the EO event log as a CITE_DEL so
+   the revision history replays faithfully. Safe to run idempotently. */
 function syncCitationRegistry() {
   const body = $('#article-body');
   if (!body) return;
@@ -21932,10 +21934,25 @@ function syncCitationRegistry() {
     entry.claim_id = id;
     CITATIONS.upsert(entry);
   });
-  // Drop registry entries whose claim no longer exists
   for (const entry of CITATIONS.all()) {
     const claim = (typeof CLAIMS === 'object' && CLAIMS[entry.claim_id]) || null;
-    if (!claim || claim.status === 'retracted') CITATIONS.remove(entry.claim_id);
+    const deadClaim = !claim || claim.status === 'retracted';
+    const deletedFromBody = !seen.has(entry.claim_id);
+    if (!deadClaim && !deletedFromBody) continue;
+    CITATIONS.remove(entry.claim_id);
+    if (deletedFromBody) {
+      try {
+        appendEvent({
+          op: 'CITE_DEL',
+          site: 'claim:' + entry.claim_id,
+          payload: {
+            output_id: (typeof CURRENT_OUTPUT_ID !== 'undefined') ? CURRENT_OUTPUT_ID : null,
+            claim_id: entry.claim_id,
+            reason: 'span_removed_from_body'
+          }
+        });
+      } catch (e) { /* logging failure must not block render */ }
+    }
   }
 }
 
@@ -22021,14 +22038,13 @@ function renderCitations() {
     el.insertAdjacentElement('afterend', sup);
   }
 
-  // Rebuild footnotes in N order, with orphan rows for registry entries
-  // whose claim no longer has a span in the body.
+  // Rebuild footnotes in N order. syncCitationRegistry has already
+  // pruned registry entries whose span was deleted from the body, so
+  // any remaining orphan is a genuine registry-vs-CLAIMS mismatch worth
+  // surfacing. If there's nothing to show, keep the section hidden.
   foot.innerHTML = '';
-  if (numbers.size === 0) {
-    // Also surface any orphans so the reporter notices broken citations.
-    const orphans = CITATIONS.all().filter(e => !occurrences.has(e.claim_id));
-    if (orphans.length === 0) { foot.hidden = true; return; }
-  }
+  const orphans = CITATIONS.all().filter(e => !occurrences.has(e.claim_id));
+  if (numbers.size === 0 && orphans.length === 0) { foot.hidden = true; return; }
   foot.hidden = false;
   const h = document.createElement('h2');
   h.textContent = 'Footnotes';
