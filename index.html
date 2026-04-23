@@ -8594,9 +8594,9 @@ async function runAssistantTurn(userText) {
       html: result.html,
       evidence: null,
       provenance: {
-        claims: [],
+        claims: buildClaimsFromRetrieval(retrievalLog),
         webCitations: Array.isArray(result.citations) ? result.citations : [],
-        computations: [],
+        computations: collectComputationsFromHtml(result.html),
         retrieval: retrievalLog.slice()
       }
     };
@@ -8631,11 +8631,27 @@ function handleChatMessageAction(act, origIdx, btnEl) {
     return;
   }
   if (act === 'copy-sources') {
-    // Stub: Prompt 9 builds a markdown+HTML payload with citations,
-    // computed tables, and graph paths. Until then, fall back to plain text
-    // plus any visible web-source URLs so the action isn't a dead end.
-    const text = stripHtmlToText(m.html || '');
-    copyTextToClipboard(text, btnEl);
+    const payload = buildProvenanceClipboard(m);
+    const done = () => {
+      if (!btnEl) return;
+      const prev = btnEl.textContent;
+      btnEl.textContent = 'Copied';
+      btnEl.classList.add('is-flash');
+      setTimeout(() => { btnEl.textContent = prev; btnEl.classList.remove('is-flash'); }, 1100);
+    };
+    const fallback = () => copyTextToClipboard(payload.text, btnEl);
+    // Prefer the dual-format clipboard write when the browser
+    // supports ClipboardItem; plain-text paste-targets get the
+    // markdown version, rich-text paste-targets get the HTML.
+    if (typeof ClipboardItem === 'function' && navigator.clipboard && navigator.clipboard.write) {
+      try {
+        const item = new ClipboardItem({
+          'text/plain': new Blob([payload.text], { type: 'text/plain' }),
+          'text/html':  new Blob([payload.html], { type: 'text/html' })
+        });
+        navigator.clipboard.write([item]).then(done, fallback);
+      } catch { fallback(); }
+    } else { fallback(); }
     return;
   }
   if (act === 'regenerate') {
@@ -16516,6 +16532,240 @@ function graphAskAboutEntities(entityIds) {
   // Also log once so the caller sees something even if chat mode
   // isn't available in this build.
   console.info('[graph] ask-about', idList);
+}
+
+/* ======================================================================
+   PROVENANCE POPULATION + CLIPBOARD (Prompt 9)
+   ----------------------------------------------------------------------
+   m.provenance travels with every assistant message. Four arrays:
+     claims       — segments the model's retrieval tools pulled, one
+                    entry per unique segmentId. Each carries the
+                    segment quote, source name, and loc so the
+                    clipboard serializer can emit a Sources section.
+     webCitations — populated in callChatAgent from the web tools'
+                    tool-result citations (name/url pairs).
+     computations — extracted from any <div data-computation>...</div>
+                    blocks that later prompts (Phase A/B computed
+                    cards) add to the reply HTML. Empty for now;
+                    the read-through lands when those cards exist.
+     retrieval    — per-turn tool-call log (Prompt 7.4), one entry
+                    per client-tool dispatch.
+====================================================================== */
+
+function formatSegmentLoc(loc) {
+  if (!loc) return '';
+  const pair = (singular, plural, startKey, endKey) => {
+    const s = loc[startKey];
+    const e = loc[endKey];
+    if (!Number.isFinite(s)) return null;
+    const endOk = Number.isFinite(e);
+    if (!endOk || e === s) return singular + ' ' + s;
+    return plural + ' ' + s + '-' + e;
+  };
+  return pair('p.', 'pp.', 'pageStart', 'pageEnd')
+      || pair('row', 'rows', 'rowStart', 'rowEnd')
+      || pair('line', 'lines', 'lineStart', 'lineEnd')
+      || '';
+}
+
+function buildClaimsFromRetrieval(retrievalLog) {
+  const out = [];
+  const seen = new Set();
+  if (!Array.isArray(retrievalLog)) return out;
+  for (const r of retrievalLog) {
+    const ids = Array.isArray(r.segmentIds) ? r.segmentIds : [];
+    for (const segId of ids) {
+      if (seen.has(segId)) continue;
+      seen.add(segId);
+      const sid = sourceIdOfSegment(segId);
+      const seg = (SOURCE_SEGMENTS[sid] || []).find(s => s.id === segId);
+      if (!seg) continue;
+      const src = USER_SOURCES[sid];
+      const full = String(seg.text || '');
+      out.push({
+        segmentId: segId,
+        sourceId: sid,
+        sourceName: (src && src.name) || sid,
+        loc: seg.loc || null,
+        kind: seg.kind,
+        // Trim long segments to 320 chars so the Sources section
+        // stays scannable. Full text is always reachable via the
+        // source viewer and via read_span on the chat side.
+        quote: full.length > 320 ? full.slice(0, 320) + '…' : full,
+        viaTool: r.tool
+      });
+    }
+  }
+  return out;
+}
+
+function collectComputationsFromHtml(html) {
+  if (!html || typeof document === 'undefined') return [];
+  const out = [];
+  try {
+    const wrap = document.createElement('div');
+    wrap.innerHTML = html;
+    // Phase A/B computed cards attach a JSON blob to data-computation.
+    // If later prompts render them into the chat HTML, we lift the
+    // blob into the provenance record so the clipboard preserves
+    // the rowset and op signature.
+    wrap.querySelectorAll('[data-computation]').forEach(el => {
+      try {
+        const raw = el.getAttribute('data-computation');
+        if (!raw) return;
+        out.push(JSON.parse(raw));
+      } catch (err) {
+        console.warn('[provenance] bad data-computation blob', err);
+      }
+    });
+  } catch {}
+  return out;
+}
+
+/* Serialise a message's provenance into a dual-format clipboard
+   payload. text/plain is GitHub-flavoured markdown; text/html is
+   the same content rendered with structural <section>s so rich-text
+   editors (Docs/Word/Notion) preserve the layout. */
+function buildProvenanceClipboard(m) {
+  const p = (m && m.provenance) || {};
+  const body = stripHtmlToText(m.html || '');
+  const lines = [body || ''];
+
+  const claims = Array.isArray(p.claims) ? p.claims : [];
+  if (claims.length) {
+    lines.push('');
+    lines.push('## Sources');
+    claims.forEach((c, i) => {
+      const loc = formatSegmentLoc(c.loc);
+      const quote = String(c.quote || '').replace(/\s+/g, ' ').trim();
+      const locBit = loc ? ', ' + loc : '';
+      lines.push(`${i + 1}. ${c.sourceName}${locBit} — "${quote}"`);
+    });
+  }
+
+  const comps = Array.isArray(p.computations) ? p.computations : [];
+  if (comps.length) {
+    lines.push('');
+    lines.push('## Computations');
+    comps.forEach((c, i) => {
+      const op = c.op || c.caption || ('computation ' + (i + 1));
+      lines.push(`${i + 1}. ${op}`);
+      if (Array.isArray(c.columns) && Array.isArray(c.rows)) {
+        lines.push('');
+        lines.push('| ' + c.columns.join(' | ') + ' |');
+        lines.push('|' + c.columns.map(() => '---').join('|') + '|');
+        for (const row of c.rows) {
+          const cells = c.columns.map((_, idx) => {
+            const v = Array.isArray(row) ? row[idx] : row[c.columns[idx]];
+            return v == null ? '' : String(v);
+          });
+          lines.push('| ' + cells.join(' | ') + ' |');
+        }
+      }
+    });
+  }
+
+  const retrieval = Array.isArray(p.retrieval) ? p.retrieval : [];
+  const graphRetrieval = retrieval.filter(r => r && r.tool === 'query_graph');
+  if (graphRetrieval.length) {
+    lines.push('');
+    lines.push('## Graph Paths');
+    graphRetrieval.forEach((r, i) => {
+      const args = (() => { try { return JSON.stringify(r.args); } catch { return '{}'; } })();
+      const segCount = (r.segmentIds || []).length;
+      lines.push(`${i + 1}. query_graph ${args.slice(0, 160)}${args.length > 160 ? '…' : ''} — ${segCount} supporting segments`);
+    });
+  }
+  // Also surface other retrieval tools so the trail is complete.
+  const otherRetrieval = retrieval.filter(r => r && r.tool !== 'query_graph');
+  if (otherRetrieval.length) {
+    lines.push('');
+    lines.push('## Retrieval');
+    otherRetrieval.forEach((r, i) => {
+      const args = (() => { try { return JSON.stringify(r.args); } catch { return '{}'; } })();
+      const segCount = (r.segmentIds || []).length;
+      lines.push(`${i + 1}. ${r.tool} ${args.slice(0, 160)}${args.length > 160 ? '…' : ''}${segCount ? ' — ' + segCount + ' segments' : ''}`);
+    });
+  }
+
+  const web = Array.isArray(p.webCitations) ? p.webCitations : [];
+  if (web.length) {
+    lines.push('');
+    lines.push('## Web');
+    web.forEach((c, i) => {
+      const url = c.url || '';
+      const title = c.title || url;
+      lines.push(`${i + 1}. [${title}](${url})`);
+    });
+  }
+
+  const text = lines.join('\n');
+
+  // --- HTML ---
+  // Reply body: whatever the chat already rendered. We append the
+  // provenance sections below as <section>s so paste targets like
+  // Docs / Word render them with their section styling.
+  const esc = (s) => String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+  const htmlParts = [String(m.html || '')];
+  if (claims.length) {
+    htmlParts.push('<section class="sources"><h2>Sources</h2><ol>' +
+      claims.map(c => {
+        const loc = formatSegmentLoc(c.loc);
+        const quote = String(c.quote || '').replace(/\s+/g, ' ').trim();
+        return `<li>${esc(c.sourceName)}${loc ? ', ' + esc(loc) : ''} — <q>${esc(quote)}</q></li>`;
+      }).join('') + '</ol></section>');
+  }
+  if (comps.length) {
+    htmlParts.push('<section class="computations"><h2>Computations</h2>' +
+      comps.map(c => {
+        const op = esc(c.op || c.caption || '');
+        let table = '';
+        if (Array.isArray(c.columns) && Array.isArray(c.rows)) {
+          const hd = '<tr>' + c.columns.map(col => '<th>' + esc(col) + '</th>').join('') + '</tr>';
+          const rows = c.rows.map(row => {
+            return '<tr>' + c.columns.map((_, idx) => {
+              const v = Array.isArray(row) ? row[idx] : row[c.columns[idx]];
+              const isNum = typeof v === 'number';
+              const styled = isNum ? '<td style="font-family:monospace;text-align:right;">' : '<td>';
+              return styled + esc(v == null ? '' : v) + '</td>';
+            }).join('') + '</tr>';
+          }).join('');
+          table = '<table>' + hd + rows + '</table>';
+        }
+        return '<div class="computation"><p><strong>' + op + '</strong></p>' + table + '</div>';
+      }).join('') + '</section>');
+  }
+  if (graphRetrieval.length) {
+    htmlParts.push('<section class="graph-paths"><h2>Graph Paths</h2><ol>' +
+      graphRetrieval.map(r => {
+        const args = (() => { try { return JSON.stringify(r.args); } catch { return '{}'; } })();
+        const segCount = (r.segmentIds || []).length;
+        return `<li><code>query_graph ${esc(args.slice(0, 200))}</code> — ${segCount} supporting segments</li>`;
+      }).join('') + '</ol></section>');
+  }
+  if (otherRetrieval.length) {
+    htmlParts.push('<section class="retrieval"><h2>Retrieval</h2><ol>' +
+      otherRetrieval.map(r => {
+        const args = (() => { try { return JSON.stringify(r.args); } catch { return '{}'; } })();
+        const segCount = (r.segmentIds || []).length;
+        return `<li><code>${esc(r.tool)} ${esc(args.slice(0, 200))}</code>${segCount ? ' — ' + segCount + ' segments' : ''}</li>`;
+      }).join('') + '</ol></section>');
+  }
+  if (web.length) {
+    htmlParts.push('<section class="web"><h2>Web</h2><ol>' +
+      web.map(c => {
+        const url = c.url || '';
+        const title = c.title || url;
+        return `<li><a href="${esc(url)}">${esc(title)}</a></li>`;
+      }).join('') + '</ol></section>');
+  }
+  const html = htmlParts.join('\n');
+
+  return { text, html };
 }
 
 function bindGraphRailSelection() {
