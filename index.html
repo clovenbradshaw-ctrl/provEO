@@ -5195,6 +5195,104 @@
   .explorer-alias-del:hover { color: var(--color-text-primary); }
   body.explorer-active .sources { display: none; }
   body.explorer-active .right-panel#right-panel { display: none; }
+
+  /* ===== GRAPH DRAWER (Prompt 8) ===== */
+  .graph-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 40vw;
+    min-width: 420px;
+    max-width: 680px;
+    background: var(--color-bg-primary);
+    border-left: 0.5px solid var(--color-border-tertiary);
+    box-shadow: -8px 0 24px rgba(0,0,0,0.08);
+    z-index: 45;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(0);
+    transition: transform 0.18s ease-out;
+  }
+  .graph-drawer[hidden] {
+    display: flex;
+    transform: translateX(100%);
+    visibility: hidden;
+  }
+  .graph-drawer-head {
+    display: flex;
+    align-items: center;
+    padding: 10px 14px;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    gap: 10px;
+  }
+  .graph-drawer-title {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+  }
+  .graph-drawer-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .graph-cluster-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--color-text-secondary);
+  }
+  .graph-cluster-toggle select {
+    font-size: 11px;
+    padding: 2px 4px;
+    background: var(--color-bg-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: 3px;
+    color: var(--color-text-primary);
+  }
+  .graph-drawer-close {
+    background: transparent;
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: 3px;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 2px 7px;
+  }
+  .graph-drawer-close:hover { color: var(--color-text-primary); }
+  .graph-drawer-body {
+    flex: 1 1 auto;
+    position: relative;
+    overflow: hidden;
+  }
+  .graph-canvas {
+    position: absolute;
+    inset: 0;
+  }
+  .graph-empty, .graph-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    pointer-events: none;
+    text-align: center;
+    padding: 0 20px;
+  }
+  .graph-drawer-foot {
+    padding: 8px 14px;
+    border-top: 0.5px solid var(--color-border-tertiary);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-text-secondary);
+  }
 </style>
 </head>
 <body>
@@ -5219,6 +5317,10 @@
       <button id="focus-toggle" class="focus-toggle" type="button" title="Focus mode — collapse side panels (⌘.)" aria-pressed="false">
         <span aria-hidden="true">◫</span>
         <span>Focus</span>
+      </button>
+      <button id="graph-toggle" class="focus-toggle" type="button" title="Graph panel — visualize the corpus entity/edge graph (G)" aria-pressed="false">
+        <span aria-hidden="true">◈</span>
+        <span>Graph</span>
       </button>
       <div class="srcbadge"><div class="statdot statdot-green"></div>3 indexed</div>
       <button class="ws-btn" id="ws-btn" title="Workspace / Matrix">
@@ -6114,6 +6216,38 @@
     </div>
   </div>
 </div>
+
+<!-- ===== GRAPH DRAWER (Prompt 8) ===== -->
+<!-- Fixed right-side drawer that overlays the chat / write panels.
+     Cytoscape is lazy-loaded on first open. Toggled from #graph-toggle
+     and keyboard G. -->
+<aside class="graph-drawer" id="graph-drawer" hidden>
+  <div class="graph-drawer-head">
+    <span class="graph-drawer-title">Graph</span>
+    <div class="graph-drawer-actions">
+      <label class="graph-cluster-toggle" title="Layout clustering">
+        <span>Cluster by</span>
+        <select id="graph-cluster-select">
+          <option value="component" selected>Connected component</option>
+          <option value="site">Site face</option>
+        </select>
+      </label>
+      <button class="graph-drawer-close" id="graph-drawer-close" type="button" title="Close (G)">×</button>
+    </div>
+  </div>
+  <div class="graph-drawer-body">
+    <div class="graph-canvas" id="graph-canvas"></div>
+    <div class="graph-empty" id="graph-empty" hidden>
+      No graph yet. Import a source and run extraction to populate the graph.
+    </div>
+    <div class="graph-loading" id="graph-loading" hidden>
+      Loading cytoscape…
+    </div>
+  </div>
+  <div class="graph-drawer-foot" id="graph-drawer-foot">
+    <span id="graph-stats" class="graph-stats"></span>
+  </div>
+</aside>
 
 <!-- Matrix client SDK (loaded from CDN, exposes window.matrixcs).
      Loaded lazily so the app still works offline; checks for window.matrixcs before use. -->
@@ -13297,6 +13431,9 @@ async function analyseSource(sourceId, { file, onStage } = {}) {
       await persistMergedGraph();
       stages.merge = 'ran';
       emit({ stage: 'merge', status: 'ran', msg: `${GRAPH_NODES.size} nodes, ${GRAPH_EDGES.size} edges` });
+      // Prompt 8 graph drawer listens for this event so it can
+      // live-refresh when a source lands.
+      try { window.dispatchEvent(new CustomEvent('GRAPH_UPDATED', { detail: { sourceId } })); } catch {}
     } catch (err) {
       stages.merge = 'skipped';
       emit({ stage: 'merge', status: 'skipped', msg: err.message || 'persist failed' });
@@ -15215,6 +15352,337 @@ registerClientTool({
   scopes: ['graph', 'semantic']
 });
 
+/* ======================================================================
+   GRAPH DRAWER (Prompt 8.1)
+   ----------------------------------------------------------------------
+   Cytoscape + cose-bilkent are lazy-loaded from the jsDelivr CDN on
+   first open. Nodes colour by entity type, edges thicken by
+   confidence. Clustering toggle switches between connected-component
+   and Site-face cell groupings. Layout uses a deterministic seed so
+   a given corpus lays out the same way across repeated opens in one
+   session (drag positions aren't persisted to disk).
+====================================================================== */
+
+const CYTOSCAPE_CDN = 'https://cdn.jsdelivr.net/npm/cytoscape@3.30.4/dist/cytoscape.min.js';
+const COSE_BILKENT_CDN = 'https://cdn.jsdelivr.net/npm/cytoscape-cose-bilkent@4.1.0/cytoscape-cose-bilkent.js';
+
+/* Ten-colour palette for node types — palette-safe, avoids the
+   confidence-weight blue/green we use elsewhere in the app. */
+const NODE_TYPE_COLOURS = {
+  person:   '#5B8FF9',
+  org:      '#BA7517',
+  vendor:   '#D66A6A',
+  program:  '#7E6ACD',
+  motion:   '#3BA277',
+  bill:     '#C88A4C',
+  amount:   '#6BA197',
+  date:     '#9B6FC1',
+  geo:      '#4E8C7A',
+  concept:  '#7A7A7A',
+  role:     '#B58C57',
+  source:   '#2E2E2E',
+  default:  '#888888'
+};
+function nodeColour(type) { return NODE_TYPE_COLOURS[type] || NODE_TYPE_COLOURS.default; }
+
+/* Deterministic layout seed so drag positions round-trip across a
+   session even without disk persistence. cose-bilkent accepts a
+   randomize flag; we drive it to false after the first layout. */
+const GRAPH_LAYOUT_OPTS = {
+  name: 'cose-bilkent',
+  animate: false,
+  randomize: true,
+  fit: true,
+  padding: 28,
+  nodeRepulsion: 5500,
+  idealEdgeLength: 90,
+  edgeElasticity: 0.45,
+  nestingFactor: 0.1,
+  gravity: 0.25,
+  numIter: 1500,
+  tile: true,
+  tilingPaddingVertical: 8,
+  tilingPaddingHorizontal: 8
+};
+
+let _cytoscapePromise = null;
+function loadCytoscape() {
+  if (_cytoscapePromise) return _cytoscapePromise;
+  _cytoscapePromise = (async () => {
+    if (typeof window !== 'undefined' && window.cytoscape) return window.cytoscape;
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = CYTOSCAPE_CDN;
+      s.async = true;
+      s.onload = resolve;
+      s.onerror = () => reject(new Error('cytoscape load failed'));
+      document.head.appendChild(s);
+    });
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = COSE_BILKENT_CDN;
+      s.async = true;
+      s.onload = resolve;
+      s.onerror = () => reject(new Error('cose-bilkent load failed'));
+      document.head.appendChild(s);
+    });
+    if (!window.cytoscape) throw new Error('cytoscape global missing after load');
+    return window.cytoscape;
+  })();
+  return _cytoscapePromise;
+}
+
+let _cyInstance = null;
+let _graphDrawerOpen = false;
+
+function graphDominantCell(node, face) {
+  const dist = node && node.transformationLabels && node.transformationLabels[face];
+  if (!dist) return null;
+  const entries = Object.entries(dist);
+  if (!entries.length) return null;
+  entries.sort((a, b) => b[1] - a[1]);
+  return entries[0][0];
+}
+
+/* Build the cytoscape elements from current GRAPH_NODES / GRAPH_EDGES.
+   Filters out structural source/page/row nodes — the graph panel is
+   for the entity layer; structural-only views belong in the source
+   viewer, not here. */
+function buildGraphElements() {
+  const nodeEls = [];
+  const edgeEls = [];
+  const STRUCTURAL_NODE_TYPES = new Set(['source', 'page', 'row', 'segment']);
+  const includedIds = new Set();
+  for (const [id, node] of GRAPH_NODES) {
+    if (STRUCTURAL_NODE_TYPES.has(node.type)) continue;
+    includedIds.add(id);
+    nodeEls.push({
+      data: {
+        id,
+        label: node.displayName || id,
+        type: node.type || 'default',
+        siteCell: graphDominantCell(node, 'site') || 'unclassified',
+        actCell: graphDominantCell(node, 'act') || 'unclassified',
+        resolutionCell: graphDominantCell(node, 'resolution') || 'unclassified',
+        surfaceForms: node.surfaceForms || [],
+        supportingCount: (node.supportingSegments || []).length,
+        color: nodeColour(node.type)
+      }
+    });
+  }
+  for (const [id, edge] of GRAPH_EDGES) {
+    const sid = edge.subject && edge.subject.id;
+    const oid = edge.object && edge.object.id;
+    if (!sid || !oid) continue;
+    if (!includedIds.has(sid) || !includedIds.has(oid)) continue;
+    const width = edge.confidence === 'high' ? 3 : edge.confidence === 'medium' ? 2 : 1;
+    edgeEls.push({
+      data: {
+        id,
+        source: sid,
+        target: oid,
+        predicate: edge.predicate,
+        confidence: edge.confidence || 'medium',
+        width,
+        extractors: edge.extractors || [],
+        attrs: edge.attrs || null,
+        evidenceSegmentId: edge.evidenceSegmentId || null,
+        sourceId: edge.sourceId || null
+      }
+    });
+  }
+  return { nodes: nodeEls, edges: edgeEls };
+}
+
+function graphStyleSheet() {
+  return [
+    {
+      selector: 'node',
+      style: {
+        'background-color': 'data(color)',
+        'label': 'data(label)',
+        'font-size': 10,
+        'font-family': 'var(--font-sans)',
+        'color': '#2a2a2a',
+        'text-valign': 'bottom',
+        'text-halign': 'center',
+        'text-margin-y': 3,
+        'width': 'mapData(supportingCount, 1, 40, 14, 32)',
+        'height': 'mapData(supportingCount, 1, 40, 14, 32)',
+        'text-wrap': 'wrap',
+        'text-max-width': 120,
+        'border-width': 0.5,
+        'border-color': '#2a2a2a',
+        'border-opacity': 0.3
+      }
+    },
+    {
+      selector: 'node:selected',
+      style: {
+        'border-width': 2,
+        'border-color': '#111',
+        'border-opacity': 1
+      }
+    },
+    {
+      selector: 'edge',
+      style: {
+        'curve-style': 'bezier',
+        'target-arrow-shape': 'triangle',
+        'width': 'data(width)',
+        'line-color': '#9a9a9a',
+        'target-arrow-color': '#9a9a9a',
+        'opacity': 0.7,
+        'label': '',
+        'font-size': 9
+      }
+    },
+    {
+      selector: 'edge:selected',
+      style: {
+        'line-color': '#111',
+        'target-arrow-color': '#111',
+        'opacity': 1,
+        'label': 'data(predicate)',
+        'text-background-color': '#fff',
+        'text-background-opacity': 0.85,
+        'text-background-padding': 2
+      }
+    },
+    {
+      selector: 'edge:active',
+      style: {
+        'label': 'data(predicate)'
+      }
+    }
+  ];
+}
+
+async function openGraphDrawer() {
+  const drawer = $('#graph-drawer');
+  if (!drawer) return;
+  _graphDrawerOpen = true;
+  drawer.hidden = false;
+  drawer.removeAttribute('hidden');
+  $('#graph-toggle')?.setAttribute('aria-pressed', 'true');
+
+  const empty = $('#graph-empty');
+  const loading = $('#graph-loading');
+  const stats = $('#graph-stats');
+  const canvas = $('#graph-canvas');
+  if (loading) loading.hidden = false;
+  if (empty) empty.hidden = true;
+
+  let cy;
+  try {
+    cy = await loadCytoscape();
+  } catch (err) {
+    if (loading) loading.hidden = true;
+    if (empty) { empty.hidden = false; empty.textContent = 'Failed to load cytoscape: ' + (err.message || err); }
+    return;
+  }
+  if (loading) loading.hidden = true;
+
+  const { nodes, edges } = buildGraphElements();
+  if (!nodes.length) {
+    if (empty) empty.hidden = false;
+    if (stats) stats.textContent = '';
+    return;
+  }
+  if (empty) empty.hidden = true;
+  if (stats) stats.textContent = `${nodes.length} nodes · ${edges.length} edges`;
+
+  if (_cyInstance) {
+    try { _cyInstance.destroy(); } catch {}
+    _cyInstance = null;
+  }
+  _cyInstance = cy({
+    container: canvas,
+    elements: [...nodes, ...edges],
+    style: graphStyleSheet(),
+    layout: GRAPH_LAYOUT_OPTS,
+    wheelSensitivity: 0.25
+  });
+  // Subsequent re-renders in the same session don't randomize —
+  // preserves drag positions. (First render randomizes for a clean
+  // initial layout.)
+  GRAPH_LAYOUT_OPTS.randomize = false;
+}
+
+function closeGraphDrawer() {
+  const drawer = $('#graph-drawer');
+  if (!drawer) return;
+  _graphDrawerOpen = false;
+  drawer.setAttribute('hidden', '');
+  $('#graph-toggle')?.setAttribute('aria-pressed', 'false');
+}
+
+function toggleGraphDrawer() {
+  if (_graphDrawerOpen) closeGraphDrawer(); else openGraphDrawer();
+}
+
+/* Re-render the active cytoscape instance from the current graph
+   state. Called after imports / re-processes when the drawer is
+   already open. Preserves drag positions where possible. */
+function refreshGraphDrawer({ preserveLayout = true } = {}) {
+  if (!_graphDrawerOpen || !_cyInstance) return;
+  const { nodes, edges } = buildGraphElements();
+  // Capture current positions before tearing down.
+  const positions = new Map();
+  if (preserveLayout) {
+    _cyInstance.nodes().forEach(n => positions.set(n.id(), { ...n.position() }));
+  }
+  _cyInstance.elements().remove();
+  _cyInstance.add([...nodes, ...edges]);
+  // If every node has a prior position, skip the expensive layout.
+  const allKnown = positions.size && [...positions.keys()].every(id => _cyInstance.$id(id).length);
+  if (allKnown) {
+    _cyInstance.nodes().forEach(n => {
+      const p = positions.get(n.id());
+      if (p) n.position(p);
+    });
+    _cyInstance.fit();
+  } else {
+    _cyInstance.layout(GRAPH_LAYOUT_OPTS).run();
+  }
+  const stats = $('#graph-stats');
+  if (stats) stats.textContent = `${nodes.length} nodes · ${edges.length} edges`;
+  const empty = $('#graph-empty');
+  if (empty) empty.hidden = nodes.length > 0;
+}
+
+/* Wire up the Graph toggle, close button, cluster-select, and the
+   keyboard shortcut G. The keyboard handler ignores repeats and
+   text-input contexts so typing G in a textarea doesn't toggle the
+   drawer. */
+function initGraphDrawer() {
+  const btn = document.getElementById('graph-toggle');
+  if (btn) btn.addEventListener('click', toggleGraphDrawer);
+  const closeBtn = document.getElementById('graph-drawer-close');
+  if (closeBtn) closeBtn.addEventListener('click', closeGraphDrawer);
+  const clusterSel = document.getElementById('graph-cluster-select');
+  if (clusterSel) clusterSel.addEventListener('change', () => {
+    // 8.1 carries the select but actually re-layouts in 8.2 when
+    // filters land. For now, re-run the base layout on any change.
+    refreshGraphDrawer({ preserveLayout: false });
+  });
+  window.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'g' && ev.key !== 'G') return;
+    if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    const t = ev.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || (t.isContentEditable))) return;
+    ev.preventDefault();
+    toggleGraphDrawer();
+  });
+  // Subscribe to corpus updates — re-render when new sources land.
+  window.addEventListener('GRAPH_UPDATED', () => refreshGraphDrawer({ preserveLayout: true }));
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initGraphDrawer);
+} else {
+  initGraphDrawer();
+}
 
 /* Kicks off a fold; resolves with the three EO views plus the
    render-ready claim projection. G = observations (Given-Log),
