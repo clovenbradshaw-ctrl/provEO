@@ -14931,6 +14931,216 @@ registerClientTool({
   execute: executeQueryGraph
 });
 
+/* ---------- search_segments ---------- */
+
+const SEARCH_SEGMENTS_TOOL_DEF = {
+  name: 'search_segments',
+  description: 'Semantic k-NN search over every segment embedding in the loaded sources. Use for questions that aren\'t graph-shaped — tone, topic, "what does the council say about X", open-ended retrieval. Returns segment text + loc + face labels. Pair with read_span to widen a hit for quoting.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      query: { type: 'string', description: 'The search query; will be embedded with the same MiniLM-L6-v2 model that classified the segments.' },
+      k: { type: 'integer', description: 'Number of neighbours to return (default 5, cap 20).' },
+      sourceIds: { type: 'array', items: { type: 'string' }, description: 'Restrict the search pool to these source ids.' },
+      face: {
+        type: 'object',
+        description: 'Restrict to segments whose dominant label matches the given face cell (e.g. { act: "INS" }).',
+        properties: {
+          act: { type: 'string' },
+          site: { type: 'string' },
+          resolution: { type: 'string' }
+        }
+      }
+    },
+    required: ['query']
+  }
+};
+
+async function executeSearchSegments(input) {
+  const query = String(input.query || '').trim();
+  if (!query) return { error: 'query is required' };
+  const k = Math.max(1, Math.min(20, Number.isFinite(input.k) ? input.k | 0 : 5));
+  const sourceIdFilter = Array.isArray(input.sourceIds) && input.sourceIds.length ? new Set(input.sourceIds) : null;
+  const faceFilter = input.face && typeof input.face === 'object' ? input.face : null;
+
+  // Embed the query in the same MiniLM space.
+  let qVec;
+  try { qVec = await embed(query); }
+  catch (err) { return { error: 'embedder unavailable: ' + (err && err.message || err) }; }
+
+  // Build pool from in-memory embeddings, filtered.
+  const pool = [];
+  for (const [sourceId, segs] of Object.entries(SOURCE_SEGMENTS)) {
+    if (sourceIdFilter && !sourceIdFilter.has(sourceId)) continue;
+    const labels = SEG_LABELS[sourceId] || {};
+    for (const seg of segs) {
+      if (seg.kind === 'source') continue;
+      const vec = SEG_EMBEDDINGS[seg.id];
+      if (!vec) continue;
+      if (faceFilter) {
+        const L = labels[seg.id];
+        if (!L) continue;
+        let ok = true;
+        for (const [face, cell] of Object.entries(faceFilter)) {
+          if (L[face] !== cell) { ok = false; break; }
+        }
+        if (!ok) continue;
+      }
+      pool.push({ id: seg.id, embedding: vec });
+    }
+  }
+  if (!pool.length) return { hits: [], total: 0 };
+  const hits = topKCosine(qVec, pool, k);
+  return {
+    hits: hits.map(h => {
+      const sid = sourceIdOfSegment(h.id);
+      const seg = (SOURCE_SEGMENTS[sid] || []).find(s => s.id === h.id);
+      if (!seg) return { segmentId: h.id, score: h.score };
+      const labels = (SEG_LABELS[sid] || {})[seg.id] || null;
+      return {
+        segmentId: seg.id,
+        sourceId: sid,
+        sourceName: USER_SOURCES[sid] && USER_SOURCES[sid].name,
+        kind: seg.kind,
+        text: seg.text,
+        loc: seg.loc,
+        labels,
+        score: Math.round(h.score * 1000) / 1000
+      };
+    }),
+    total: pool.length
+  };
+}
+
+registerClientTool({
+  definition: SEARCH_SEGMENTS_TOOL_DEF,
+  execute: executeSearchSegments
+});
+
+/* ---------- read_span ---------- */
+
+const READ_SPAN_TOOL_DEF = {
+  name: 'read_span',
+  description: 'Pull a segment\'s text plus optionally the text of its parent (sentence -> paragraph -> section -> source). Use after query_graph or search_segments surfaces an evidence hit that you want to quote at more length.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      segmentId: { type: 'string', description: 'The segment id to read (from query_graph evidence or search_segments hits).' },
+      sourceId: { type: 'string', description: 'Optional — required only if the segment id is ambiguous (rare).' },
+      context: { type: 'string', enum: ['sentence', 'paragraph', 'section', 'source', 'parent'], description: 'Widen to this kind of enclosing segment. "parent" widens one level up; the others jump directly to the named kind.' }
+    },
+    required: ['segmentId']
+  }
+};
+
+async function executeReadSpan(input) {
+  const segmentId = String(input.segmentId || '');
+  if (!segmentId) return { error: 'segmentId is required' };
+  const sourceId = input.sourceId || sourceIdOfSegment(segmentId);
+  const segs = SOURCE_SEGMENTS[sourceId] || [];
+  const seg = segs.find(s => s.id === segmentId);
+  if (!seg) return { error: 'segment not found: ' + segmentId };
+  const context = input.context || null;
+
+  // Walk parent chain; stop at the requested ancestor kind.
+  let widened = seg;
+  if (context) {
+    const chain = segmentAncestors(sourceId, segmentId);
+    if (context === 'parent' && chain.length > 1) {
+      widened = chain[1];
+    } else {
+      const target = chain.find(node => node.kind === context);
+      if (target) widened = target;
+    }
+  }
+  return {
+    segmentId: widened.id,
+    sourceId,
+    sourceName: USER_SOURCES[sourceId] && USER_SOURCES[sourceId].name,
+    kind: widened.kind,
+    text: widened.text,
+    loc: widened.loc,
+    labels: (SEG_LABELS[sourceId] || {})[widened.id] || null,
+    originalSegmentId: segmentId
+  };
+}
+
+registerClientTool({
+  definition: READ_SPAN_TOOL_DEF,
+  execute: executeReadSpan
+});
+
+/* ---------- describe_source ---------- */
+
+const DESCRIBE_SOURCE_TOOL_DEF = {
+  name: 'describe_source',
+  description: 'Pre-computed summary of a source: segment counts by kind, dominant face labels per face, distinct entity types present, triple count. No text body. Use this when you need to know what a source is before deciding which retrieval tool to use.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      sourceId: { type: 'string', description: 'The source id from the routing header.' }
+    },
+    required: ['sourceId']
+  }
+};
+
+async function executeDescribeSource(input) {
+  const sourceId = String(input.sourceId || '');
+  if (!sourceId) return { error: 'sourceId is required' };
+  const src = USER_SOURCES[sourceId];
+  if (!src) return { error: 'source not found: ' + sourceId };
+  const segs = SOURCE_SEGMENTS[sourceId] || [];
+  const labels = SEG_LABELS[sourceId] || {};
+
+  const segmentCounts = {};
+  for (const s of segs) segmentCounts[s.kind] = (segmentCounts[s.kind] || 0) + 1;
+
+  // Dominant face labels per face (top 3 cells with percentages).
+  const topFaceCells = {};
+  const rootSeg = segs.find(s => s.kind === 'source');
+  const rootLabel = rootSeg && labels[rootSeg.id];
+  const dist = rootLabel && rootLabel.distribution
+    ? rootLabel.distribution
+    : (typeof aggregateFaceDistribution === 'function'
+        ? aggregateFaceDistribution(sourceId, segs.map(s => s.id))
+        : null);
+  if (dist) {
+    for (const face of ['act', 'site', 'resolution']) {
+      const entries = Object.entries(dist[face] || {}).sort((a, b) => b[1] - a[1]).slice(0, 3);
+      topFaceCells[face] = entries.map(([cell, share]) => ({ cell, share: Math.round(share * 100) / 100 }));
+    }
+  }
+
+  // Distinct entity types in edges for this source.
+  const entityTypes = new Map();
+  let tripleCount = 0;
+  for (const edge of GRAPH_EDGES.values()) {
+    if (edge.sourceId !== sourceId) continue;
+    tripleCount++;
+    for (const ref of [edge.subject, edge.object]) {
+      if (!ref || !ref.type) continue;
+      if (STRUCTURAL_TYPES.has(ref.type)) continue;
+      entityTypes.set(ref.type, (entityTypes.get(ref.type) || 0) + 1);
+    }
+  }
+
+  return {
+    sourceId,
+    name: src.name,
+    kind: src.kind,
+    rough_size: roughSizeForSource(src),
+    segment_counts: segmentCounts,
+    face_labels: topFaceCells,
+    entity_types: [...entityTypes.entries()].sort((a, b) => b[1] - a[1]).map(([type, count]) => ({ type, count })),
+    triple_count: tripleCount
+  };
+}
+
+registerClientTool({
+  definition: DESCRIBE_SOURCE_TOOL_DEF,
+  execute: executeDescribeSource
+});
+
 
 /* Kicks off a fold; resolves with the three EO views plus the
    render-ready claim projection. G = observations (Given-Log),
