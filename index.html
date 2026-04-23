@@ -413,6 +413,166 @@
   .outputs-menu .outputs-new:hover {
     color: var(--color-text-primary);
   }
+
+  /* ---------- DOCUMENT TABS BAR ---------- */
+  .doc-tabs-bar {
+    display: flex;
+    align-items: stretch;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    background: var(--color-background-secondary);
+    min-height: 33px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex-shrink: 0;
+  }
+  .doc-tabs-bar::-webkit-scrollbar { display: none; }
+  .doc-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 0 10px 0 13px;
+    min-width: 72px;
+    max-width: 180px;
+    border-right: 0.5px solid var(--color-border-tertiary);
+    cursor: pointer;
+    background: transparent;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+    flex-shrink: 0;
+    user-select: none;
+    transition: background 0.1s, color 0.1s;
+  }
+  .doc-tab:hover {
+    background: var(--color-background-primary);
+    color: var(--color-text-primary);
+  }
+  .doc-tab.active {
+    background: var(--color-background-primary);
+    color: var(--color-text-primary);
+    box-shadow: inset 0 -1.5px 0 var(--color-text-primary);
+  }
+  .doc-tab-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+  }
+  .doc-tab-close {
+    opacity: 0;
+    font-size: 14px;
+    line-height: 1;
+    color: var(--color-text-tertiary);
+    border: 0;
+    background: transparent;
+    padding: 0 1px;
+    cursor: pointer;
+    border-radius: 2px;
+    flex-shrink: 0;
+    transition: opacity 0.1s, color 0.1s;
+  }
+  .doc-tab:hover .doc-tab-close,
+  .doc-tab.active .doc-tab-close { opacity: 1; }
+  .doc-tab-close:hover { color: var(--color-text-primary); }
+  .doc-tab-new-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 33px;
+    flex-shrink: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-tertiary);
+    font-size: 18px;
+    cursor: pointer;
+    transition: color 0.1s;
+  }
+  .doc-tab-new-btn:hover { color: var(--color-text-primary); }
+
+  /* ---------- DRAFTS FOLDER (sidebar) ---------- */
+  .doc-folder {
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    flex-shrink: 0;
+  }
+  .doc-folder-head {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 8px 14px 6px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    user-select: none;
+  }
+  .doc-folder-head:hover { color: var(--color-text-primary); }
+  .doc-folder-caret {
+    font-size: 7px;
+    transition: transform 0.15s;
+    flex-shrink: 0;
+  }
+  .doc-folder.collapsed .doc-folder-caret { transform: rotate(-90deg); }
+  .doc-folder-count {
+    opacity: 0.5;
+    margin-left: auto;
+    font-weight: 400;
+    font-size: 10px;
+  }
+  .doc-folder-list { padding: 0 8px 6px; }
+  .doc-folder.collapsed .doc-folder-list { display: none; }
+  .doc-folder-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    border: 0.5px solid transparent;
+    margin-bottom: 1px;
+    transition: background 0.1s, color 0.1s;
+  }
+  .doc-folder-item:hover {
+    background: var(--color-background-primary);
+    border-color: var(--color-border-tertiary);
+    color: var(--color-text-primary);
+  }
+  .doc-folder-item.active {
+    color: var(--color-text-primary);
+    background: var(--color-background-primary);
+    border-color: var(--color-border-tertiary);
+  }
+  .doc-folder-item-icon { opacity: 0.4; flex-shrink: 0; }
+  .doc-folder-item-title {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .doc-folder-new {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    border: 0;
+    background: transparent;
+    width: 100%;
+    text-align: left;
+    margin-top: 2px;
+    transition: color 0.1s;
+  }
+  .doc-folder-new:hover { color: var(--color-text-primary); }
+
   .counts {
     font-family: var(--font-mono);
     font-size: 11px;
@@ -5610,6 +5770,14 @@
         <span>Sources</span>
         <button class="panel-collapse-btn" id="sources-collapse" type="button" title="Collapse sources">‹</button>
       </div>
+      <div class="doc-folder" id="doc-folder">
+        <div class="doc-folder-head" id="doc-folder-head">
+          <span class="doc-folder-caret">▾</span>
+          <span>Drafts</span>
+          <span class="doc-folder-count" id="doc-folder-count">0</span>
+        </div>
+        <div class="doc-folder-list" id="doc-folder-list"></div>
+      </div>
       <div class="slist" id="slist"></div>
       <div class="sadd-stack">
         <div class="sadd" id="sadd-btn">+ add source</div>
@@ -5624,6 +5792,7 @@
     <!-- ===== WRITE MODE ===== -->
     <section class="mode-panel active" id="mode-write">
       <div class="center">
+        <div class="doc-tabs-bar" id="doc-tabs-bar"></div>
         <div class="editor-wrap">
           <div class="editor-toolbar" id="editor-toolbar" role="toolbar" aria-label="Formatting">
             <div class="tbtn-style-wrap" title="Paragraph style">
@@ -5689,14 +5858,6 @@
           </div>
           <div class="evidence-bench" id="evidence-bench" hidden></div>
           <div class="article-meta">
-            <div class="outputs-picker">
-              <button type="button" class="outputs-btn" id="outputs-btn" aria-haspopup="listbox" aria-expanded="false">
-                <span class="outputs-btn-label" id="outputs-btn-label">Untitled</span>
-                <span class="outputs-caret">▾</span>
-              </button>
-              <div class="outputs-menu" id="outputs-menu" role="listbox" hidden></div>
-            </div>
-            <span class="sep">·</span>
             <span class="counts" id="counts-meta"></span>
           </div>
           <div class="article-title" contenteditable="true" spellcheck="false" data-placeholder="Untitled">The Private Police and the Public Budget</div>
@@ -6550,7 +6711,7 @@
 
 <!-- Matrix client SDK (loaded from CDN, exposes window.matrixcs).
      Loaded lazily so the app still works offline; checks for window.matrixcs before use. -->
-<script src="https://cdn.jsdelivr.net/npm/matrix-js-sdk@34.11.0/lib/browser-matrix.min.js" crossorigin="anonymous" referrerpolicy="no-referrer" onerror="this.onerror=null;console.warn('[matrix] jsdelivr failed, trying unpkg');var s=document.createElement('script');s.src='https://unpkg.com/matrix-js-sdk@34.11.0/lib/browser-matrix.min.js';s.crossOrigin='anonymous';s.referrerPolicy='no-referrer';s.onerror=function(){console.warn('[matrix] SDK failed to load — Matrix features will be unavailable')};document.head.appendChild(s)"></script>
+<script src="https://cdn.jsdelivr.net/npm/matrix-js-sdk@28.2.0/dist/browser-matrix.min.js" crossorigin="anonymous" referrerpolicy="no-referrer" onerror="this.onerror=null;console.warn('[matrix] jsdelivr failed, trying unpkg');var s=document.createElement('script');s.src='https://unpkg.com/matrix-js-sdk@28.2.0/dist/browser-matrix.min.js';s.crossOrigin='anonymous';s.referrerPolicy='no-referrer';s.onerror=function(){console.warn('[matrix] SDK failed to load — Matrix features will be unavailable')};document.head.appendChild(s)"></script>
 
 <script>
 /* ===========================================================================
@@ -21595,6 +21756,8 @@ async function createNewOutput(rawTitle) {
   try { renderCounts(); } catch {}
   try { updateWordCount(); } catch {}
   renderOutputsPicker();
+  try { renderDocTabs(); } catch {}
+  try { renderDocFolder(); } catch {}
   if (titleEl) {
     titleEl.focus();
     const range = document.createRange();
@@ -21623,6 +21786,8 @@ async function switchToOutput(id) {
   try { renderCounts(); } catch {}
   try { updateWordCount(); } catch {}
   renderOutputsPicker();
+  try { renderDocTabs(); } catch {}
+  try { renderDocFolder(); } catch {}
 }
 
 async function saveArticleNow() {
@@ -21644,7 +21809,7 @@ async function saveArticleNow() {
       entry.title = nextTitle;
       entry.updatedAt = new Date().toISOString();
       await storage.writeOutputsIndex(OUTPUTS);
-      if (titleChanged) renderOutputsPicker();
+      if (titleChanged) { renderOutputsPicker(); try { renderDocTabs(); renderDocFolder(); } catch {} }
     }
   } else {
     // Only hit on the very first render before initOutputs() finishes.
@@ -21783,6 +21948,148 @@ function wireOutputsPicker() {
   });
 
   renderOutputsPicker();
+}
+
+/* ---------- Document tabs bar + Drafts folder ---------- */
+
+const LS_OPEN_TABS = 'proveo.openTabs.v1';
+let OPEN_TAB_IDS = [];
+
+function loadOpenTabs() {
+  try {
+    const raw = localStorage.getItem(LS_OPEN_TABS);
+    if (raw) OPEN_TAB_IDS = JSON.parse(raw).filter(id => typeof id === 'string');
+  } catch {}
+  if (CURRENT_OUTPUT_ID && !OPEN_TAB_IDS.includes(CURRENT_OUTPUT_ID)) {
+    OPEN_TAB_IDS.unshift(CURRENT_OUTPUT_ID);
+  }
+  // Drop tabs whose output no longer exists
+  OPEN_TAB_IDS = OPEN_TAB_IDS.filter(id => OUTPUTS.find(o => o.id === id));
+  saveOpenTabs();
+}
+
+function saveOpenTabs() {
+  try { localStorage.setItem(LS_OPEN_TABS, JSON.stringify(OPEN_TAB_IDS)); } catch {}
+}
+
+function openDocInTab(id) {
+  if (!OPEN_TAB_IDS.includes(id)) {
+    OPEN_TAB_IDS.push(id);
+    saveOpenTabs();
+  }
+  switchToOutput(id).catch(err => console.warn('[doc-tabs] switch failed', err));
+}
+
+function closeDocTab(id) {
+  const idx = OPEN_TAB_IDS.indexOf(id);
+  if (idx === -1) return;
+  OPEN_TAB_IDS.splice(idx, 1);
+  saveOpenTabs();
+  if (id === CURRENT_OUTPUT_ID) {
+    const next = OPEN_TAB_IDS[Math.min(idx, OPEN_TAB_IDS.length - 1)];
+    if (next) {
+      switchToOutput(next).catch(err => console.warn('[doc-tabs] switch failed', err));
+      return;
+    }
+  }
+  renderDocTabs();
+  renderDocFolder();
+}
+
+function renderDocTabs() {
+  const bar = $('#doc-tabs-bar');
+  if (!bar) return;
+  OPEN_TAB_IDS = OPEN_TAB_IDS.filter(id => OUTPUTS.find(o => o.id === id));
+  const esc = s => (s || '').replace(/[<&>"]/g, c => ({'<':'&lt;','&':'&amp;','>':'&gt;','"':'&quot;'}[c]));
+  const tabs = OPEN_TAB_IDS.map(id => {
+    const entry = OUTPUTS.find(o => o.id === id);
+    if (!entry) return '';
+    const active = id === CURRENT_OUTPUT_ID;
+    const title = esc(entry.title || 'Untitled');
+    return `<div class="doc-tab${active ? ' active' : ''}" data-tab-id="${id}" title="${title}" role="button" tabindex="0">
+      <span class="doc-tab-title">${title}</span>
+      <span class="doc-tab-close" data-close-id="${id}" title="Close tab" role="button" tabindex="-1">×</span>
+    </div>`;
+  }).join('');
+  bar.innerHTML = tabs
+    + '<button type="button" class="doc-tab-new-btn" id="doc-tab-new-btn" title="New draft">+</button>';
+}
+
+function renderDocFolder() {
+  const list = $('#doc-folder-list');
+  const countEl = $('#doc-folder-count');
+  if (!list) return;
+  if (countEl) countEl.textContent = OUTPUTS.length;
+  const esc = s => (s || '').replace(/[<&>"]/g, c => ({'<':'&lt;','&':'&amp;','>':'&gt;','"':'&quot;'}[c]));
+  const sorted = OUTPUTS.slice().sort((a, b) => {
+    const ua = a.updatedAt || a.createdAt || '';
+    const ub = b.updatedAt || b.createdAt || '';
+    return ub.localeCompare(ua);
+  });
+  list.innerHTML = sorted.map(o => {
+    const active = o.id === CURRENT_OUTPUT_ID;
+    const title = esc(o.title || 'Untitled');
+    return `<div class="doc-folder-item${active ? ' active' : ''}" data-folder-id="${o.id}" title="${title}">
+      <span class="doc-folder-item-icon">◻</span>
+      <span class="doc-folder-item-title">${title}</span>
+    </div>`;
+  }).join('')
+    + '<button type="button" class="doc-folder-new" id="doc-folder-new-btn">+ new draft</button>';
+}
+
+function wireDocTabs() {
+  const bar = $('#doc-tabs-bar');
+  if (!bar) return;
+  bar.addEventListener('click', async (e) => {
+    const closeEl = e.target.closest('[data-close-id]');
+    if (closeEl) { closeDocTab(closeEl.dataset.closeId); return; }
+    if (e.target.closest('#doc-tab-new-btn')) {
+      const name = window.prompt('Name for the new draft:', 'Untitled');
+      if (name === null) return;
+      try {
+        await createNewOutput(name);
+        if (!OPEN_TAB_IDS.includes(CURRENT_OUTPUT_ID)) {
+          OPEN_TAB_IDS.push(CURRENT_OUTPUT_ID);
+          saveOpenTabs();
+        }
+        renderDocTabs();
+        renderDocFolder();
+      } catch (err) { console.warn('[doc-tabs] create failed', err); }
+      return;
+    }
+    const tab = e.target.closest('[data-tab-id]');
+    if (tab && tab.dataset.tabId !== CURRENT_OUTPUT_ID) {
+      openDocInTab(tab.dataset.tabId);
+    }
+  });
+}
+
+function wireDocFolder() {
+  const head = $('#doc-folder-head');
+  if (head) {
+    head.addEventListener('click', () => {
+      $('#doc-folder')?.classList.toggle('collapsed');
+    });
+  }
+  const list = $('#doc-folder-list');
+  if (!list) return;
+  list.addEventListener('click', async (e) => {
+    const item = e.target.closest('[data-folder-id]');
+    if (item) { openDocInTab(item.dataset.folderId); return; }
+    if (e.target.closest('#doc-folder-new-btn')) {
+      const name = window.prompt('Name for the new draft:', 'Untitled');
+      if (name === null) return;
+      try {
+        await createNewOutput(name);
+        if (!OPEN_TAB_IDS.includes(CURRENT_OUTPUT_ID)) {
+          OPEN_TAB_IDS.push(CURRENT_OUTPUT_ID);
+          saveOpenTabs();
+        }
+        renderDocTabs();
+        renderDocFolder();
+      } catch (err) { console.warn('[doc-folder] create failed', err); }
+    }
+  });
 }
 
 function setSyncStatus(state, label) {
@@ -28465,6 +28772,7 @@ async function init() {
   // Initialize the outputs index (migrates legacy article.html on first boot)
   // before loading a draft — loadPersistedArticle reads from the current output.
   await initOutputs();
+  loadOpenTabs();
 
   // render seeded article first; if a persisted draft exists, load it over
   renderArticleBody($('#article-body'));
@@ -28483,6 +28791,10 @@ async function init() {
   renderCounts();
   wireEditor();
   wireOutputsPicker();
+  wireDocTabs();
+  wireDocFolder();
+  renderDocTabs();
+  renderDocFolder();
   wireUploads();
   wireSelectionToolbar();
   wirePanelCollapse();
