@@ -2642,6 +2642,37 @@
     color: var(--color-text-secondary);
     margin-top: 6px;
   }
+  .chatctl-scope-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 4px;
+  }
+  .chatctl-scope {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 5px 8px;
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 11.5px;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .chatctl-scope:hover { background: var(--color-bg-tertiary); }
+  .chatctl-scope.on {
+    border-color: var(--color-text-secondary);
+    background: var(--color-bg-tertiary);
+  }
+  .chatctl-scope input { margin: 0; }
+  .chatctl-scope span { font-weight: 500; }
+  .chatctl-scope em {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-text-secondary);
+    font-style: normal;
+    margin-left: auto;
+  }
   .chatctl-empty {
     font-size: 11.5px;
     color: var(--color-text-secondary);
@@ -7950,6 +7981,15 @@ function renderChatControls() {
       <div class="chatctl-footer">${included} of ${total} included</div>
     </div>
     <div class="ws-section chatctl-section">
+      <div class="ws-section-title">Retrieval scope</div>
+      <div class="ws-section-sub">Controls how Claude reads your sources. Graph is the default; Full is the old 180KB injection escape hatch.</div>
+      <div class="chatctl-scope-row">
+        <label class="chatctl-scope${CLAUDE_CHAT_SCOPE === 'graph' ? ' on' : ''}"><input type="radio" name="chatctl-scope" value="graph"${CLAUDE_CHAT_SCOPE === 'graph' ? ' checked' : ''}><span>Graph</span><em>query_graph + read_span + describe_source</em></label>
+        <label class="chatctl-scope${CLAUDE_CHAT_SCOPE === 'semantic' ? ' on' : ''}"><input type="radio" name="chatctl-scope" value="semantic"${CLAUDE_CHAT_SCOPE === 'semantic' ? ' checked' : ''}><span>Semantic</span><em>search_segments + read_span + describe_source</em></label>
+        <label class="chatctl-scope${CLAUDE_CHAT_SCOPE === 'full' ? ' on' : ''}"><input type="radio" name="chatctl-scope" value="full"${CLAUDE_CHAT_SCOPE === 'full' ? ' checked' : ''}><span>Full</span><em>inject full source text (180KB cap)</em></label>
+      </div>
+    </div>
+    <div class="ws-section chatctl-section">
       <div class="ws-section-title">Web tools</div>
       <div class="ws-section-sub">web_search and web_fetch. Billed separately by Anthropic.</div>
       <label class="ws-toggle"><input type="checkbox" id="chatctl-web-on"${CLAUDE_CHAT_WEB ? ' checked' : ''}> Let Claude call web tools (search + fetch)</label>
@@ -8008,6 +8048,18 @@ function renderChatControls() {
       try { localStorage.setItem(LS_CLAUDE_CHAT_WEB, CLAUDE_CHAT_WEB ? '1' : '0'); } catch {}
     });
   }
+  $$('input[name="chatctl-scope"]').forEach(r => {
+    r.addEventListener('change', () => {
+      if (!r.checked) return;
+      const v = r.value;
+      if (v === 'graph' || v === 'semantic' || v === 'full') {
+        CLAUDE_CHAT_SCOPE = v;
+        try { localStorage.setItem(LS_CLAUDE_CHAT_SCOPE, CLAUDE_CHAT_SCOPE); } catch {}
+        // Re-render this panel to update the 'on' highlight.
+        renderChatControls();
+      }
+    });
+  });
   const webMax = $('#chatctl-web-max');
   if (webMax) {
     webMax.addEventListener('change', () => {
@@ -8080,9 +8132,6 @@ async function runAssistantTurn(userText) {
   if (sendBtn) sendBtn.disabled = true;
 
   try {
-    // Prompt 7.1 default: ship compact routing headers, not full
-    // text. Scope=Full (Prompt 7.4) flips this back to the 180KB
-    // injection for the one turn where the model needs a total view.
     const blocks = await gatherChatSourceBlocks({
       fullText: (typeof CLAUDE_CHAT_SCOPE !== 'undefined' && CLAUDE_CHAT_SCOPE === 'full')
     });
@@ -8090,6 +8139,11 @@ async function runAssistantTurn(userText) {
       .filter((m, i) => i !== pendingIdx && !m.__seed && !m.__pending)
       .slice(-10)
       .slice(0, -1); // exclude the just-pushed user message; we'll add it last
+    // Per-turn retrieval log. Each client-tool call appends one
+    // entry { tool, args, resultSize, segmentIds } which we stash
+    // on the assistant message's .provenance.retrieval[] so
+    // Prompt 9.2's clipboard can emit citations and graph paths.
+    const retrievalLog = [];
     const result = await callChatAgent(CLAUDE_API_KEY, {
       userText,
       priorTurns,
@@ -8098,13 +8152,20 @@ async function runAssistantTurn(userText) {
       systemPrompt: CHAT_SYSTEM_PROMPT,
       webMaxUses: CHAT_WEB_MAX,
       allowedDomains: splitDomains(CHAT_WEB_ALLOW),
-      blockedDomains: splitDomains(CHAT_WEB_BLOCK)
+      blockedDomains: splitDomains(CHAT_WEB_BLOCK),
+      retrievalLog
     });
     CHAT_HISTORY[pendingIdx] = {
       role: 'system',
       meta: result.meta,
       html: result.html,
-      evidence: null
+      evidence: null,
+      provenance: {
+        claims: [],
+        webCitations: Array.isArray(result.citations) ? result.citations : [],
+        computations: [],
+        retrieval: retrievalLog.slice()
+      }
     };
   } catch (err) {
     CHAT_HISTORY[pendingIdx] = {
@@ -8407,13 +8468,17 @@ async function callChatAgent(apiKey, opts) {
     }
     tools.push(webSearch, webFetch);
   }
-  // Custom client tools for graph-shaped retrieval. Enabled when
-  // scope is Graph (default) or Semantic. Scope=Full sends the old
-  // 180KB injection instead and skips these tools for one turn
-  // (Prompt 7.4).
+  // Custom client tools. Scope determines which subset registers:
+  //   graph    — query_graph, read_span, describe_source
+  //   semantic — search_segments, read_span, describe_source
+  //   full     — none; the system prompt carries the full-text
+  //              corpus directly.
   const scope = (typeof CLAUDE_CHAT_SCOPE !== 'undefined' ? CLAUDE_CHAT_SCOPE : 'graph');
   if (scope !== 'full' && CLIENT_TOOL_REGISTRY && CLIENT_TOOL_REGISTRY.length) {
-    for (const t of CLIENT_TOOL_REGISTRY) tools.push(t.definition);
+    for (const t of CLIENT_TOOL_REGISTRY) {
+      const scopes = t.scopes || ['graph', 'semantic'];
+      if (scopes.includes(scope)) tools.push(t.definition);
+    }
   }
   if (tools.length) body.tools = tools;
 
@@ -8473,19 +8538,24 @@ async function callChatAgent(apiKey, opts) {
       const toolResults = [];
       for (const call of clientCalls) {
         let resultStr = '';
+        const argStr = (() => { try { return JSON.stringify(call.input || {}); } catch { return '{}'; } })();
         try {
           const out = await executeClientTool(call.name, call.input || {});
+          const size = (JSON.stringify(out) || '').length;
+          const segmentIds = collectSegmentIdsFromToolResult(out);
+          console.debug('[tool ' + call.name + ']', argStr.slice(0, 200), '->', size + ' bytes,', segmentIds.length + ' segment refs');
           if (retrievalLog) retrievalLog.push({
             tool: call.name,
             args: call.input || {},
-            resultSize: (JSON.stringify(out) || '').length,
-            segmentIds: collectSegmentIdsFromToolResult(out)
+            resultSize: size,
+            segmentIds
           });
           resultStr = JSON.stringify(out);
           if (resultStr.length > 64000) {
             resultStr = JSON.stringify({ error: 'result too large', size: resultStr.length, truncated: true });
           }
         } catch (err) {
+          console.debug('[tool ' + call.name + '] ERROR', err && err.message);
           resultStr = JSON.stringify({ error: String(err && err.message || err) });
         }
         toolResults.push({
@@ -14928,7 +14998,8 @@ async function executeQueryGraph(input) {
 
 registerClientTool({
   definition: QUERY_GRAPH_TOOL_DEF,
-  execute: executeQueryGraph
+  execute: executeQueryGraph,
+  scopes: ['graph']
 });
 
 /* ---------- search_segments ---------- */
@@ -15014,7 +15085,8 @@ async function executeSearchSegments(input) {
 
 registerClientTool({
   definition: SEARCH_SEGMENTS_TOOL_DEF,
-  execute: executeSearchSegments
+  execute: executeSearchSegments,
+  scopes: ['semantic']
 });
 
 /* ---------- read_span ---------- */
@@ -15067,7 +15139,8 @@ async function executeReadSpan(input) {
 
 registerClientTool({
   definition: READ_SPAN_TOOL_DEF,
-  execute: executeReadSpan
+  execute: executeReadSpan,
+  scopes: ['graph', 'semantic']
 });
 
 /* ---------- describe_source ---------- */
@@ -15138,7 +15211,8 @@ async function executeDescribeSource(input) {
 
 registerClientTool({
   definition: DESCRIBE_SOURCE_TOOL_DEF,
-  execute: executeDescribeSource
+  execute: executeDescribeSource,
+  scopes: ['graph', 'semantic']
 });
 
 
@@ -17159,6 +17233,23 @@ let CLAUDE_CHAT_WEB = (() => {
     const v = localStorage.getItem(LS_CLAUDE_CHAT_WEB);
     return v === null ? true : v === '1';
   } catch { return true; }
+})();
+/* Retrieval scope controls which client tools the chat loop
+   registers per turn and whether the routing header or the full-
+   text dump lands in the system prompt.
+     graph    — default. query_graph + read_span + describe_source;
+                header only in system prompt.
+     semantic — search_segments + read_span + describe_source;
+                header only.
+     full     — no client tools, inject the full-text corpus as the
+                original code did. Escape hatch for broad synthesis
+                across the whole workspace. */
+const LS_CLAUDE_CHAT_SCOPE = 'nl.claudeChatScope.v1';
+let CLAUDE_CHAT_SCOPE = (() => {
+  try {
+    const v = localStorage.getItem(LS_CLAUDE_CHAT_SCOPE);
+    return (v === 'semantic' || v === 'full') ? v : 'graph';
+  } catch { return 'graph'; }
 })();
 // Matches agents/proveo-research.yaml — keep these in sync.
 const CLAUDE_API_MODEL = 'claude-sonnet-4-6';
