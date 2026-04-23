@@ -18435,6 +18435,9 @@ async function createNewProjectRoom({ nameHint } = {}) {
     const newRoomId = res && (res.room_id || res.roomId);
     if (!newRoomId) throw new Error('no room_id returned');
     markRoomAsProveoWorkspace(newRoomId);
+    // A freshly-created project room is, by definition, a doc the user wants
+    // to see — flag it so the Workspaces explorer surfaces it immediately.
+    markRoomAsProveoDoc(newRoomId);
     // Give the SDK a moment to see the new room, then refresh + select.
     setTimeout(async () => {
       refreshRooms();
@@ -18541,11 +18544,14 @@ function renderRoomExplorer() {
     `);
   }
 
-  // Only show rooms that have been used as PROVeo workspaces — plain Matrix
-  // chats on the same homeserver shouldn't clutter the Workspaces tab.
+  // Only show rooms that are both known proveo workspaces AND explicitly
+  // flagged as proveo docs. The doc flag is the gate for surfacing rooms as
+  // documents — plain Matrix chats and un-flagged proveo rooms stay hidden.
   const proveoRooms = loadProveoRooms();
+  const proveoDocRooms = loadProveoDocRooms();
   const rooms = (matrix.rooms || []).filter(r => {
     if (!proveoRooms.has(r.id)) return false;
+    if (!proveoDocRooms.has(r.id)) return false;
     if (q && !(r.name.toLowerCase().includes(q) || r.id.toLowerCase().includes(q))) return false;
     if (filter === 'active') return r.id === matrix.activeRoomId;
     if (filter === 'local') return false;
@@ -18662,6 +18668,7 @@ function renderRoomExplorerDetail(key) {
       <div class="ws-btn-row" style="gap:8px">
         <button class="btn-sm btn-sm-primary" id="room-detail-open">Open Workspace settings</button>
         ${key === matrix.activeRoomId ? '' : `<button class="btn-sm" id="room-detail-activate">Activate this workspace</button>`}
+        <button class="btn-sm" id="room-detail-doc-toggle">${isProveoDocRoom(key) ? 'Unflag as PROVeo doc' : 'Flag as PROVeo doc'}</button>
       </div>
     </div>
   `;
@@ -18675,6 +18682,18 @@ function renderRoomExplorerDetail(key) {
   const activateBtn = $('#room-detail-activate');
   if (activateBtn) activateBtn.addEventListener('click', async () => {
     await selectWorkspaceRoom(key);
+    renderRoomExplorer();
+    renderRoomExplorerDetail(key);
+  });
+  const docToggle = $('#room-detail-doc-toggle');
+  if (docToggle) docToggle.addEventListener('click', () => {
+    if (isProveoDocRoom(key)) {
+      unmarkRoomAsProveoDoc(key);
+      showToast('unflagged as PROVeo doc');
+    } else {
+      markRoomAsProveoDoc(key);
+      showToast('flagged as PROVeo doc');
+    }
     renderRoomExplorer();
     renderRoomExplorerDetail(key);
   });
@@ -27343,6 +27362,7 @@ function setSampleData(on) {
 const LS_MX_SESSION = 'nl.mxSession.v1';
 const LS_MX_ROOM = 'nl.mxRoom.v1';
 const LS_PROVEO_ROOMS = 'proveo.knownRooms.v1';
+const LS_PROVEO_DOC_ROOMS = 'proveo.docRooms.v1';
 
 /* Set of Matrix room IDs that PROVeo has ever used as a workspace. Populated
    when the user creates a new project room via createNewProjectRoom or when
@@ -27367,6 +27387,39 @@ function markRoomAsProveoWorkspace(roomId) {
 }
 function isProveoWorkspaceRoom(roomId) {
   return loadProveoRooms().has(roomId);
+}
+
+/* Subset of proveo rooms explicitly flagged as "proveo docs" — the ones that
+   should surface in the Workspaces explorer (i.e. shown as documents). A room
+   can be a known proveo workspace without being a doc; only flagged rooms
+   appear in the list. Rooms created via `+ new workspace` are auto-flagged so
+   the create-then-see flow keeps working. */
+function loadProveoDocRooms() {
+  try {
+    const raw = localStorage.getItem(LS_PROVEO_DOC_ROOMS);
+    const arr = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch { return new Set(); }
+}
+function saveProveoDocRooms(set) {
+  try { localStorage.setItem(LS_PROVEO_DOC_ROOMS, JSON.stringify([...set])); } catch {}
+}
+function markRoomAsProveoDoc(roomId) {
+  if (!roomId) return;
+  const set = loadProveoDocRooms();
+  if (set.has(roomId)) return;
+  set.add(roomId);
+  saveProveoDocRooms(set);
+}
+function unmarkRoomAsProveoDoc(roomId) {
+  if (!roomId) return;
+  const set = loadProveoDocRooms();
+  if (!set.has(roomId)) return;
+  set.delete(roomId);
+  saveProveoDocRooms(set);
+}
+function isProveoDocRoom(roomId) {
+  return loadProveoDocRooms().has(roomId);
 }
 
 const matrix = {
