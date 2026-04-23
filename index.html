@@ -5370,6 +5370,18 @@
   }
   .graph-search-mode.on { color: var(--color-text-primary); border-color: var(--color-text-secondary); }
   .graph-search-mode:hover, .graph-reset-btn:hover { color: var(--color-text-primary); }
+  .graph-query-row { margin-top: 4px; }
+  .graph-query-view-btn {
+    width: 100%;
+    padding: 5px 8px;
+    font-size: 11px;
+    border: 0.5px solid var(--color-text-secondary);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--color-text-primary);
+    cursor: pointer;
+  }
+  .graph-query-view-btn:hover { background: var(--color-bg-tertiary); }
 
   .graph-rail {
     position: absolute;
@@ -6510,6 +6522,9 @@
       <input type="search" id="graph-search-input" class="graph-search-input" placeholder="Search nodes…" spellcheck="false" />
       <button class="graph-search-mode" id="graph-search-mode" type="button" title="Toggle search mode (name / semantic)">name</button>
       <button class="graph-reset-btn" id="graph-reset-btn" type="button" title="Clear all filters">reset</button>
+    </div>
+    <div class="graph-query-row">
+      <button class="graph-query-view-btn" id="graph-query-view-btn" type="button" title="Draft a chat question scoped to the current filter view">Query this view →</button>
     </div>
   </div>
   <div class="graph-drawer-body">
@@ -15965,6 +15980,8 @@ function initGraphDrawer() {
     ev.preventDefault();
     toggleGraphDrawer();
   });
+  const queryBtn = document.getElementById('graph-query-view-btn');
+  if (queryBtn) queryBtn.addEventListener('click', handleQueryThisView);
   // Subscribe to corpus updates — re-render when new sources land.
   window.addEventListener('GRAPH_UPDATED', () => refreshGraphDrawer({ preserveLayout: true }));
 }
@@ -16415,6 +16432,90 @@ function openRailForMultiSelect(nodeIds) {
 function closeGraphRail() {
   const rail = document.getElementById('graph-rail');
   if (rail) rail.hidden = true;
+}
+
+/* ======================================================================
+   GRAPH -> CHAT INTEGRATION (Prompt 8.4)
+   ----------------------------------------------------------------------
+   Two affordances route graph context into the chat input:
+     "Query this view"    — reads the active filter bar state, drafts
+                            a natural-language question with the
+                            filter spec appended as a preset chip.
+     "Ask about these"    — multi-select rail button; drafts a
+                            question scoped to a specific entityIds
+                            list so query_graph can start there.
+   Both drop into the chat textarea as a draft and switch to chat
+   mode. The user edits the wrapper and sends.
+====================================================================== */
+
+function describeActiveGraphFilters() {
+  const parts = [];
+  for (const face of ['act', 'site', 'resolution']) {
+    const cells = [...GRAPH_FILTERS[face]];
+    if (cells.length) parts.push(face + '=' + (cells.length === 1 ? cells[0] : '{' + cells.join(', ') + '}'));
+  }
+  if (GRAPH_FILTERS.search.q) {
+    parts.push('search:' + GRAPH_FILTERS.search.mode + '="' + GRAPH_FILTERS.search.q + '"');
+  }
+  return parts;
+}
+
+function buildQueryViewSpec() {
+  const match = {};
+  // Only the first cell of each face translates to a direct match
+  // filter — multi-cell filters are expressive in the UI but
+  // query_graph's match takes a single face spec.
+  for (const face of ['act', 'site', 'resolution']) {
+    const cells = [...GRAPH_FILTERS[face]];
+    if (cells.length === 1) {
+      match.face = match.face || {};
+      match.face[face] = cells[0];
+    }
+  }
+  if (GRAPH_FILTERS.search.q && GRAPH_FILTERS.search.mode === 'name') {
+    match.name = GRAPH_FILTERS.search.q;
+  }
+  // Default traverse: 1 hop, both directions.
+  return { match, traverse: { depth: 1 }, return: 'evidence' };
+}
+
+function graphDraftChatQuestion(text) {
+  const input = document.getElementById('chat-input');
+  if (!input) { console.info('[graph] chat input not found'); return; }
+  // Switch to chat mode first so the input is visible and focused.
+  if (typeof switchMode === 'function') {
+    try { switchMode('chat'); } catch {}
+  }
+  input.value = text;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  // Focus and scroll input into view once the chat panel is active.
+  requestAnimationFrame(() => {
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  });
+}
+
+function handleQueryThisView() {
+  const filterBits = describeActiveGraphFilters();
+  const spec = buildQueryViewSpec();
+  const scopeDesc = filterBits.length ? `(${filterBits.join(', ')})` : '(unfiltered)';
+  const specJson = JSON.stringify(spec);
+  const draft = `Across the filtered subgraph ${scopeDesc}, what patterns do you see?\n\n[query_graph preset: ${specJson}]`;
+  graphDraftChatQuestion(draft);
+}
+
+function graphAskAboutEntities(entityIds) {
+  if (!Array.isArray(entityIds) || !entityIds.length) return;
+  const names = entityIds.map(id => {
+    const n = GRAPH_NODES.get(id);
+    return n ? n.displayName : id;
+  });
+  const idList = JSON.stringify(entityIds);
+  const draft = `Tell me about these entities: ${names.join(', ')}.\n\n[query_graph preset: ${JSON.stringify({ entityIds, return: 'evidence' })}]`;
+  graphDraftChatQuestion(draft);
+  // Also log once so the caller sees something even if chat mode
+  // isn't available in this build.
+  console.info('[graph] ask-about', idList);
 }
 
 function bindGraphRailSelection() {
