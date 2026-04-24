@@ -1,18 +1,21 @@
-/* ---------- CHAT MODE (Groundbox MVP) ---------- */
+/* ---------- CHAT MODE (Groundbox) ---------- */
+/* Re-themed to PROVeo's editorial cream palette (see tokens.css). */
 #mode-chat.active { display: flex; flex-direction: column; padding: 0; }
 #mode-chat .gbx {
-  --gbx-bg: #18150f;
-  --gbx-bg-soft: #211d15;
-  --gbx-bg-panel: #1e1b14;
-  --gbx-ink: #ecdfc7;
-  --gbx-ink-dim: #a9a08a;
-  --gbx-ink-faint: #6d654f;
-  --gbx-accent: #d98f3f;
-  --gbx-accent-soft: rgba(217, 143, 63, 0.14);
-  --gbx-line: rgba(236, 223, 199, 0.08);
-  --gbx-line-strong: rgba(236, 223, 199, 0.16);
-  --gbx-user-bg: #2a2518;
-  --gbx-danger: #c96b5a;
+  --gbx-bg: var(--color-background-primary);
+  --gbx-bg-soft: var(--color-background-secondary);
+  --gbx-bg-panel: var(--color-background-secondary);
+  --gbx-ink: var(--color-text-primary);
+  --gbx-ink-dim: var(--color-text-secondary);
+  --gbx-ink-faint: var(--color-text-tertiary);
+  --gbx-accent: var(--amber-mid);
+  --gbx-accent-text: var(--amber-text);
+  --gbx-accent-soft: var(--amber-fill);
+  --gbx-line: var(--color-border-tertiary);
+  --gbx-line-strong: var(--color-border-secondary);
+  --gbx-user-bg: var(--color-background-secondary);
+  --gbx-danger: var(--red-mid);
+  --gbx-ok: var(--teal-mid);
   max-width: 860px;
   width: 100%;
   margin: 0 auto;
@@ -20,20 +23,17 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 0 20px;
+  padding: 0 32px;
   background: var(--gbx-bg);
-  background-image:
-    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(217, 143, 63, 0.08), transparent),
-    radial-gradient(ellipse 60% 40% at 20% 110%, rgba(217, 143, 63, 0.04), transparent);
   color: var(--gbx-ink);
-  font-family: 'IBM Plex Sans', system-ui, sans-serif;
-  font-size: 15px;
+  font-family: var(--font-sans);
+  font-size: 14px;
   line-height: 1.55;
 }
 #mode-chat .gbx * { box-sizing: border-box; }
 #mode-chat .gbx-header {
-  padding: 22px 0 18px;
-  border-bottom: 1px solid var(--gbx-line);
+  padding: 24px 0 16px;
+  border-bottom: 0.5px solid var(--gbx-line);
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -43,27 +43,27 @@
 #mode-chat .gbx-brand { display: flex; align-items: baseline; gap: 10px; }
 #mode-chat .gbx-brand h1 {
   margin: 0;
-  font-family: 'Instrument Serif', 'IBM Plex Serif', serif;
+  font-family: var(--font-serif);
   font-weight: 400;
-  font-size: 30px;
+  font-size: 26px;
   letter-spacing: -0.01em;
   color: var(--gbx-ink);
 }
-#mode-chat .gbx-brand h1 em { color: var(--gbx-accent); font-style: italic; }
+#mode-chat .gbx-brand h1 em { color: var(--gbx-accent-text); font-style: italic; }
 #mode-chat .gbx-tag {
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--gbx-ink-faint);
   padding: 3px 7px;
-  border: 1px solid var(--gbx-line-strong);
-  border-radius: 2px;
+  border: 0.5px solid var(--gbx-line);
+  border-radius: var(--border-radius-sm);
 }
 #mode-chat .gbx-status {
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   color: var(--gbx-ink-dim);
   display: flex;
   align-items: center;
@@ -75,7 +75,7 @@
   transition: all 0.3s;
 }
 #mode-chat .gbx-status[data-state="loading"] .dot { background: var(--gbx-accent); animation: gbx-pulse 1.5s infinite; }
-#mode-chat .gbx-status[data-state="ready"] .dot { background: #7ab36a; box-shadow: 0 0 8px rgba(122, 179, 106, 0.5); }
+#mode-chat .gbx-status[data-state="ready"] .dot { background: var(--gbx-ok); }
 #mode-chat .gbx-status[data-state="error"] .dot { background: var(--gbx-danger); }
 @keyframes gbx-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 #mode-chat .gbx-setup {
@@ -84,26 +84,27 @@
   flex-direction: column;
   justify-content: center;
   padding: 32px 0;
-  gap: 28px;
+  gap: 24px;
   overflow-y: auto;
 }
 #mode-chat .gbx-intro {
-  font-family: 'Instrument Serif', 'IBM Plex Serif', serif;
-  font-size: 22px;
-  line-height: 1.4;
+  font-family: var(--font-serif);
+  font-size: 20px;
+  line-height: 1.45;
   color: var(--gbx-ink);
   font-style: italic;
   max-width: 540px;
   margin: 0;
 }
-#mode-chat .gbx-intro::before { content: "—"; color: var(--gbx-accent); margin-right: 10px; font-style: normal; }
-#mode-chat .gbx-models { display: grid; gap: 10px; }
+#mode-chat .gbx-intro::before { content: "—"; color: var(--gbx-accent-text); margin-right: 10px; font-style: normal; }
+#mode-chat .gbx-models { display: grid; gap: 8px; }
 #mode-chat .gbx-model-option {
-  background: var(--gbx-bg-panel);
-  border: 1px solid var(--gbx-line);
-  padding: 16px 18px;
+  background: var(--gbx-bg);
+  border: 0.5px solid var(--gbx-line);
+  border-radius: var(--border-radius-md);
+  padding: 14px 16px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: border-color 0.12s, background 0.12s;
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 4px 16px;
@@ -114,13 +115,16 @@
   font-size: inherit;
 }
 #mode-chat .gbx-model-option:hover { border-color: var(--gbx-line-strong); background: var(--gbx-bg-soft); }
-#mode-chat .gbx-model-option.selected { border-color: var(--gbx-accent); background: var(--gbx-accent-soft); }
-#mode-chat .gbx-model-option .name { font-weight: 500; font-size: 15px; }
-#mode-chat .gbx-model-option .desc { font-size: 13px; color: var(--gbx-ink-dim); grid-column: 1; }
+#mode-chat .gbx-model-option.selected {
+  border-color: var(--color-border-primary);
+  background: var(--gbx-accent-soft);
+}
+#mode-chat .gbx-model-option .name { font-weight: 500; font-size: 14px; font-family: var(--font-serif); }
+#mode-chat .gbx-model-option .desc { font-size: 12.5px; color: var(--gbx-ink-dim); grid-column: 1; line-height: 1.5; }
 #mode-chat .gbx-model-option .meta {
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   color: var(--gbx-ink-faint);
   text-transform: uppercase;
   grid-row: 1 / 3;
@@ -129,32 +133,39 @@
   align-self: center;
   white-space: nowrap;
 }
-#mode-chat .gbx-model-option.selected .meta { color: var(--gbx-accent); }
+#mode-chat .gbx-model-option.selected .meta { color: var(--gbx-accent-text); }
 #mode-chat .gbx-load-btn {
-  background: var(--gbx-accent);
-  color: var(--gbx-bg);
-  border: none;
-  padding: 14px 24px;
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 12px;
+  background: var(--color-text-primary);
+  color: var(--color-background-primary);
+  border: 0.5px solid var(--color-text-primary);
+  border-radius: var(--border-radius-md);
+  padding: 10px 18px;
+  font-family: var(--font-mono);
+  font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.12s, color 0.12s, opacity 0.12s;
   align-self: start;
 }
-#mode-chat .gbx-load-btn:hover:not(:disabled) { background: #e5a05a; }
-#mode-chat .gbx-load-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-#mode-chat .gbx-progress-wrap { display: none; flex-direction: column; gap: 10px; }
+#mode-chat .gbx-load-btn:hover:not(:disabled) { background: #333029; }
+#mode-chat .gbx-load-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+#mode-chat .gbx-progress-wrap { display: none; flex-direction: column; gap: 8px; }
 #mode-chat .gbx-progress-wrap.active { display: flex; }
 #mode-chat .gbx-progress-text {
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--gbx-ink-dim);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
 }
-#mode-chat .gbx-progress-bar { height: 2px; background: var(--gbx-line); overflow: hidden; position: relative; }
+#mode-chat .gbx-progress-bar {
+  height: 2px;
+  background: var(--gbx-line);
+  overflow: hidden;
+  position: relative;
+  border-radius: 1px;
+}
 #mode-chat .gbx-progress-fill {
   position: absolute;
   top: 0; left: 0; bottom: 0;
@@ -164,17 +175,17 @@
 }
 #mode-chat .gbx-note {
   font-size: 12px;
-  color: var(--gbx-ink-faint);
-  line-height: 1.5;
+  color: var(--gbx-ink-dim);
+  line-height: 1.55;
   max-width: 540px;
   margin: 0;
 }
 #mode-chat .gbx-note code {
-  font-family: 'IBM Plex Mono', monospace;
-  background: var(--gbx-bg-panel);
+  font-family: var(--font-mono);
+  background: var(--gbx-bg-soft);
   padding: 1px 5px;
-  border-radius: 2px;
-  color: var(--gbx-ink-dim);
+  border-radius: var(--border-radius-sm);
+  color: var(--gbx-ink);
   font-size: 11px;
 }
 #mode-chat .gbx-chat-panel {
@@ -195,7 +206,7 @@
   scrollbar-color: var(--gbx-line-strong) transparent;
 }
 #mode-chat .gbx-messages::-webkit-scrollbar { width: 6px; }
-#mode-chat .gbx-messages::-webkit-scrollbar-thumb { background: var(--gbx-line-strong); }
+#mode-chat .gbx-messages::-webkit-scrollbar-thumb { background: var(--gbx-line-strong); border-radius: 3px; }
 #mode-chat .gbx-msg {
   display: flex;
   flex-direction: column;
@@ -205,25 +216,28 @@
 }
 @keyframes gbx-fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 #mode-chat .gbx-msg .role {
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--gbx-ink-faint);
 }
-#mode-chat .gbx-msg.user .role { color: var(--gbx-accent); }
+#mode-chat .gbx-msg.user .role { color: var(--gbx-accent-text); }
 #mode-chat .gbx-msg .content {
   white-space: pre-wrap;
   word-wrap: break-word;
-  font-size: 15px;
-  line-height: 1.6;
+  font-size: 14.5px;
+  line-height: 1.65;
+  font-family: var(--font-serif);
 }
 #mode-chat .gbx-msg.user .content {
   background: var(--gbx-user-bg);
   padding: 10px 14px;
   border-left: 2px solid var(--gbx-accent);
+  border-radius: 0 var(--border-radius-md) var(--border-radius-md) 0;
   align-self: flex-start;
   max-width: 90%;
+  color: var(--gbx-ink);
 }
 #mode-chat .gbx-msg.assistant .content { color: var(--gbx-ink); }
 #mode-chat .gbx-msg.assistant .content::after {
@@ -235,52 +249,57 @@
 #mode-chat .gbx-msg.assistant.streaming .content::after { opacity: 1; animation: gbx-blink 1s infinite; }
 @keyframes gbx-blink { 50% { opacity: 0; } }
 #mode-chat .gbx-composer {
-  border-top: 1px solid var(--gbx-line);
-  padding: 14px 0 20px;
+  border-top: 0.5px solid var(--gbx-line);
+  padding: 14px 0 16px;
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: flex-end;
 }
 #mode-chat .gbx-composer textarea {
   flex: 1;
-  background: var(--gbx-bg-panel);
-  border: 1px solid var(--gbx-line);
+  background: var(--gbx-bg);
+  border: 0.5px solid var(--gbx-line-strong);
+  border-radius: var(--border-radius-md);
   color: var(--gbx-ink);
-  padding: 12px 14px;
-  font-family: inherit;
-  font-size: 15px;
+  padding: 10px 12px;
+  font-family: var(--font-sans);
+  font-size: 14px;
   line-height: 1.5;
   resize: none;
-  min-height: 46px;
+  min-height: 42px;
   max-height: 200px;
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color 0.12s, box-shadow 0.12s;
 }
-#mode-chat .gbx-composer textarea:focus { border-color: var(--gbx-line-strong); }
+#mode-chat .gbx-composer textarea:focus {
+  border-color: var(--color-border-primary);
+  box-shadow: 0 0 0 2px rgba(26,25,21,0.04);
+}
 #mode-chat .gbx-composer textarea::placeholder { color: var(--gbx-ink-faint); }
 #mode-chat .gbx-send-btn {
-  background: var(--gbx-accent);
-  color: var(--gbx-bg);
-  border: 1px solid var(--gbx-accent);
+  background: var(--color-text-primary);
+  color: var(--color-background-primary);
+  border: 0.5px solid var(--color-text-primary);
+  border-radius: var(--border-radius-md);
   padding: 0 16px;
-  height: 46px;
-  font-family: 'IBM Plex Mono', monospace;
+  height: 42px;
+  font-family: var(--font-mono);
   font-size: 11px;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.12s, opacity 0.12s;
 }
-#mode-chat .gbx-send-btn:hover:not(:disabled) { background: #e5a05a; }
+#mode-chat .gbx-send-btn:hover:not(:disabled) { background: #333029; }
 #mode-chat .gbx-send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 #mode-chat .gbx-controls {
   display: flex;
   gap: 8px;
-  padding: 10px 0;
-  border-top: 1px solid var(--gbx-line);
-  font-family: 'IBM Plex Mono', monospace;
+  padding: 10px 0 16px;
+  border-top: 0.5px solid var(--gbx-line);
+  font-family: var(--font-mono);
   font-size: 10px;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--gbx-ink-faint);
   align-items: center;
@@ -298,12 +317,12 @@
   text-transform: inherit;
   cursor: pointer;
   padding: 4px 0;
-  transition: color 0.15s;
+  transition: color 0.12s;
 }
-#mode-chat .gbx-text-btn:hover { color: var(--gbx-accent); }
+#mode-chat .gbx-text-btn:hover { color: var(--gbx-accent-text); }
 /* ---------- Sources (chat-with-documents) panel ---------- */
 #mode-chat .gbx-sources {
-  border-bottom: 1px solid var(--gbx-line);
+  border-bottom: 0.5px solid var(--gbx-line);
   padding: 12px 0 14px;
   display: flex;
   flex-direction: column;
@@ -314,9 +333,9 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--gbx-ink-faint);
 }
@@ -332,38 +351,38 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 10px 5px 7px;
-  background: transparent;
-  border: 1px solid var(--gbx-line);
+  padding: 4px 10px 4px 6px;
+  background: var(--gbx-bg);
+  border: 0.5px solid var(--gbx-line);
+  border-radius: var(--border-radius-md);
   color: var(--gbx-ink-dim);
   font-family: inherit;
   font-size: 12px;
   line-height: 1.2;
   cursor: pointer;
-  transition: all 0.12s;
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
   max-width: 320px;
 }
 #mode-chat .gbx-src-chip:hover { border-color: var(--gbx-line-strong); color: var(--gbx-ink); }
 #mode-chat .gbx-src-chip.on {
-  border-color: var(--gbx-accent);
+  border-color: var(--color-border-primary);
   background: var(--gbx-accent-soft);
   color: var(--gbx-ink);
 }
-#mode-chat .gbx-src-chip.pending {
-  opacity: 0.55;
-}
+#mode-chat .gbx-src-chip.pending { opacity: 0.55; }
 #mode-chat .gbx-src-chip .chip-kind {
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 9px;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   color: var(--gbx-ink-faint);
-  background: var(--gbx-bg-panel);
+  background: var(--gbx-bg-soft);
   padding: 2px 5px;
-  border-radius: 2px;
+  border-radius: var(--border-radius-sm);
+  text-transform: uppercase;
 }
 #mode-chat .gbx-src-chip.on .chip-kind {
-  color: var(--gbx-accent);
-  background: rgba(217, 143, 63, 0.08);
+  color: var(--gbx-accent-text);
+  background: rgba(186, 117, 23, 0.12);
 }
 #mode-chat .gbx-src-chip .chip-name {
   overflow: hidden;
@@ -380,34 +399,35 @@
 /* ---------- Citations footer on assistant messages ---------- */
 #mode-chat .gbx-citations {
   margin-top: 10px;
-  padding: 8px 10px;
+  padding: 8px 12px;
   border-left: 2px solid var(--gbx-line-strong);
-  background: var(--gbx-bg-panel);
+  background: var(--gbx-bg-soft);
+  border-radius: 0 var(--border-radius-md) var(--border-radius-md) 0;
+  font-family: var(--font-sans);
   font-size: 12px;
-  line-height: 1.45;
+  line-height: 1.5;
   color: var(--gbx-ink-dim);
 }
 #mode-chat .gbx-citations-title {
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 9px;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--gbx-ink-faint);
   margin-bottom: 4px;
 }
 #mode-chat .gbx-cit-row { display: block; }
-#mode-chat .gbx-cit-row .cit-num { color: var(--gbx-accent); margin-right: 4px; }
+#mode-chat .gbx-cit-row .cit-num { color: var(--gbx-accent-text); margin-right: 4px; font-family: var(--font-mono); }
 #mode-chat .gbx-cit-row .cit-name { color: var(--gbx-ink); }
-#mode-chat .gbx-cit-row .cit-loc { color: var(--gbx-ink-faint); font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
-#mode-chat .gbx-cit-row .cit-score { color: var(--gbx-ink-faint); font-family: 'IBM Plex Mono', monospace; font-size: 10px; }
+#mode-chat .gbx-cit-row .cit-loc { color: var(--gbx-ink-faint); font-family: var(--font-mono); font-size: 11px; }
+#mode-chat .gbx-cit-row .cit-score { color: var(--gbx-ink-faint); font-family: var(--font-mono); font-size: 10px; }
 
 @media (max-width: 600px) {
-  #mode-chat .gbx { padding: 0 14px; }
+  #mode-chat .gbx { padding: 0 18px; }
   #mode-chat .gbx-header { padding: 16px 0 12px; }
-  #mode-chat .gbx-brand h1 { font-size: 24px; }
-  #mode-chat .gbx-intro { font-size: 18px; }
-  #mode-chat .gbx-setup { padding: 20px 0; gap: 20px; }
-  #mode-chat .gbx-model-option { padding: 14px; }
+  #mode-chat .gbx-brand h1 { font-size: 22px; }
+  #mode-chat .gbx-intro { font-size: 17px; }
+  #mode-chat .gbx-setup { padding: 20px 0; gap: 18px; }
+  #mode-chat .gbx-model-option { padding: 12px 14px; }
   #mode-chat .gbx-src-chip { max-width: 180px; }
 }
-
