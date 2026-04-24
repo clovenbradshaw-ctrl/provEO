@@ -1,0 +1,283 @@
+  padding: 4px 10px;
+  border-radius: var(--border-radius-md);
+  cursor: pointer;
+}
+.src-viewer-tuple-btn:disabled { opacity: 0.4; cursor: default; }
+.src-viewer-tuple-btn:not(:disabled):hover { background: var(--color-background-tertiary); }
+
+/* ---------- PDF VIEW (rendered original + audited extraction) ---------- */
+.src-viewer-body.is-pdf { width: min(1400px, 96vw); }
+.src-viewer-pdf-wrap {
+  flex: 1;
+  overflow: auto;
+  padding: 22px 24px;
+  background: var(--color-background-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.src-viewer-pdf-wrap[hidden] { display: none; }
+.pdf-page-card {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: 260px;
+  flex-shrink: 0;
+}
+.pdf-page-canvas-wrap {
+  background: #2a2a2a;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 16px;
+  overflow: auto;
+  border-right: 0.5px solid var(--color-border-tertiary);
+}
+.pdf-page-canvas-wrap canvas {
+  max-width: 100%;
+  height: auto;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+}
+.pdf-page-text-wrap {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.pdf-page-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--color-background-secondary);
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+.pdf-page-num { font-weight: 600; color: var(--color-text-primary); }
+.pdf-page-meta { color: var(--color-text-tertiary); margin-left: auto; }
+.pdf-page-text {
+  flex: 1;
+  overflow: auto;
+  padding: 14px 18px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  color: var(--color-text-primary);
+}
+.pdf-page-text.is-empty {
+  color: var(--color-text-tertiary);
+  font-style: italic;
+}
+.method-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.method-badge.method-native { background: var(--teal-fill); color: var(--teal-text); }
+.method-badge.method-ocr    { background: var(--amber-fill); color: var(--amber-text); }
+.method-badge.method-failed { background: var(--blue-fill); color: var(--red-mid); }
+/* Per-page OCR acknowledgement banner shown inside the text column on
+   pages whose text came from OCR rather than the PDF's text layer.
+   The method pill in the page head already labels it, but the banner
+   makes the provenance unmissable when a reader is scanning text. */
+.pdf-ocr-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 14px;
+  background: var(--amber-fill);
+  color: var(--amber-text);
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+.pdf-ocr-notice b { font-weight: 700; }
+.pdf-ocr-notice .pdf-ocr-notice-icon { flex: 0 0 auto; }
+.pdf-ocr-notice.is-failed {
+  background: var(--blue-fill);
+  color: var(--red-mid);
+}
+/* Document-level OCR banner at the top of a PDF whose text was
+   produced (even in part) by OCR. Sits above the per-page summary and
+   flags the provenance caveat once for the whole document. */
+.pdf-ocr-doc-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--amber-fill);
+  color: var(--amber-text);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  flex-shrink: 0;
+}
+.pdf-ocr-doc-banner b { font-weight: 700; }
+.pdf-doc-summary {
+  padding: 14px 18px;
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.pdf-doc-summary b { color: var(--color-text-primary); font-weight: 600; }
+.pdf-doc-summary .audit-link {
+  margin-left: auto;
+  color: var(--teal-text);
+  cursor: pointer;
+  text-decoration: underline;
+  background: none;
+  border: 0;
+  font: inherit;
+  padding: 0;
+}
+.pdf-audit-json {
+  margin: 0;
+  padding: 16px 20px;
+  height: 320px;
+  max-height: 50vh;
+  overflow: auto;
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--color-text-primary);
+  white-space: pre;
+  flex-shrink: 0;
+}
+
+/* ---------- PDF VIEW TOGGLE (Visual / Split / Text) ---------- */
+.pdf-view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  overflow: hidden;
+  margin-left: auto;
+}
+.pdf-view-toggle-btn {
+  appearance: none;
+  background: var(--color-background-primary);
+  color: var(--color-text-secondary);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  padding: 5px 12px;
+  border: 0;
+  border-right: 0.5px solid var(--color-border-tertiary);
+  cursor: pointer;
+  letter-spacing: 0.02em;
+}
+.pdf-view-toggle-btn:last-child { border-right: 0; }
+.pdf-view-toggle-btn:hover { background: var(--color-background-tertiary); }
+.pdf-view-toggle-btn.is-active {
+  background: var(--teal-fill);
+  color: var(--teal-text);
+  font-weight: 600;
+}
+.src-viewer-pdf-wrap.view-visual .pdf-page-card { grid-template-columns: minmax(0, 1fr); }
+.src-viewer-pdf-wrap.view-visual .pdf-page-text-wrap { display: none; }
+.src-viewer-pdf-wrap.view-visual .pdf-page-canvas-wrap { border-right: 0; }
+.src-viewer-pdf-wrap.view-text   .pdf-page-card { grid-template-columns: minmax(0, 1fr); }
+.src-viewer-pdf-wrap.view-text   .pdf-page-canvas-wrap { display: none; }
+
+/* Line-numbered text column inside a PDF page card. Gives the text side
+   the same gutter UX as plain-text sources so regions and lines can be
+   cited by number. */
+.pdf-page-text.is-lined {
+  padding: 14px 0 14px 0;
+  counter-reset: pdfln;
+}
+.pdf-page-text.is-lined .pdf-txt-line {
+  display: block;
+  padding: 0 18px 0 56px;
+  position: relative;
+  white-space: pre-wrap;
+  min-height: 1.6em;
+}
+.pdf-page-text.is-lined .pdf-txt-line::before {
+  counter-increment: pdfln;
+  content: counter(pdfln);
+  position: absolute;
+  left: 0;
+  width: 44px;
+  text-align: right;
+  color: var(--color-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  user-select: none;
+  padding-right: 10px;
+  border-right: 0.5px solid var(--color-border-tertiary);
+}
+
+/* ---------- PDF REGION SELECTION (visual citing) ---------- */
+.pdf-page-canvas-wrap { position: relative; }
+.pdf-page-canvas-wrap canvas { cursor: crosshair; }
+.pdf-region-box {
+  position: absolute;
+  border: 1.5px dashed var(--amber-text);
+  background: rgba(240, 180, 60, 0.18);
+  pointer-events: none;
+  z-index: 2;
+  border-radius: 2px;
+}
+.pdf-region-box.is-picked {
+  border-style: solid;
+  background: rgba(240, 180, 60, 0.22);
+  box-shadow: 0 0 0 2px rgba(240, 180, 60, 0.35);
+}
+.pdf-region-hint {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 3px 8px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  border-radius: 3px;
+  pointer-events: none;
+  z-index: 3;
+  opacity: 0.35;
+  transition: opacity 0.15s;
+}
+.pdf-page-canvas-wrap:hover .pdf-region-hint { opacity: 0.9; }
+
+/* Region thumbnail shown in clipboard items and in-article citation
+   chips so the reader can see what visual area was cited. */
+.clip-item-thumb {
+  display: block;
+  max-width: 260px;
+  max-height: 180px;
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 3px;
+  background: #fff;
+  padding: 2px;
+  align-self: start;
+}

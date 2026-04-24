@@ -1,0 +1,29 @@
+/* ---------- STATUS BAR ---------- */
+.statusbar {
+  height: 34px;
+  border-top: 0.5px solid var(--color-border-tertiary);
+  padding: 0 44px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-shrink: 0;
+  background: var(--color-background-secondary);
+}
+.sstat {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+}
+.sstat-n {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.sstat-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+

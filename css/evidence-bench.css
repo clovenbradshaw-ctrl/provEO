@@ -1,0 +1,92 @@
+/* ---------- EVIDENCE BENCH ---------- */
+.evidence-bench {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 0.5px dashed var(--color-border-secondary);
+  border-radius: var(--border-radius-md);
+  margin-bottom: 14px;
+  background: var(--color-background-secondary);
+  flex-wrap: wrap;
+}
+.evidence-bench[hidden] { display: none; }
+.evidence-bench .bench-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+.bench-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+.bench-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 4px 10px;
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  cursor: grab;
+  max-width: 260px;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.bench-chip:hover { border-color: var(--color-text-primary); }
+.bench-chip.dragging { opacity: 0.5; }
+.bench-chip-src {
+  font-weight: 600;
+  color: var(--color-text-primary);
+  flex-shrink: 0;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bench-chip-text {
+  color: var(--color-text-secondary);
+  font-family: var(--font-serif);
+  font-size: 11.5px;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bench-chip-del {
+  background: transparent;
+  border: 0;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  padding: 0 4px;
+  font-size: 14px;
+  line-height: 1;
+}
+.bench-chip-del:hover { color: var(--red-text); }
+
+/* Source viewer header actions + highlight-mode toggle */
+.src-viewer-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+#src-viewer-hl-toggle {
+  font-size: 10.5px;
+  padding: 3px 8px;
+}
+#src-viewer-hl-toggle.active {
+  background: var(--amber-fill);
+  color: var(--amber-text);
+  border-color: var(--amber-mid);
+}
+.src-viewer-body.is-highlight-mode #src-viewer-text {
+  cursor: text;
+  background: color-mix(in srgb, var(--amber-fill) 30%, var(--color-background-primary));
+}
+

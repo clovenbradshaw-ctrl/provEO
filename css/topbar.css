@@ -1,0 +1,89 @@
+/* ---------- TOPBAR ---------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  height: 46px;
+  flex-shrink: 0;
+}
+.appname {
+  font-family: var(--font-serif);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  margin-right: 24px;
+}
+.appname .dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-text-primary);
+  margin-right: 7px;
+  vertical-align: 2px;
+}
+.modetabs { display: flex; gap: 2px; }
+.mtab {
+  padding: 6px 14px;
+  border-radius: var(--border-radius-md);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  transition: background 0.12s, color 0.12s;
+}
+.mtab:hover { color: var(--color-text-primary); }
+.mtab.active {
+  background: var(--color-background-secondary);
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+.topright {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.srcbadge {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Pulse the thing we scrolled to in the source viewer — used by
+   .source-chip → showSourceViewer({scrollTo}). */
+.pulse-target { animation: pulse-target 1.4s ease-out 1; }
+@keyframes pulse-target {
+  0%   { box-shadow: 0 0 0 0 var(--amber-mid); background-color: var(--amber-fill); }
+  60%  { box-shadow: 0 0 0 10px rgba(199, 141, 44, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(199, 141, 44, 0); }
+}
+.src-viewer-hit {
+  background: var(--amber-fill);
+  color: var(--amber-text);
+  padding: 1px 2px;
+  border-radius: 2px;
+  box-shadow: inset 0 -2px 0 var(--amber-mid);
+}
+.srcbadge .statdot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.statdot-green { background: var(--teal-mid); }
+.statdot-amber {
+  background: var(--amber-mid);
+  animation: pulse 1.8s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+

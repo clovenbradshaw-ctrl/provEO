@@ -1,0 +1,179 @@
+/* ---------- WORKSPACE BUTTON + MODAL ---------- */
+.ws-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--color-background-secondary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  padding: 4px 9px 4px 8px;
+  cursor: pointer;
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  color: var(--color-text-primary);
+  transition: border-color 0.12s, background 0.12s;
+}
+.ws-btn:hover { border-color: var(--color-text-primary); }
+.ws-caret { font-size: 9px; opacity: 0.6; }
+.ws-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+.ws-dot.connected { background: var(--teal-mid); }
+.ws-dot.error { background: var(--red-mid); }
+
+.ws-modal-body {
+  position: relative;
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-lg);
+  width: min(640px, 92vw);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 12px 48px rgba(26,25,21,0.22);
+  overflow: hidden;
+}
+.ws-section {
+  padding: 16px 20px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+}
+.ws-section:last-child { border-bottom: 0; }
+.ws-section-title {
+  font-family: var(--font-serif);
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+.ws-section-sub {
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+  margin-bottom: 12px;
+  line-height: 1.45;
+}
+.ws-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.ws-form-row label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+.ws-input {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 7px 10px;
+  border: 0.5px solid var(--color-border-secondary);
+  border-radius: var(--border-radius-md);
+  background: var(--color-background-primary);
+  color: var(--color-text-primary);
+  outline: none;
+}
+.ws-input:focus { border-color: var(--color-text-primary); }
+.ws-btn-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  align-items: center;
+}
+.ws-err {
+  color: var(--red-text);
+  background: var(--red-fill);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: var(--border-radius-md);
+  margin-top: 8px;
+}
+.ws-room-list { max-height: 220px; overflow-y: auto; }
+.ws-room-item {
+  padding: 8px 10px;
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  margin-bottom: 4px;
+  cursor: pointer;
+  background: var(--color-background-primary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.ws-room-item:hover { border-color: var(--color-text-primary); }
+.ws-room-item.active { border-color: var(--color-text-primary); background: var(--amber-fill); }
+.ws-room-name { font-family: var(--font-serif); font-size: 13px; }
+.ws-room-meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--color-text-secondary); }
+.ws-member-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ws-member-chip {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--color-background-secondary);
+  border: 0.5px solid var(--color-border-tertiary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.ws-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.ws-toggle input { margin: 0; }
+.ws-invite-row {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+.ws-invite-row .ws-input { flex: 1; }
+.ws-invite-link-row {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+  margin-top: 8px;
+}
+.ws-invite-link-row .ws-input {
+  flex: 1;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+.ws-invite-help {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 0.5px dashed var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  background: var(--color-background-secondary);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+.ws-invite-help ol {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.ws-invite-help li { margin-bottom: 3px; }
+.ws-invite-help code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--color-background-primary);
+  padding: 1px 4px;
+  border-radius: 3px;
+  border: 0.5px solid var(--color-border-tertiary);
+}
+.ws-invite-pending {
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.ws-invite-pending .pending-mxid { color: var(--color-text-primary); }
+.ws-invite-pending .pending-state { color: var(--color-text-secondary); margin-left: 6px; }
+
