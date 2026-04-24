@@ -301,6 +301,106 @@
   transition: color 0.15s;
 }
 #mode-chat .gbx-text-btn:hover { color: var(--gbx-accent); }
+/* ---------- Sources (chat-with-documents) panel ---------- */
+#mode-chat .gbx-sources {
+  border-bottom: 1px solid var(--gbx-line);
+  padding: 12px 0 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+#mode-chat .gbx-sources[hidden] { display: none; }
+#mode-chat .gbx-sources-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gbx-ink-faint);
+}
+#mode-chat .gbx-sources-title { color: var(--gbx-ink-dim); }
+#mode-chat .gbx-sources-count { color: var(--gbx-ink-faint); margin-left: auto; }
+#mode-chat .gbx-sources-actions { display: flex; gap: 8px; }
+#mode-chat .gbx-sources-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+#mode-chat .gbx-src-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 5px 7px;
+  background: transparent;
+  border: 1px solid var(--gbx-line);
+  color: var(--gbx-ink-dim);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: all 0.12s;
+  max-width: 320px;
+}
+#mode-chat .gbx-src-chip:hover { border-color: var(--gbx-line-strong); color: var(--gbx-ink); }
+#mode-chat .gbx-src-chip.on {
+  border-color: var(--gbx-accent);
+  background: var(--gbx-accent-soft);
+  color: var(--gbx-ink);
+}
+#mode-chat .gbx-src-chip.pending {
+  opacity: 0.55;
+}
+#mode-chat .gbx-src-chip .chip-kind {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--gbx-ink-faint);
+  background: var(--gbx-bg-panel);
+  padding: 2px 5px;
+  border-radius: 2px;
+}
+#mode-chat .gbx-src-chip.on .chip-kind {
+  color: var(--gbx-accent);
+  background: rgba(217, 143, 63, 0.08);
+}
+#mode-chat .gbx-src-chip .chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#mode-chat .gbx-sources-hint {
+  font-size: 11px;
+  color: var(--gbx-ink-faint);
+  font-style: italic;
+}
+#mode-chat .gbx-sources-hint[hidden] { display: none; }
+
+/* ---------- Citations footer on assistant messages ---------- */
+#mode-chat .gbx-citations {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--gbx-line-strong);
+  background: var(--gbx-bg-panel);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--gbx-ink-dim);
+}
+#mode-chat .gbx-citations-title {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gbx-ink-faint);
+  margin-bottom: 4px;
+}
+#mode-chat .gbx-cit-row { display: block; }
+#mode-chat .gbx-cit-row .cit-num { color: var(--gbx-accent); margin-right: 4px; }
+#mode-chat .gbx-cit-row .cit-name { color: var(--gbx-ink); }
+#mode-chat .gbx-cit-row .cit-loc { color: var(--gbx-ink-faint); font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
+#mode-chat .gbx-cit-row .cit-score { color: var(--gbx-ink-faint); font-family: 'IBM Plex Mono', monospace; font-size: 10px; }
+
 @media (max-width: 600px) {
   #mode-chat .gbx { padding: 0 14px; }
   #mode-chat .gbx-header { padding: 16px 0 12px; }
@@ -308,5 +408,6 @@
   #mode-chat .gbx-intro { font-size: 18px; }
   #mode-chat .gbx-setup { padding: 20px 0; gap: 20px; }
   #mode-chat .gbx-model-option { padding: 14px; }
+  #mode-chat .gbx-src-chip { max-width: 180px; }
 }
 

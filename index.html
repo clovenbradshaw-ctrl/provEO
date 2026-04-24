@@ -267,6 +267,19 @@
           </p>
         </section>
         <section class="gbx-chat-panel" id="gbx-chat">
+          <div class="gbx-sources" id="gbx-sources" hidden>
+            <div class="gbx-sources-head">
+              <span class="gbx-sources-title">Chat sources</span>
+              <span class="gbx-sources-count" id="gbx-sources-count">0 on</span>
+              <div class="gbx-sources-actions">
+                <button class="gbx-text-btn" id="gbx-sources-all" type="button">All</button>
+                <button class="gbx-text-btn" id="gbx-sources-none" type="button">None</button>
+                <button class="gbx-text-btn" id="gbx-sources-refresh" type="button" title="Rescan loaded sources">↺</button>
+              </div>
+            </div>
+            <div class="gbx-sources-list" id="gbx-sources-list"></div>
+            <div class="gbx-sources-hint" id="gbx-sources-hint" hidden></div>
+          </div>
           <div class="gbx-messages" id="gbx-messages"></div>
           <div class="gbx-composer">
             <textarea id="gbx-input" placeholder="Send a message…" rows="1"></textarea>
@@ -23324,6 +23337,63 @@ async function init() {
   };
 }
 
+/* ---------- RAG bridge for #mode-chat (Groundbox module) ----------
+   The Groundbox chat lives in a separate <script type="module"> block,
+   so it can't see the const-scoped tables defined here. Expose a small
+   surface on window so the module can list sources, honour the per-chat
+   include toggle (same CHAT_SOURCE_INCLUDE store as the old Claude
+   panel), and run semantic retrieval over MiniLM segment embeddings. */
+window.docChatRag = {
+  listSources() {
+    try {
+      return allSources().map(s => {
+        const segs = SOURCE_SEGMENTS[s.id] || [];
+        let embedded = 0;
+        for (const seg of segs) {
+          if (seg.kind === 'source') continue;
+          if (SEG_EMBEDDINGS[seg.id]) embedded++;
+        }
+        return {
+          id: s.id,
+          name: s.name,
+          kind: s.kind,
+          included: isSourceIncluded(s.id),
+          embeddedSegments: embedded,
+          totalSegments: segs.length,
+          ready: embedded > 0
+        };
+      });
+    } catch (err) {
+      console.warn('[docChatRag.listSources]', err);
+      return [];
+    }
+  },
+  isIncluded(id) {
+    try { return isSourceIncluded(id); } catch { return true; }
+  },
+  setIncluded(id, on) {
+    try {
+      if (on) delete CHAT_SOURCE_INCLUDE[id];
+      else CHAT_SOURCE_INCLUDE[id] = false;
+      saveChatSourceInclude();
+      return true;
+    } catch (err) {
+      console.warn('[docChatRag.setIncluded]', err);
+      return false;
+    }
+  },
+  async search(query, opts = {}) {
+    const args = { query: String(query || '') };
+    if (Number.isFinite(opts.k)) args.k = opts.k;
+    if (Array.isArray(opts.sourceIds) && opts.sourceIds.length) args.sourceIds = opts.sourceIds;
+    try { return await executeSearchSegments(args); }
+    catch (err) {
+      console.warn('[docChatRag.search]', err);
+      return { error: String(err && err.message || err), hits: [], total: 0 };
+    }
+  }
+};
+
 init().catch(err => {
   console.error('boot failed:', err);
   setBootStatus('boot failed — see console', 'var(--red-mid)');
@@ -23352,6 +23422,7 @@ let selectedModel = null;
 let engine = null;
 let messages = [];
 let isGenerating = false;
+let lastAutoRefreshAt = 0;
 
 const $g = (id) => document.getElementById(id);
 const modelsEl     = $g('gbx-models');
@@ -23371,6 +23442,151 @@ const unloadBtn    = $g('gbx-unload-btn');
 const currentModelEl = $g('gbx-current-model');
 const statEl       = $g('gbx-stat');
 const compatNote   = $g('gbx-compat-note');
+const sourcesEl       = $g('gbx-sources');
+const sourcesListEl   = $g('gbx-sources-list');
+const sourcesCountEl  = $g('gbx-sources-count');
+const sourcesHintEl   = $g('gbx-sources-hint');
+const sourcesAllBtn   = $g('gbx-sources-all');
+const sourcesNoneBtn  = $g('gbx-sources-none');
+const sourcesRefreshBtn = $g('gbx-sources-refresh');
+
+/* ---------- document chat (RAG) ----------
+   Bridges to window.docChatRag (exposed from the main script). When
+   sources are loaded and embedded, each user turn does a k-NN search
+   over the toggled-on sources and injects the top hits as a per-turn
+   system message. Retrieval is best-effort: if the bridge is missing,
+   embeddings aren't ready, or no sources are on, the chat still runs. */
+const RAG = {
+  k: 6,
+  charCap: 6000,
+  lastHits: []
+};
+
+function escapeHtmlLocal(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function ragBridge() { return (window && window.docChatRag) || null; }
+
+function refreshSourcesPanel() {
+  if (!sourcesListEl || !sourcesCountEl) return;
+  const bridge = ragBridge();
+  if (!bridge) {
+    sourcesEl.hidden = true;
+    return;
+  }
+  const sources = bridge.listSources();
+  sourcesEl.hidden = false;
+  if (!sources.length) {
+    sourcesListEl.innerHTML = '';
+    sourcesCountEl.textContent = 'none loaded';
+    sourcesHintEl.hidden = false;
+    sourcesHintEl.textContent = 'No sources yet. Upload files in the Sources rail to chat with documents.';
+    return;
+  }
+  const onCount = sources.filter(s => s.included && s.ready).length;
+  const loadedCount = sources.filter(s => s.ready).length;
+  sourcesCountEl.textContent = `${onCount} on · ${sources.length} loaded`;
+
+  sourcesListEl.innerHTML = sources.map(s => {
+    const cls = ['gbx-src-chip'];
+    if (s.included) cls.push('on');
+    if (!s.ready) cls.push('pending');
+    const kind = (s.kind || 'doc').toUpperCase();
+    const status = s.ready ? '' : ' · indexing…';
+    return `<button class="${cls.join(' ')}" type="button"
+      data-src-id="${escapeHtmlLocal(s.id)}"
+      aria-pressed="${s.included ? 'true' : 'false'}"
+      title="${escapeHtmlLocal(s.name)} (${s.embeddedSegments} embedded segments)${status ? ' — embeddings pending' : ''}">
+      <span class="chip-kind">${escapeHtmlLocal(kind)}</span>
+      <span class="chip-name">${escapeHtmlLocal(s.name)}</span>
+    </button>`;
+  }).join('');
+
+  let hint = '';
+  if (!loadedCount) hint = 'Sources are still indexing. They\'ll become searchable once MiniLM finishes embedding them.';
+  else if (!onCount) hint = 'All sources are off — the assistant will answer without document grounding.';
+  sourcesHintEl.hidden = !hint;
+  sourcesHintEl.textContent = hint;
+
+  sourcesListEl.querySelectorAll('[data-src-id]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-src-id');
+      const nowOn = !(btn.getAttribute('aria-pressed') === 'true');
+      bridge.setIncluded(id, nowOn);
+      refreshSourcesPanel();
+    });
+  });
+}
+
+if (sourcesAllBtn) sourcesAllBtn.addEventListener('click', () => {
+  const bridge = ragBridge();
+  if (!bridge) return;
+  for (const s of bridge.listSources()) bridge.setIncluded(s.id, true);
+  refreshSourcesPanel();
+});
+if (sourcesNoneBtn) sourcesNoneBtn.addEventListener('click', () => {
+  const bridge = ragBridge();
+  if (!bridge) return;
+  for (const s of bridge.listSources()) bridge.setIncluded(s.id, false);
+  refreshSourcesPanel();
+});
+if (sourcesRefreshBtn) sourcesRefreshBtn.addEventListener('click', () => refreshSourcesPanel());
+
+async function retrieveContextFor(query) {
+  const bridge = ragBridge();
+  if (!bridge) return { hits: [], systemMsg: null, meta: null };
+  const sources = bridge.listSources();
+  const on = sources.filter(s => s.included && s.ready).map(s => s.id);
+  if (!on.length) return { hits: [], systemMsg: null, meta: null };
+  const res = await bridge.search(query, { k: RAG.k, sourceIds: on });
+  if (res && res.error) {
+    return { hits: [], systemMsg: null, meta: { error: res.error } };
+  }
+  const hits = (res && Array.isArray(res.hits)) ? res.hits : [];
+  if (!hits.length) return { hits: [], systemMsg: null, meta: null };
+
+  // Assemble numbered excerpts, respecting a rough char cap.
+  const parts = [];
+  let budget = RAG.charCap;
+  for (let i = 0; i < hits.length; i++) {
+    const h = hits[i];
+    let text = String(h.text || '').trim();
+    if (!text) continue;
+    if (text.length > 1200) text = text.slice(0, 1200) + '…';
+    if (text.length > budget) text = text.slice(0, Math.max(100, budget)) + '…';
+    const loc = h.loc ? ` ${h.loc}` : '';
+    const name = h.sourceName || h.sourceId || 'source';
+    parts.push(`[${i + 1}] ${name}${loc}\n${text}`);
+    budget -= text.length + 40;
+    if (budget <= 0) break;
+  }
+  if (!parts.length) return { hits, systemMsg: null, meta: null };
+
+  const systemMsg = [
+    'You are answering questions about the user\'s local documents.',
+    'Use ONLY the excerpts below to answer. If the answer is not in the excerpts, say you cannot find it in the loaded documents.',
+    'Cite excerpts inline as [1], [2], etc. Keep answers concise and specific.',
+    '',
+    '=== EXCERPTS ===',
+    parts.join('\n\n---\n\n')
+  ].join('\n');
+
+  return { hits, systemMsg, meta: { used: parts.length, pool: res.total || 0 } };
+}
+
+function renderCitationsFooter(hits) {
+  if (!hits || !hits.length) return '';
+  const rows = hits.map((h, i) => {
+    const loc = h.loc ? `<span class="cit-loc">${escapeHtmlLocal(h.loc)}</span>` : '';
+    const name = escapeHtmlLocal(h.sourceName || h.sourceId || 'source');
+    const score = (typeof h.score === 'number') ? ` · <span class="cit-score">${h.score.toFixed(2)}</span>` : '';
+    return `<div class="gbx-cit-row"><span class="cit-num">[${i + 1}]</span> <span class="cit-name">${name}</span> ${loc}${score}</div>`;
+  }).join('');
+  return `<div class="gbx-citations"><div class="gbx-citations-title">Context used</div>${rows}</div>`;
+}
 
 if (!navigator.gpu && compatNote) {
   compatNote.innerHTML = '<strong style="color: var(--gbx-danger);">WebGPU is not available in this browser.</strong> You need Chrome/Edge 113+ on desktop, Chrome 121+ on Android, or Safari 18+ on iOS/macOS. On iPhone, make sure iOS is at least 18 and WebGPU is enabled in Safari\'s advanced settings.';
@@ -23429,6 +23645,7 @@ loadBtn.addEventListener('click', async () => {
     setTimeout(() => {
       setupEl.style.display = 'none';
       chatEl.classList.add('active');
+      refreshSourcesPanel();
       inputEl.focus();
     }, 400);
   } catch (err) {
@@ -23439,6 +23656,20 @@ loadBtn.addEventListener('click', async () => {
     progressText.querySelector('span').textContent = `Error: ${err.message || err}`;
     loadBtn.disabled = false;
   }
+});
+
+// Re-render the source list when the user switches into the Chat mode,
+// since sources can be added/removed while other modes are active.
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest && e.target.closest('[data-mode="chat"], [data-mode-btn="chat"], [data-nav="chat"]');
+  if (btn) setTimeout(refreshSourcesPanel, 40);
+});
+// Also refresh on focus — cheap, covers most cases.
+window.addEventListener('focus', () => {
+  const now = Date.now();
+  if (now - lastAutoRefreshAt < 1000) return;
+  lastAutoRefreshAt = now;
+  if (chatEl && chatEl.classList.contains('active')) refreshSourcesPanel();
 });
 
 async function sendMessage() {
@@ -23452,17 +23683,34 @@ async function sendMessage() {
   inputEl.style.height = 'auto';
   isGenerating = true;
   sendBtn.disabled = true;
-  statEl.textContent = 'thinking…';
+  statEl.textContent = 'retrieving…';
+
+  // Retrieve context before streaming. Runs against toggled-on
+  // sources only; per-turn only (not stored in message history).
+  let retrieval = { hits: [], systemMsg: null, meta: null };
+  try { retrieval = await retrieveContextFor(text); }
+  catch (err) { console.warn('[retrieval] failed', err); }
+  RAG.lastHits = retrieval.hits || [];
 
   const assistantEl = renderMessage('assistant', '', true);
   const contentEl = assistantEl.querySelector('.content');
   let fullReply = '';
   let tokenCount = 0;
   const startTime = performance.now();
+  statEl.textContent = retrieval.hits.length
+    ? `thinking · ${retrieval.hits.length} snippet${retrieval.hits.length === 1 ? '' : 's'}`
+    : 'thinking…';
+
+  // Build the per-turn request messages. The retrieval system prompt
+  // is prepended per-turn and is NOT stored in `messages`, so each
+  // turn sees fresh excerpts without accumulating context rot.
+  const requestMessages = [];
+  if (retrieval.systemMsg) requestMessages.push({ role: 'system', content: retrieval.systemMsg });
+  for (const m of messages) requestMessages.push(m);
 
   try {
     const stream = await engine.chat.completions.create({
-      messages: messages,
+      messages: requestMessages,
       stream: true,
       temperature: 0.7,
     });
@@ -23480,6 +23728,13 @@ async function sendMessage() {
     const elapsed = (performance.now() - startTime) / 1000;
     const tps = (tokenCount / elapsed).toFixed(1);
     statEl.textContent = `${tps} tok/s`;
+
+    if (retrieval.hits && retrieval.hits.length) {
+      const footer = document.createElement('div');
+      footer.innerHTML = renderCitationsFooter(retrieval.hits);
+      const cit = footer.firstElementChild;
+      if (cit) assistantEl.appendChild(cit);
+    }
 
     messages.push({ role: 'assistant', content: fullReply });
     assistantEl.classList.remove('streaming');
@@ -23551,6 +23806,11 @@ unloadBtn.addEventListener('click', async () => {
   progressFill.style.width = '0%';
   loadBtn.disabled = !selectedModel;
 });
+
+// Initial paint: if the bridge is already available when this module
+// runs (it will be — the main script executes first), populate the
+// source list so the user sees it even before loading a model.
+refreshSourcesPanel();
 </script>
 </body>
 </html>
