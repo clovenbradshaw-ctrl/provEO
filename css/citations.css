@@ -1,0 +1,124 @@
+/* ---------- WIKIPEDIA-STYLE CITATIONS — badges + footnotes ----------
+   The existing .g/.conflict/.absent spans already track cited prose
+   (position moves with edits via contenteditable's native span handling).
+   This layer adds a numbered superscript badge after each cited span and
+   renders a footnotes section beneath the body. Badges + footnotes are
+   generated every render pass from CITATIONS and stripped before save —
+   the source of truth is (spans in body) + (registry in storage). */
+.cite-badge {
+  font-size: 0.7em;
+  line-height: 1;
+  vertical-align: super;
+  -webkit-user-select: none;
+  user-select: none;
+  margin-left: 1px;
+}
+.cite-badge a {
+  color: var(--blue-text);
+  text-decoration: none;
+  padding: 0 2px;
+  border-radius: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.cite-badge a:hover { background: var(--amber-fill); }
+.g.cite-flash,
+.conflict.cite-flash,
+.absent.cite-flash {
+  animation: cite-flash 1.1s ease-out;
+}
+@keyframes cite-flash {
+  0%   { background: var(--amber-fill); box-shadow: 0 0 0 3px var(--amber-fill); }
+  100% { background: transparent;       box-shadow: 0 0 0 0 transparent; }
+}
+.footnotes {
+  margin: 48px 0 24px;
+  padding-top: 18px;
+  border-top: 0.5px solid var(--color-border-tertiary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+.footnotes[hidden] { display: none; }
+.footnotes h2 {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.footnotes-list {
+  list-style: none;
+  counter-reset: fn;
+  padding: 0;
+  margin: 0;
+}
+.footnotes-list li {
+  counter-increment: fn;
+  padding: 6px 0 6px 30px;
+  position: relative;
+  line-height: 1.55;
+}
+.footnotes-list li::before {
+  content: counter(fn) ".";
+  position: absolute;
+  left: 0;
+  width: 24px;
+  text-align: right;
+  color: var(--color-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.fn-back {
+  color: var(--blue-text);
+  text-decoration: none;
+  padding: 0 2px;
+  margin-right: 4px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+.fn-back + .fn-back { margin-left: -2px; }
+.fn-back:hover { background: var(--amber-fill); }
+.fn-claim {
+  color: var(--color-text-primary);
+  cursor: pointer;
+  padding: 0 1px;
+  border-radius: 2px;
+}
+.fn-claim:hover { background: var(--amber-fill); }
+.fn-sep { margin: 0 6px; color: var(--color-text-tertiary); }
+.fn-source a {
+  color: var(--blue-text);
+  text-decoration: none;
+  cursor: pointer;
+}
+.fn-source a:hover { text-decoration: underline; }
+.fn-loc {
+  color: var(--color-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  margin-left: 6px;
+}
+.fn-meta {
+  margin-left: 8px;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  font-family: var(--font-mono);
+}
+.footnotes-list li.orphaned {
+  padding-left: 38px;
+}
+.footnotes-list li.orphaned::after {
+  content: "orphan";
+  margin-left: 8px;
+  font-size: 10px;
+  color: var(--red-mid);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-family: var(--font-mono);
+}
+.footnotes-list li.orphaned .fn-claim {
+  color: var(--color-text-tertiary);
+  text-decoration: line-through;
+}
+

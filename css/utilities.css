@@ -1,0 +1,12 @@
+/* --- utilities --- */
+.cursor {
+  display: inline-block;
+  width: 2px;
+  height: 15px;
+  background: var(--color-text-primary);
+  vertical-align: text-bottom;
+  animation: blink 1.1s step-end infinite;
+  margin-left: 1px;
+}
+@keyframes blink { 50% { opacity: 0; } }
+

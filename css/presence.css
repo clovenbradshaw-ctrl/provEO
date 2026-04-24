@@ -1,0 +1,104 @@
+/* ---------- PRESENCE ---------- */
+.presence-bar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 0;
+  margin-left: 8px;
+}
+.presence-bar:empty { display: none; }
+.pchip {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--color-border-secondary);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-transform: uppercase;
+  border: 1.5px solid transparent;
+  position: relative;
+  transition: border-color 0.2s;
+}
+.pchip.editing { border-color: currentColor; }
+.pchip.editing::after {
+  content: '';
+  position: absolute;
+  bottom: -2px; right: -2px;
+  width: 7px; height: 7px;
+  background: var(--teal-mid, #3a9d8a);
+  border: 1.5px solid var(--color-bg, #fafaf7);
+  border-radius: 50%;
+}
+
+/* ---------- REMOTE CURSORS ---------- */
+.remote-cursor {
+  position: absolute;
+  width: 2px;
+  pointer-events: none;
+  z-index: 5;
+  transition: top 0.12s, left 0.12s, height 0.12s;
+}
+.remote-cursor .rc-flag {
+  position: absolute;
+  top: -15px;
+  left: -1px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  color: #fff;
+  padding: 1px 5px;
+  border-radius: 3px 3px 3px 0;
+  white-space: nowrap;
+  line-height: 1.3;
+  letter-spacing: 0.03em;
+}
+
+/* Claim annotations */
+.g, .conflict, .absent {
+  cursor: pointer;
+  position: relative;
+  transition: background 0.1s;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+.g {
+  border-bottom: 2px solid var(--amber-mid);
+}
+.g:hover, .g.active {
+  background: var(--amber-fill);
+}
+/* Pasted-with-provenance spans read as plain text. The chain is still
+   attached (data-proveo-provenance + data-id), the click handler still
+   opens the inspector, and the entry shows up in the activity log — but
+   the body copy is not decorated. Hover reveals a subtle cue so users
+   who mouse over it still discover the affordance. */
+.g.g-paste {
+  border-bottom: 0;
+  padding: 0;
+}
+.g.g-paste:hover {
+  background: var(--amber-fill);
+  box-shadow: inset 0 -1px 0 var(--amber-mid);
+}
+.g.g-paste.active {
+  background: var(--amber-fill);
+  box-shadow: inset 0 -2px 0 var(--amber-mid);
+}
+.conflict {
+  border-bottom: 2px dashed var(--red-mid);
+}
+.conflict:hover, .conflict.active {
+  background: var(--red-fill);
+}
+.absent {
+  border-bottom: 2px dotted var(--blue-mid);
+}
+.absent:hover, .absent.active {
+  background: var(--blue-fill);
+}
+

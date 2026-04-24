@@ -1,0 +1,452 @@
+/* ---------- PROVENANCE VIEWS (new) ---------- */
+
+/* Source chip — always at top of panel, anchors "this came from" */
+.source-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  background: var(--color-background-secondary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  margin-bottom: 14px;
+  cursor: pointer;
+  transition: border-color 0.12s;
+}
+.source-chip:hover { border-color: var(--color-text-primary); }
+.source-chip-name {
+  font-weight: 500;
+  color: var(--color-text-primary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.source-chip-loc {
+  color: var(--color-text-secondary);
+  font-size: 10.5px;
+  flex-shrink: 0;
+}
+.source-chip-open {
+  color: var(--color-text-tertiary);
+  font-size: 13px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+/* Quote view — PDF sentence in context, with the claim span highlighted */
+.quote-view {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  padding: 14px 16px;
+  font-family: var(--font-serif);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--color-text-secondary);
+}
+.quote-view .highlight {
+  color: var(--color-text-primary);
+  background: var(--amber-fill);
+  padding: 1px 2px;
+  border-radius: 2px;
+  box-shadow: inset 0 -2px 0 var(--amber-mid);
+}
+.quote-view .ellipsis {
+  color: var(--color-text-tertiary);
+  font-style: italic;
+  letter-spacing: 0.05em;
+}
+.quote-meta {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--color-text-secondary);
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 0.5px solid var(--color-border-tertiary);
+  display: flex;
+  justify-content: space-between;
+}
+
+/* Cell view — CSV row/col tuple with neighbors */
+.cell-view {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.cell-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.cell-table th,
+.cell-table td {
+  padding: 6px 10px;
+  text-align: left;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  border-right: 0.5px solid var(--color-border-tertiary);
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cell-table th {
+  background: var(--color-background-secondary);
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  position: sticky;
+  top: 0;
+}
+.cell-table th.target-col {
+  background: var(--amber-fill);
+  color: var(--amber-text);
+}
+.cell-table td.target-cell {
+  background: var(--amber-fill);
+  color: var(--amber-text);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1.5px var(--amber-mid);
+}
+.cell-table td.neighbor { color: var(--color-text-secondary); }
+.cell-table td.row-label {
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+  background: var(--color-background-secondary);
+  font-weight: 500;
+}
+.cell-table tr:last-child td { border-bottom: none; }
+.cell-table th:last-child,
+.cell-table td:last-child { border-right: none; }
+.cell-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* Inline cells table — pasted into the article body via the paste
+   handler when the clipboard carries a Copy-JSON cells payload. Reads as
+   a block element but sits inside a .g.g-paste.cells-inline span so the
+   provenance chain stays attached to the claim. */
+.article-body .cells-inline {
+  display: block;
+  margin: 10px 0;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  background: var(--color-background-primary);
+}
+.article-body .cells-inline:hover {
+  background: var(--amber-fill);
+  box-shadow: inset 0 0 0 1px var(--amber-mid);
+}
+.cells-inline-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.cells-inline-table th,
+.cells-inline-table td {
+  padding: 6px 10px;
+  text-align: left;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  border-right: 0.5px solid var(--color-border-tertiary);
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cells-inline-table th {
+  background: var(--color-background-secondary);
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+.cells-inline-table th.row-label,
+.cells-inline-table td.row-label {
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+  background: var(--color-background-secondary);
+  font-weight: 500;
+  text-align: right;
+  max-width: 48px;
+}
+.cells-inline-table td.picked {
+  background: var(--amber-fill);
+  color: var(--amber-text);
+  font-weight: 600;
+}
+.cells-inline-table td.neighbor { color: var(--color-text-secondary); }
+.cells-inline-table tr:last-child td { border-bottom: none; }
+.cells-inline-table th:last-child,
+.cells-inline-table td:last-child { border-right: none; }
+
+/* Derived view — expression box with drillable input list */
+.derived-expr {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--color-background-secondary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  padding: 10px 12px;
+  line-height: 1.55;
+  word-break: break-word;
+}
+.derived-expr .expr-op {
+  color: var(--amber-text);
+  font-weight: 600;
+}
+.derived-expr .expr-result {
+  display: block;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 0.5px dashed var(--color-border-secondary);
+  color: var(--color-text-primary);
+}
+.derived-expr .expr-result::before {
+  content: '= ';
+  color: var(--color-text-tertiary);
+  font-weight: normal;
+}
+
+.input-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.input-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  transition: border-color 0.12s, background 0.12s;
+}
+.input-item:hover {
+  border-color: var(--color-text-primary);
+  background: var(--color-background-secondary);
+}
+.input-kind {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1.5px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+.input-kind-cell { background: var(--teal-fill); color: var(--teal-text); }
+.input-kind-quote { background: var(--amber-fill); color: var(--amber-text); }
+.input-kind-derived { background: #E8E4F5; color: #3E2F7A; }
+.input-loc {
+  color: var(--color-text-secondary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.input-value {
+  color: var(--color-text-primary);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* Conflict view — two stacked provenances with delta */
+.conflict-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 0.5px solid #F7C1C1;
+  border-radius: var(--border-radius-md);
+  overflow: hidden;
+}
+.conflict-stack.concur { border-color: #9FE1CB; }
+.conflict-side.concur {
+  background: var(--teal-fill);
+  border-bottom: 0.5px solid #9FE1CB;
+}
+.conflict-side.concur:last-child { border-bottom: none; }
+.conflict-side.concur .conflict-side-label { color: var(--teal-text); }
+
+/* Link mode — while picking the second claim for a LINK, the article
+   highlights eligible claim spans and swaps cursor. */
+.link-mode .g:not(.link-source),
+.link-mode .conflict:not(.link-source) {
+  cursor: crosshair;
+  outline: 2px dashed var(--amber-mid);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+.link-mode.link-concur .g:not(.link-source),
+.link-mode.link-concur .conflict:not(.link-source) {
+  outline-color: var(--teal-mid);
+}
+.link-mode .link-source {
+  background: var(--amber-fill);
+  box-shadow: inset 0 0 0 2px var(--amber-mid);
+  border-radius: 3px;
+}
+.link-mode.link-concur .link-source {
+  background: var(--teal-fill);
+  box-shadow: inset 0 0 0 2px var(--teal-mid);
+}
+.conflict-side {
+  padding: 10px 12px;
+  background: var(--color-background-primary);
+}
+.conflict-side.reported {
+  background: var(--red-fill);
+  border-bottom: 0.5px solid #F7C1C1;
+}
+.conflict-side.source {
+  background: var(--color-background-primary);
+}
+.conflict-side-label {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  margin-bottom: 5px;
+}
+.conflict-side.reported .conflict-side-label { color: var(--red-text); }
+.conflict-side-value {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.conflict-side-loc {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--color-text-secondary);
+  margin-top: 3px;
+}
+.conflict-delta {
+  padding: 8px 12px;
+  background: var(--color-background-secondary);
+  border-top: 0.5px solid var(--color-border-tertiary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  display: flex;
+  justify-content: space-between;
+}
+.conflict-delta-val {
+  color: var(--red-text);
+  font-weight: 600;
+}
+
+/* Absence view — the hole made visible */
+.absence-view {
+  background: var(--color-background-primary);
+  border: 0.5px dashed var(--blue-mid);
+  border-radius: var(--border-radius-md);
+  padding: 14px 16px;
+}
+.absence-expected {
+  font-family: var(--font-serif);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text-primary);
+  margin-bottom: 10px;
+}
+.absence-expected em {
+  font-style: italic;
+  color: var(--blue-text);
+}
+.absence-scan {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+.absence-scan-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+.absence-scan-item::before {
+  content: '×';
+  color: var(--blue-mid);
+  font-weight: 600;
+  width: 10px;
+  text-align: center;
+}
+
+/* Subtle "inspect fold events" affordance — collapsed by default */
+.inspect-fold {
+  margin-top: 10px;
+  font-size: 10.5px;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: color 0.12s;
+}
+.inspect-fold:hover { color: var(--color-text-secondary); }
+.inspect-fold-body {
+  display: none;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 0.5px dashed var(--color-border-tertiary);
+}
+.inspect-fold-body.open { display: block; }
+
+.btn-sm {
+  padding: 5px 11px;
+  font-size: 11.5px;
+  border-radius: var(--border-radius-md);
+  cursor: pointer;
+  font-weight: 500;
+  border: 0.5px solid var(--color-border-secondary);
+  background: transparent;
+  color: var(--color-text-primary);
+  font-family: inherit;
+  transition: background 0.12s, border-color 0.12s;
+}
+.btn-sm:hover {
+  background: var(--color-background-secondary);
+  border-color: var(--color-text-primary);
+}
+.btn-sm-danger {
+  border-color: #F09595;
+  color: var(--red-text);
+  background: var(--red-fill);
+}
+.btn-sm-danger:hover { background: #F7C1C1; }
+
+/* Provenance tag chips */
+.prov-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 0.5px solid transparent;
+  letter-spacing: 0.01em;
+}
+.prov-tag-amber { background: var(--amber-fill); color: var(--amber-text); border-color: #EDC89A; }
+.prov-tag-red { background: var(--red-fill); color: var(--red-text); border-color: #F7C1C1; }
+.prov-tag-blue { background: var(--blue-fill); color: var(--blue-text); border-color: #B5D4F4; }
+.prov-tag-teal { background: var(--teal-fill); color: var(--teal-text); border-color: #9FE1CB; }
+
