@@ -22834,32 +22834,23 @@ async function init() {
   };
 }
 
-/* ---------- RAG bridge for #mode-chat (Groundbox module) ----------
+/* ---------- Source bridge for #mode-chat (Groundbox module) ----------
    The Groundbox chat lives in a separate <script type="module"> block,
    so it can't see the const-scoped tables defined here. Expose a small
    surface on window so the module can list sources, honour the per-chat
    include toggle (same CHAT_SOURCE_INCLUDE store as the old Claude
-   panel), and run semantic retrieval over MiniLM segment embeddings. */
+   panel), and pull the raw text of toggled-on sources to feed directly
+   into the local model. Indexing/embeddings are intentionally bypassed. */
 window.docChatRag = {
   listSources() {
     try {
-      return allSources().map(s => {
-        const segs = SOURCE_SEGMENTS[s.id] || [];
-        let embedded = 0;
-        for (const seg of segs) {
-          if (seg.kind === 'source') continue;
-          if (SEG_EMBEDDINGS[seg.id]) embedded++;
-        }
-        return {
-          id: s.id,
-          name: s.name,
-          kind: s.kind,
-          included: isSourceIncluded(s.id),
-          embeddedSegments: embedded,
-          totalSegments: segs.length,
-          ready: embedded > 0
-        };
-      });
+      return allSources().map(s => ({
+        id: s.id,
+        name: s.name,
+        kind: s.kind,
+        included: isSourceIncluded(s.id),
+        ready: true
+      }));
     } catch (err) {
       console.warn('[docChatRag.listSources]', err);
       return [];
@@ -22879,14 +22870,22 @@ window.docChatRag = {
       return false;
     }
   },
-  async search(query, opts = {}) {
-    const args = { query: String(query || '') };
-    if (Number.isFinite(opts.k)) args.k = opts.k;
-    if (Array.isArray(opts.sourceIds) && opts.sourceIds.length) args.sourceIds = opts.sourceIds;
-    try { return await executeSearchSegments(args); }
-    catch (err) {
-      console.warn('[docChatRag.search]', err);
-      return { error: String(err && err.message || err), hits: [], total: 0 };
+  // Direct-feed mode: return the raw text of every toggled-on source so
+  // the Groundbox chat can dump it into the model's system prompt without
+  // waiting for MiniLM embeddings. Reuses gatherChatSourceBlocks (which
+  // already filters on isSourceIncluded and applies size caps).
+  async getIncludedSourceTexts() {
+    try {
+      const blocks = await gatherChatSourceBlocks({ fullText: true });
+      return blocks.map(b => ({
+        id: b.id,
+        name: b.name,
+        kind: b.kind,
+        text: String(b.text || '')
+      }));
+    } catch (err) {
+      console.warn('[docChatRag.getIncludedSourceTexts]', err);
+      return [];
     }
   }
 };
@@ -22947,16 +22946,17 @@ const sourcesAllBtn   = $g('gbx-sources-all');
 const sourcesNoneBtn  = $g('gbx-sources-none');
 const sourcesRefreshBtn = $g('gbx-sources-refresh');
 
-/* ---------- document chat (RAG) ----------
-   Bridges to window.docChatRag (exposed from the main script). When
-   sources are loaded and embedded, each user turn does a k-NN search
-   over the toggled-on sources and injects the top hits as a per-turn
-   system message. Retrieval is best-effort: if the bridge is missing,
-   embeddings aren't ready, or no sources are on, the chat still runs. */
+/* ---------- document chat (direct feed) ----------
+   Bridges to window.docChatRag (exposed from the main script). Each
+   user turn dumps the full text of every toggled-on source into a
+   per-turn system message. No MiniLM, no k-NN — the model sees the
+   raw documents directly. Capped so we don't blow up the small
+   model's context window. Best-effort: if the bridge is missing or
+   no sources are on, the chat still runs without grounding. */
 const RAG = {
-  k: 6,
-  charCap: 6000,
-  lastHits: []
+  totalCharCap: 24000,
+  perSourceCharCap: 12000,
+  lastSources: []
 };
 
 function escapeHtmlLocal(s) {
@@ -22983,28 +22983,24 @@ function refreshSourcesPanel() {
     sourcesHintEl.textContent = 'No sources yet. Upload files in the Sources rail to chat with documents.';
     return;
   }
-  const onCount = sources.filter(s => s.included && s.ready).length;
-  const loadedCount = sources.filter(s => s.ready).length;
+  const onCount = sources.filter(s => s.included).length;
   sourcesCountEl.textContent = `${onCount} on · ${sources.length} loaded`;
 
   sourcesListEl.innerHTML = sources.map(s => {
     const cls = ['gbx-src-chip'];
     if (s.included) cls.push('on');
-    if (!s.ready) cls.push('pending');
     const kind = (s.kind || 'doc').toUpperCase();
-    const status = s.ready ? '' : ' · indexing…';
     return `<button class="${cls.join(' ')}" type="button"
       data-src-id="${escapeHtmlLocal(s.id)}"
       aria-pressed="${s.included ? 'true' : 'false'}"
-      title="${escapeHtmlLocal(s.name)} (${s.embeddedSegments} embedded segments)${status ? ' — embeddings pending' : ''}">
+      title="${escapeHtmlLocal(s.name)}">
       <span class="chip-kind">${escapeHtmlLocal(kind)}</span>
       <span class="chip-name">${escapeHtmlLocal(s.name)}</span>
     </button>`;
   }).join('');
 
   let hint = '';
-  if (!loadedCount) hint = 'Sources are still indexing. They\'ll become searchable once MiniLM finishes embedding them.';
-  else if (!onCount) hint = 'All sources are off — the assistant will answer without document grounding.';
+  if (!onCount) hint = 'All sources are off — the assistant will answer without document grounding.';
   sourcesHintEl.hidden = !hint;
   sourcesHintEl.textContent = hint;
 
@@ -23032,57 +23028,55 @@ if (sourcesNoneBtn) sourcesNoneBtn.addEventListener('click', () => {
 });
 if (sourcesRefreshBtn) sourcesRefreshBtn.addEventListener('click', () => refreshSourcesPanel());
 
-async function retrieveContextFor(query) {
+async function retrieveContextFor(_query) {
   const bridge = ragBridge();
-  if (!bridge) return { hits: [], systemMsg: null, meta: null };
-  const sources = bridge.listSources();
-  const on = sources.filter(s => s.included && s.ready).map(s => s.id);
-  if (!on.length) return { hits: [], systemMsg: null, meta: null };
-  const res = await bridge.search(query, { k: RAG.k, sourceIds: on });
-  if (res && res.error) {
-    return { hits: [], systemMsg: null, meta: { error: res.error } };
+  if (!bridge || typeof bridge.getIncludedSourceTexts !== 'function') {
+    return { sources: [], systemMsg: null };
   }
-  const hits = (res && Array.isArray(res.hits)) ? res.hits : [];
-  if (!hits.length) return { hits: [], systemMsg: null, meta: null };
+  let blocks = [];
+  try { blocks = await bridge.getIncludedSourceTexts(); }
+  catch (err) { console.warn('[direct-feed] getIncludedSourceTexts', err); }
+  if (!blocks.length) return { sources: [], systemMsg: null };
 
-  // Assemble numbered excerpts, respecting a rough char cap.
+  // Dump full source text into the prompt, capped per-source and total
+  // so the small in-browser model doesn't OOM on context.
   const parts = [];
-  let budget = RAG.charCap;
-  for (let i = 0; i < hits.length; i++) {
-    const h = hits[i];
-    let text = String(h.text || '').trim();
+  const used = [];
+  let budget = RAG.totalCharCap;
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i];
+    let text = String(b.text || '').trim();
     if (!text) continue;
-    if (text.length > 1200) text = text.slice(0, 1200) + '…';
-    if (text.length > budget) text = text.slice(0, Math.max(100, budget)) + '…';
-    const loc = h.loc ? ` ${h.loc}` : '';
-    const name = h.sourceName || h.sourceId || 'source';
-    parts.push(`[${i + 1}] ${name}${loc}\n${text}`);
-    budget -= text.length + 40;
+    if (text.length > RAG.perSourceCharCap) text = text.slice(0, RAG.perSourceCharCap) + '\n…[truncated]';
+    if (text.length > budget) text = text.slice(0, Math.max(200, budget)) + '\n…[truncated]';
+    const kind = (b.kind || 'doc').toUpperCase();
+    parts.push(`### SOURCE ${i + 1}: ${b.name} (${kind})\n${text}`);
+    used.push({ id: b.id, name: b.name, kind: b.kind, chars: text.length });
+    budget -= text.length + 60;
     if (budget <= 0) break;
   }
-  if (!parts.length) return { hits, systemMsg: null, meta: null };
+  if (!parts.length) return { sources: [], systemMsg: null };
 
   const systemMsg = [
     'You are answering questions about the user\'s local documents.',
-    'Use ONLY the excerpts below to answer. If the answer is not in the excerpts, say you cannot find it in the loaded documents.',
-    'Cite excerpts inline as [1], [2], etc. Keep answers concise and specific.',
+    'The full text of each selected source is included below. Use ONLY this material to answer. If the answer is not in the sources, say you cannot find it in the loaded documents.',
+    'Keep answers concise and specific. When useful, name the source you are drawing from.',
     '',
-    '=== EXCERPTS ===',
+    '=== LOCAL SOURCES ===',
     parts.join('\n\n---\n\n')
   ].join('\n');
 
-  return { hits, systemMsg, meta: { used: parts.length, pool: res.total || 0 } };
+  return { sources: used, systemMsg };
 }
 
-function renderCitationsFooter(hits) {
-  if (!hits || !hits.length) return '';
-  const rows = hits.map((h, i) => {
-    const loc = h.loc ? `<span class="cit-loc">${escapeHtmlLocal(h.loc)}</span>` : '';
-    const name = escapeHtmlLocal(h.sourceName || h.sourceId || 'source');
-    const score = (typeof h.score === 'number') ? ` · <span class="cit-score">${h.score.toFixed(2)}</span>` : '';
-    return `<div class="gbx-cit-row"><span class="cit-num">[${i + 1}]</span> <span class="cit-name">${name}</span> ${loc}${score}</div>`;
+function renderCitationsFooter(sources) {
+  if (!sources || !sources.length) return '';
+  const rows = sources.map((s) => {
+    const name = escapeHtmlLocal(s.name || s.id || 'source');
+    const kind = escapeHtmlLocal((s.kind || 'doc').toUpperCase());
+    return `<div class="gbx-cit-row"><span class="cit-num">${kind}</span> <span class="cit-name">${name}</span></div>`;
   }).join('');
-  return `<div class="gbx-citations"><div class="gbx-citations-title">Context used</div>${rows}</div>`;
+  return `<div class="gbx-citations"><div class="gbx-citations-title">Sources fed to model</div>${rows}</div>`;
 }
 
 if (!navigator.gpu && compatNote) {
@@ -23180,27 +23174,27 @@ async function sendMessage() {
   inputEl.style.height = 'auto';
   isGenerating = true;
   sendBtn.disabled = true;
-  statEl.textContent = 'retrieving…';
+  statEl.textContent = 'loading sources…';
 
-  // Retrieve context before streaming. Runs against toggled-on
-  // sources only; per-turn only (not stored in message history).
-  let retrieval = { hits: [], systemMsg: null, meta: null };
+  // Pull text from toggled-on sources before streaming. Per-turn only
+  // (not stored in message history).
+  let retrieval = { sources: [], systemMsg: null };
   try { retrieval = await retrieveContextFor(text); }
-  catch (err) { console.warn('[retrieval] failed', err); }
-  RAG.lastHits = retrieval.hits || [];
+  catch (err) { console.warn('[direct-feed] failed', err); }
+  RAG.lastSources = retrieval.sources || [];
 
   const assistantEl = renderMessage('assistant', '', true);
   const contentEl = assistantEl.querySelector('.content');
   let fullReply = '';
   let tokenCount = 0;
   const startTime = performance.now();
-  statEl.textContent = retrieval.hits.length
-    ? `thinking · ${retrieval.hits.length} snippet${retrieval.hits.length === 1 ? '' : 's'}`
+  statEl.textContent = retrieval.sources.length
+    ? `thinking · ${retrieval.sources.length} source${retrieval.sources.length === 1 ? '' : 's'}`
     : 'thinking…';
 
-  // Build the per-turn request messages. The retrieval system prompt
+  // Build the per-turn request messages. The source dump system prompt
   // is prepended per-turn and is NOT stored in `messages`, so each
-  // turn sees fresh excerpts without accumulating context rot.
+  // turn re-reads the current source selection without bloating history.
   const requestMessages = [];
   if (retrieval.systemMsg) requestMessages.push({ role: 'system', content: retrieval.systemMsg });
   for (const m of messages) requestMessages.push(m);
@@ -23226,9 +23220,9 @@ async function sendMessage() {
     const tps = (tokenCount / elapsed).toFixed(1);
     statEl.textContent = `${tps} tok/s`;
 
-    if (retrieval.hits && retrieval.hits.length) {
+    if (retrieval.sources && retrieval.sources.length) {
       const footer = document.createElement('div');
-      footer.innerHTML = renderCitationsFooter(retrieval.hits);
+      footer.innerHTML = renderCitationsFooter(retrieval.sources);
       const cit = footer.firstElementChild;
       if (cit) assistantEl.appendChild(cit);
     }
