@@ -4610,12 +4610,51 @@ const storage = (() => {
     await w.close();
   }
 
+  // ---- Anchorage .eo persistence ----
+  // The Anchorage substrate's append-only log lives at /anchorage.eo. It
+  // is structurally separate from /log.ndjson — sha256-keyed, five event
+  // types, JSONL with content-hash-stable lines — so it gets its own
+  // file. Same fall-back-to-memory contract as the rest of storage.
+  let memEo = [];
+  async function appendEoLine(line) {
+    if (!available) { memEo.push(line); return; }
+    const fh = await getFile('anchorage.eo', true);
+    const file = await fh.getFile();
+    const existing = await file.text();
+    const w = await fh.createWritable();
+    await w.write(existing + line + '\n');
+    await w.close();
+  }
+  async function readEoAll() {
+    if (!available) return memEo.slice();
+    try {
+      const fh = await getFile('anchorage.eo', true);
+      const file = await fh.getFile();
+      const text = await file.text();
+      if (!text) return [];
+      return text.split('\n').filter(Boolean);
+    } catch {
+      return [];
+    }
+  }
+  async function writeEoAll(text) {
+    if (!available) {
+      memEo = (text || '').split('\n').filter(Boolean);
+      return;
+    }
+    const fh = await getFile('anchorage.eo', true);
+    const w = await fh.createWritable();
+    await w.write(text || '');
+    await w.close();
+  }
+
   return {
     init, append, readAll, seedMarkerExists, setSeedMarker,
     saveSource, saveSourceBlob, readSource, readSourceBlob, deleteSource,
     saveArticle, readArticle, deleteLegacyArticle,
     readOutputsIndex, writeOutputsIndex, saveOutput, readOutput, deleteOutput,
     readEntities, saveEntities,
+    appendEoLine, readEoAll, writeEoAll,
     get available() { return available; }
   };
 })();
@@ -23015,9 +23054,57 @@ init().catch(err => {
   }
 
   // -------------------------------------------------------------
+  // OPFS persistence — /anchorage.eo. Mirrors the existing log.ndjson
+  // contract: each accepted event is appended as a JSONL line; reads
+  // happen on first mount. Falls back to in-memory when OPFS isn't
+  // available (file:// open, older browsers).
+  //
+  // We write to OPFS only after EOFormat.validateEvent passes — the
+  // file is the audit trail, malformed lines never enter it.
+  // -------------------------------------------------------------
+  async function persistAppend(evt) {
+    if (typeof storage === 'undefined' || !storage.appendEoLine) return;
+    try {
+      const v = EOFormat.validateEvent(evt);
+      if (!v.valid) return;
+      await storage.appendEoLine(JSON.stringify(evt));
+    } catch (err) {
+      console.warn('[anchorage] persistAppend failed', err);
+    }
+  }
+
+  async function persistReplace(events) {
+    if (typeof storage === 'undefined' || !storage.writeEoAll) return;
+    try {
+      await storage.writeEoAll(EOFormat.serializeEoFile(events));
+    } catch (err) {
+      console.warn('[anchorage] persistReplace failed', err);
+    }
+  }
+
+  async function loadFromOpfs() {
+    if (typeof storage === 'undefined' || !storage.readEoAll) return [];
+    try {
+      const lines = await storage.readEoAll();
+      if (!lines.length) return [];
+      const { events, errors } = EOFormat.parseEoFile(lines.join('\n'));
+      if (errors.length) {
+        console.warn('[anchorage] OPFS load: ' + errors.length + ' bad lines dropped');
+      }
+      return events;
+    } catch (err) {
+      console.warn('[anchorage] loadFromOpfs failed', err);
+      return [];
+    }
+  }
+
+  // -------------------------------------------------------------
   // File I/O. Open delegates to a hidden <input type="file">; save
   // produces a Blob and triggers a download. Both go through
   // EOFormat.parseEoFile / serializeEoFile — no in-place edits.
+  //
+  // Open replaces the in-memory log AND the OPFS file: the file
+  // picker semantics are "load this snapshot," not "merge into".
   // -------------------------------------------------------------
   async function openEoFile(file) {
     const text = await file.text();
@@ -23026,6 +23113,7 @@ init().catch(err => {
       console.warn('[anchorage] .eo parse: ' + errors.length + ' bad lines / ' + lineCount + ' total', errors.slice(0, 5));
     }
     anchorageEvents = events;
+    await persistReplace(anchorageEvents);
     refold();
     const status = document.querySelector('#mode-anchorage .aoc-status');
     if (status) status.textContent =
@@ -23046,9 +23134,9 @@ init().catch(err => {
   }
 
   // -------------------------------------------------------------
-  // Append a new DEF authored from the cursor UI. New events are
-  // appended in memory; the user clicks "Download .eo" to persist.
-  // The substrate's audit trail is the data — nothing overwrites.
+  // Append a new DEF authored from the cursor UI. New events go to
+  // OPFS as well as memory; nothing overwrites — the substrate's
+  // audit trail is the data.
   // -------------------------------------------------------------
   async function appendDefEvent(partial) {
     const evt = await EOFormat.makeEvent({
@@ -23057,6 +23145,7 @@ init().catch(err => {
       ts: new Date().toISOString()
     });
     anchorageEvents.push(evt);
+    await persistAppend(evt);
     refold();
     return evt;
   }
@@ -23068,10 +23157,12 @@ init().catch(err => {
   // tab-switch keeps work off the boot path.
   // -------------------------------------------------------------
   let mounted = false;
-  function ensureMounted() {
+  async function ensureMounted() {
     if (mounted) return;
     const root = document.getElementById('mode-anchorage');
     if (!root) return;
+    mounted = true;
+
     cursorMount = AnchorageCursor.mount(root, {
       getProjection: () => anchorageProjection,
       getEvents: () => anchorageEvents,
@@ -23100,13 +23191,29 @@ init().catch(err => {
     if (saveBtn) saveBtn.addEventListener('click', downloadEoFile);
     if (seedBtn) seedBtn.addEventListener('click', async () => {
       anchorageEvents = await buildDemoEvents();
+      await persistReplace(anchorageEvents);
       refold();
       const status = root.querySelector('.aoc-status');
       if (status) status.textContent = anchorageEvents.length + ' demo events loaded';
     });
 
-    mounted = true;
     cursorMount.refresh();
+
+    // Hydrate from OPFS. The existing init() may still be running when
+    // we mount, so we await loadFromOpfs separately and refresh once
+    // the events are in. If OPFS is unavailable this resolves to [].
+    try {
+      const persisted = await loadFromOpfs();
+      if (persisted.length) {
+        anchorageEvents = persisted;
+        refold();
+        const status = root.querySelector('.aoc-status');
+        if (status) status.textContent =
+          anchorageEvents.length + ' events restored from /anchorage.eo';
+      }
+    } catch (err) {
+      console.warn('[anchorage] hydrate failed', err);
+    }
   }
 
   // Mount on first switch into Anchorage mode. The existing switchMode
