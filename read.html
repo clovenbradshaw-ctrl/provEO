@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anchorage — Reading</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #f4ecd8; }
+  iframe { width: 100%; height: 100vh; border: 0; display: block; }
+  .anchorage-stub-msg {
+    position: fixed; top: 0; left: 0; right: 0;
+    background: #fffae0; color: #5a4a18;
+    padding: 8px 12px; font: 12px/1.4 ui-monospace, monospace;
+    border-bottom: 1px solid #d6c89a; z-index: 999;
+  }
+</style>
+<script src="anchorage/integration/nav.js" defer></script>
+</head>
+<body>
+<!--
+  Stage 1: Reading mode is hosted via iframe to the standalone eoreader
+  Pages deployment. Stage 2 will inline the reader source as proveo/read/
+  modules so the eoreader/ deployment can be retired.
+  See anchorage/SPEC.md and anchorage/README.md.
+-->
+<iframe
+  src="https://clovenbradshaw-ctrl.github.io/eoReader/"
+  title="Anchorage Reading mode"
+  allow="clipboard-read; clipboard-write"
+  referrerpolicy="same-origin"
+></iframe>
+</body>
+</html>

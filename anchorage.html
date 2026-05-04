@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anchorage</title>
+<style>
+  :root { color-scheme: dark light; }
+  html, body { margin: 0; padding: 0; height: 100%; background: #0e1116; font: 14px/1.4 ui-sans-serif, system-ui, sans-serif; color: #e6e6e6; }
+  #anchorage-bar {
+    display: flex; align-items: center; gap: 0;
+    height: 36px; padding: 0 12px;
+    background: #14181f;
+    border-bottom: 1px solid #1f2530;
+    user-select: none;
+  }
+  #anchorage-bar .brand {
+    font: 600 13px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: 0.04em;
+    color: #9aa3ad;
+    padding-right: 14px;
+    border-right: 1px solid #1f2530;
+    margin-right: 12px;
+  }
+  #anchorage-bar .modes {
+    display: flex; gap: 4px;
+  }
+  #anchorage-bar button {
+    appearance: none; border: 0; background: transparent;
+    color: #aab2bd;
+    font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    padding: 7px 11px;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  #anchorage-bar button:hover { background: rgba(255,255,255,0.06); }
+  #anchorage-bar button.active {
+    background: #2a3a4a; color: #9cf; cursor: default;
+  }
+  #anchorage-bar .spacer { flex: 1; }
+  #anchorage-bar .ctx { font: 11px/1 ui-monospace, monospace; color: #6b7280; padding-right: 8px; }
+  #anchorage-frame {
+    width: 100%;
+    height: calc(100vh - 36px);
+    border: 0;
+    display: block;
+    background: #fff;
+  }
+</style>
+</head>
+<body>
+  <header id="anchorage-bar">
+    <span class="brand">Anchorage</span>
+    <div class="modes" role="tablist" aria-label="Mode">
+      <button data-mode="writing" role="tab">Writing</button>
+      <button data-mode="reading" role="tab">Reading</button>
+    </div>
+    <span class="spacer"></span>
+    <span class="ctx" id="anchorage-ctx"></span>
+  </header>
+  <iframe id="anchorage-frame" title="Anchorage active mode" allow="clipboard-read; clipboard-write"></iframe>
+
+<script type="module">
+import { CitationBridge, parseAnchorageHash, formatAnchorageHash } from './anchorage/integration/citation-bridge.js';
+
+const MODES = {
+  writing: { src: 'index.html', label: 'Writing' },
+  reading: { src: 'read.html',  label: 'Reading' }
+};
+
+const frame = document.getElementById('anchorage-frame');
+const ctx   = document.getElementById('anchorage-ctx');
+const bar   = document.getElementById('anchorage-bar');
+
+const bridge = new CitationBridge({ frame });
+
+function modeFromHash() {
+  const h = parseAnchorageHash(location.hash);
+  return MODES[h.mode] ? h.mode : 'writing';
+}
+
+function setMode(mode, opts = {}) {
+  if (!MODES[mode]) mode = 'writing';
+  const target = MODES[mode];
+
+  // pass through src/anchor cursor as URL fragment so the inner page can scroll
+  const innerHash = opts.cursor ? '#' + new URLSearchParams(opts.cursor).toString() : '';
+  frame.src = target.src + innerHash;
+
+  for (const btn of bar.querySelectorAll('[data-mode]')) {
+    const isActive = btn.dataset.mode === mode;
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('aria-selected', String(isActive));
+  }
+
+  ctx.textContent = opts.cursor
+    ? Object.entries(opts.cursor).map(([k, v]) => k + '=' + v).join(' · ')
+    : '';
+
+  // reflect mode in the shell URL so refresh + share work
+  const newHash = formatAnchorageHash({ mode, cursor: opts.cursor });
+  if (newHash !== location.hash) history.replaceState(null, '', newHash || ' ');
+}
+
+// click handlers on the toggle
+for (const btn of bar.querySelectorAll('[data-mode]')) {
+  btn.addEventListener('click', () => setMode(btn.dataset.mode));
+}
+
+// listen for citation jumps from the iframed app
+bridge.on('jump', ({ mode, cursor }) => setMode(mode, { cursor }));
+
+// allow back/forward + deep links
+addEventListener('hashchange', () => {
+  const h = parseAnchorageHash(location.hash);
+  setMode(h.mode || 'writing', { cursor: h.cursor });
+});
+
+// initial load
+const initial = parseAnchorageHash(location.hash);
+setMode(initial.mode || 'writing', { cursor: initial.cursor });
+</script>
+</body>
+</html>
