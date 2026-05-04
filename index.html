@@ -350,6 +350,9 @@
         <button id="aoc-load-btn" type="button">Open .eo</button>
         <input id="aoc-load-input" type="file" accept=".eo,.jsonl,.txt" hidden>
         <button id="aoc-save-btn" type="button">Download .eo</button>
+        <button id="aoc-export-bundle-btn" type="button" title="Export both the proveo log (ULID, OBS/CLAIM/EVA/REC) and the .eo substrate (sha256, five event types) as a single JSON bundle. Each substrate round-trips byte-identically.">Export bundle</button>
+        <input id="aoc-import-bundle-input" type="file" accept=".json,.proveo" hidden>
+        <button id="aoc-import-bundle-btn" type="button" title="Import a previously exported bundle. Replaces both substrates' OPFS files.">Import bundle</button>
         <button id="aoc-seed-btn" type="button" title="Load a small built-in demo log to exercise the fold and cursor UI">Load demo</button>
         <label>Horizon
           <select class="aoc-horizon-select"></select>
@@ -23122,15 +23125,125 @@ init().catch(err => {
 
   function downloadEoFile() {
     const text = EOFormat.serializeEoFile(anchorageEvents);
-    const blob = new Blob([text], { type: 'application/x-ndjson' });
+    triggerDownload(text, 'anchorage-' + isoStamp() + '.eo', 'application/x-ndjson');
+  }
+
+  function triggerDownload(content, filename, mime) {
+    const blob = new Blob([content], { type: mime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'anchorage-' + new Date().toISOString().replace(/[:.]/g, '-') + '.eo';
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+  }
+
+  function isoStamp() {
+    return new Date().toISOString().replace(/[:.]/g, '-');
+  }
+
+  // -------------------------------------------------------------
+  // Combined export — single JSON manifest containing both substrates'
+  // logs as preserved text. The two logs have incompatible event
+  // shapes (proveo: ULID + many event types; anchorage: sha256 + five
+  // event types) so concatenation would produce a file that's neither
+  // valid .eo nor valid log.ndjson. The manifest keeps each substrate
+  // round-trip-stable inside one file.
+  //
+  // Format (proveo-bundle/1):
+  //   {
+  //     "format": "proveo-bundle/1",
+  //     "exported_at": "<ISO>",
+  //     "proveo_log":   "<full text of /log.ndjson>",
+  //     "anchorage_eo": "<full text of /anchorage.eo>"
+  //   }
+  //
+  // Each substrate's text is stored verbatim. Re-importing writes each
+  // text back to its OPFS file unchanged — round-trip is byte-identical.
+  // -------------------------------------------------------------
+  async function exportBundle() {
+    let proveoLogText = '';
+    let anchorageEoText = '';
+    try {
+      if (typeof storage !== 'undefined') {
+        if (storage.readAll) {
+          const lines = await storage.readAll();
+          proveoLogText = lines.length ? lines.join('\n') + '\n' : '';
+        }
+        if (storage.readEoAll) {
+          const lines = await storage.readEoAll();
+          anchorageEoText = lines.length ? lines.join('\n') + '\n' : '';
+        }
+      }
+    } catch (err) {
+      console.warn('[anchorage] exportBundle read failed', err);
+    }
+    // Fall back to in-memory anchorage events if OPFS hadn't persisted yet.
+    if (!anchorageEoText && anchorageEvents.length) {
+      anchorageEoText = EOFormat.serializeEoFile(anchorageEvents);
+    }
+    const manifest = {
+      format: 'proveo-bundle/1',
+      exported_at: new Date().toISOString(),
+      proveo_log: proveoLogText,
+      anchorage_eo: anchorageEoText
+    };
+    triggerDownload(
+      JSON.stringify(manifest, null, 2),
+      'proveo-bundle-' + isoStamp() + '.json',
+      'application/json'
+    );
+  }
+
+  async function importBundle(file) {
+    const text = await file.text();
+    let manifest;
+    try { manifest = JSON.parse(text); }
+    catch (e) { alert('Bundle parse error: ' + e.message); return; }
+    if (!manifest || manifest.format !== 'proveo-bundle/1') {
+      alert('Not a proveo-bundle/1 file (format=' + (manifest && manifest.format) + ')');
+      return;
+    }
+    const proveoText = typeof manifest.proveo_log === 'string' ? manifest.proveo_log : '';
+    const anchorageText = typeof manifest.anchorage_eo === 'string' ? manifest.anchorage_eo : '';
+    if (!confirm(
+      'Import will REPLACE both /log.ndjson and /anchorage.eo with the bundle contents. ' +
+      'The current logs will be lost. Continue?'
+    )) return;
+
+    try {
+      if (typeof storage !== 'undefined' && storage.writeEoAll) {
+        await storage.writeEoAll(anchorageText);
+      }
+      // The storage module exposes no writeAll for /log.ndjson — append()
+      // is its only public mutator. Reach into OPFS directly here; we only
+      // do so when OPFS is available so the in-memory fallback path is
+      // unaffected. The existing app picks up the new log on next reload.
+      if (navigator.storage && navigator.storage.getDirectory) {
+        try {
+          const root = await navigator.storage.getDirectory();
+          const fh = await root.getFileHandle('log.ndjson', { create: true });
+          const w = await fh.createWritable();
+          await w.write(proveoText);
+          await w.close();
+        } catch (err) {
+          console.warn('[anchorage] importBundle proveo write failed', err);
+        }
+      }
+    } catch (err) {
+      alert('Import failed: ' + err.message);
+      return;
+    }
+
+    const persisted = await loadFromOpfs();
+    anchorageEvents = persisted;
+    refold();
+    alert(
+      'Bundle imported. Anchorage substrate refolded in place. ' +
+      'Reload the page to pick up the proveo log changes.'
+    );
   }
 
   // -------------------------------------------------------------
@@ -23189,6 +23302,20 @@ init().catch(err => {
       });
     }
     if (saveBtn) saveBtn.addEventListener('click', downloadEoFile);
+
+    const exportBundleBtn = root.querySelector('#aoc-export-bundle-btn');
+    const importBundleBtn = root.querySelector('#aoc-import-bundle-btn');
+    const importBundleInput = root.querySelector('#aoc-import-bundle-input');
+    if (exportBundleBtn) exportBundleBtn.addEventListener('click', exportBundle);
+    if (importBundleBtn && importBundleInput) {
+      importBundleBtn.addEventListener('click', () => importBundleInput.click());
+      importBundleInput.addEventListener('change', () => {
+        const f = importBundleInput.files && importBundleInput.files[0];
+        if (f) importBundle(f);
+        importBundleInput.value = '';
+      });
+    }
+
     if (seedBtn) seedBtn.addEventListener('click', async () => {
       anchorageEvents = await buildDemoEvents();
       await persistReplace(anchorageEvents);
