@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anchorage — Reading</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #f4ecd8; }
+  iframe { width: 100%; height: 100vh; border: 0; display: block; }
+</style>
+<script src="anchorage/integration/nav.js" defer></script>
+</head>
+<body>
+<!--
+  Stage 1+2: Reading mode is hosted via iframe to the standalone eoreader
+  Pages deployment. Same-origin under github.io, so we can inject the
+  anchorage inner-reading module into the child frame and passthrough
+  anchorage:* postMessages between shell and child.
+  Stage 3 will inline the reader source so the eoreader/ deployment can
+  be retired. See anchorage/SPEC.md and anchorage/README.md.
+-->
+<iframe
+  id="anchorage-reader"
+  src="https://clovenbradshaw-ctrl.github.io/eoReader/"
+  title="Anchorage Reading mode"
+  allow="clipboard-read; clipboard-write"
+  referrerpolicy="same-origin"
+></iframe>
+
+<script type="module">
+const child = document.getElementById('anchorage-reader');
+
+// 1. inject inner-reading.js into the child iframe once it loads
+child.addEventListener('load', () => {
+  try {
+    const doc = child.contentDocument;
+    if (!doc) return;
+    if (doc.querySelector('script[data-anchorage-inner]')) return;
+    const s = doc.createElement('script');
+    s.type = 'module';
+    s.src = new URL('anchorage/integration/inner-reading.js', location.href).href;
+    s.dataset.anchorageInner = 'reading';
+    doc.head.appendChild(s);
+  } catch (e) {
+    console.warn('[anchorage] cannot inject inner-reading:', e);
+  }
+});
+
+// 2. passthrough: child -> parent (shell)
+addEventListener('message', (e) => {
+  const m = e.data;
+  if (!m || m.source !== 'anchorage') return;
+  // upward forward
+  if (parent && parent !== window && e.source === child.contentWindow) {
+    parent.postMessage(m, '*');
+  }
+  // downward forward (from shell into child)
+  if (e.source === parent && child.contentWindow) {
+    try { child.contentWindow.postMessage(m, '*'); } catch {}
+  }
+});
+</script>
+</body>
+</html>

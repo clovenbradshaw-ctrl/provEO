@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anchorage</title>
+<style>
+  :root { color-scheme: dark light; }
+  html, body { margin: 0; padding: 0; height: 100%; background: #0e1116; font: 14px/1.4 ui-sans-serif, system-ui, sans-serif; color: #e6e6e6; }
+  #anchorage-bar {
+    display: flex; align-items: center; gap: 0;
+    height: 36px; padding: 0 12px;
+    background: #14181f;
+    border-bottom: 1px solid #1f2530;
+    user-select: none;
+  }
+  #anchorage-bar .brand {
+    font: 600 13px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: 0.04em;
+    color: #9aa3ad;
+    padding-right: 14px;
+    border-right: 1px solid #1f2530;
+    margin-right: 12px;
+  }
+  #anchorage-bar .modes { display: flex; gap: 4px; }
+  #anchorage-bar button {
+    appearance: none; border: 0; background: transparent;
+    color: #aab2bd;
+    font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    padding: 7px 11px; border-radius: 5px; cursor: pointer;
+  }
+  #anchorage-bar button:hover { background: rgba(255,255,255,0.06); }
+  #anchorage-bar button.active { background: #2a3a4a; color: #9cf; cursor: default; }
+  #anchorage-bar .spacer { flex: 1; }
+  #anchorage-bar .ctx { font: 11px/1 ui-monospace, monospace; color: #6b7280; padding-right: 8px; }
+  #anchorage-frame {
+    width: 100%; height: calc(100vh - 36px);
+    border: 0; display: block; background: #fff;
+  }
+</style>
+</head>
+<body>
+  <header id="anchorage-bar">
+    <span class="brand">Anchorage</span>
+    <div class="modes" role="tablist" aria-label="Mode">
+      <button data-mode="writing" role="tab">Writing</button>
+      <button data-mode="reading" role="tab">Reading</button>
+    </div>
+    <span class="spacer"></span>
+    <span class="ctx" id="anchorage-ctx"></span>
+  </header>
+  <iframe id="anchorage-frame" title="Anchorage active mode" allow="clipboard-read; clipboard-write"></iframe>
+
+<script type="module">
+import { CitationBridge, parseAnchorageHash, formatAnchorageHash } from './anchorage/integration/citation-bridge.js';
+
+const MODES = {
+  writing: { src: 'index.html', inner: 'anchorage/integration/inner-writing.js', label: 'Writing' },
+  reading: { src: 'read.html',  inner: null,                                     label: 'Reading' }
+  // For reading, the inner module is injected by read.html into its own
+  // child iframe (the eoreader content). The shell does not recurse.
+};
+
+const frame = document.getElementById('anchorage-frame');
+const ctx   = document.getElementById('anchorage-ctx');
+const bar   = document.getElementById('anchorage-bar');
+
+const bridge = new CitationBridge({ frame });
+let currentMode = null;
+
+function setMode(mode, opts = {}) {
+  if (!MODES[mode]) mode = 'writing';
+  const target = MODES[mode];
+  const switching = mode !== currentMode;
+
+  if (switching) {
+    bridge.modeWillChange(mode);
+    frame.src = target.src;
+  }
+
+  for (const btn of bar.querySelectorAll('[data-mode]')) {
+    const isActive = btn.dataset.mode === mode;
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('aria-selected', String(isActive));
+  }
+
+  ctx.textContent = opts.cursor
+    ? Object.entries(opts.cursor).map(([k, v]) => k + '=' + v).join(' · ')
+    : '';
+
+  currentMode = mode;
+
+  if (opts.cursor) {
+    if (switching) bridge.sendCursor(opts.cursor, mode);   // queue until inner ready
+    else bridge.sendCursor(opts.cursor);                   // already loaded
+  }
+
+  const newHash = formatAnchorageHash({ mode, cursor: opts.cursor });
+  if (newHash !== location.hash) history.replaceState(null, '', newHash || ' ');
+}
+
+// inject inner module after iframe loads (writing only — read.html handles its own child)
+frame.addEventListener('load', () => {
+  const m = MODES[currentMode];
+  if (!m || !m.inner) return;
+  try {
+    const doc = frame.contentDocument;
+    if (!doc) return;
+    if (doc.querySelector('script[data-anchorage-inner]')) return;
+    const s = doc.createElement('script');
+    s.type = 'module';
+    s.src = new URL(m.inner, location.href).href;
+    s.dataset.anchorageInner = currentMode;
+    doc.head.appendChild(s);
+  } catch (e) {
+    console.warn('[anchorage] cannot inject inner module:', e);
+  }
+});
+
+for (const btn of bar.querySelectorAll('[data-mode]')) {
+  btn.addEventListener('click', () => setMode(btn.dataset.mode));
+}
+
+// 'jump' from inner: switch mode + carry cursor
+bridge.on('jump', ({ mode, cursor }) => setMode(mode, { cursor }));
+
+// 'cite' from inner: route the cursor to writing mode for insertion
+bridge.on('cite', ({ cursor }) => {
+  if (currentMode !== 'writing') setMode('writing', { cursor });
+  // the bridge will forward 'cite' to the writing iframe once it's ready
+});
+
+// deep links / back-forward
+addEventListener('hashchange', () => {
+  const h = parseAnchorageHash(location.hash);
+  setMode(h.mode || 'writing', { cursor: h.cursor });
+});
+
+const initial = parseAnchorageHash(location.hash);
+setMode(initial.mode || 'writing', { cursor: initial.cursor });
+</script>
+</body>
+</html>
