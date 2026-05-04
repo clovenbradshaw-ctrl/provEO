@@ -29,6 +29,7 @@
 <link rel="stylesheet" href="css/claude-research.css">
 <link rel="stylesheet" href="css/clipboard.css">
 <link rel="stylesheet" href="css/explorer-modes.css">
+<link rel="stylesheet" href="css/anchorage.css">
 </head>
 <body>
 
@@ -43,6 +44,7 @@
       <button class="mtab" data-mode="chat">Chat</button>
       <button class="mtab" data-mode="source-explorer">Sources</button>
       <button class="mtab" data-mode="entity-explorer">Entities</button>
+      <button class="mtab" data-mode="anchorage">Anchorage</button>
       <button class="mtab" data-mode="rooms">Workspaces</button>
     </div>
     <div class="topright">
@@ -335,6 +337,32 @@
         </div>
         <div class="rp-content" id="ent-explorer-detail-body"></div>
       </aside>
+    </section>
+
+    <!-- ===== ANCHORAGE ONTOLOGY LAYER ===== -->
+    <!-- A separate substrate from the existing OBS/CLAIM/EVA/REC log: the
+         .eo file format defined in build spec "Anchorage Ontology Layer".
+         Five event types (observation, anchor, def, rec, horizon),
+         content-hashed sha256 ids, fold-derived projections under a
+         pluggable Horizon σ. The existing pipeline is untouched. -->
+    <section class="mode-panel" id="mode-anchorage">
+      <div class="aoc-toolbar">
+        <button id="aoc-load-btn" type="button">Open .eo</button>
+        <input id="aoc-load-input" type="file" accept=".eo,.jsonl,.txt" hidden>
+        <button id="aoc-save-btn" type="button">Download .eo</button>
+        <button id="aoc-seed-btn" type="button" title="Load a small built-in demo log to exercise the fold and cursor UI">Load demo</button>
+        <label>Horizon
+          <select class="aoc-horizon-select"></select>
+        </label>
+        <label><input type="checkbox" class="aoc-comparative-toggle"> comparative</label>
+        <span class="aoc-status">no log loaded</span>
+      </div>
+      <div class="aoc-body">
+        <aside class="aoc-anchor-list"></aside>
+        <main class="aoc-cursor-panel">
+          <div class="aoc-empty">Open an .eo file or load the demo to begin.</div>
+        </main>
+      </div>
     </section>
 
     <!-- ===== WORKSPACES EXPLORER MODE ===== -->
@@ -1083,6 +1111,15 @@
 <script src="js/seed/source-samples.js"></script>
 <script src="js/seed/article.js"></script>
 <script src="js/seed/seed-claims.js"></script>
+
+<!-- Anchorage ontology layer (build spec: build.md → Anchorage Ontology Layer).
+     Loaded as classic scripts; each module attaches a single namespace to the
+     window. Order matters: format → fold → extraction → cursor UI. The
+     bootstrap below the main script wires them into the new mode panel. -->
+<script src="js/anchorage/eo-format.js"></script>
+<script src="js/anchorage/fold.js"></script>
+<script src="js/anchorage/extraction-prompt.js"></script>
+<script src="js/anchorage/cursor-ui.js"></script>
 <script>
 /* ===========================================================================
    NL EXPLORER
@@ -22895,6 +22932,200 @@ init().catch(err => {
   setBootStatus('boot failed — see console', 'var(--red-mid)');
 });
 
+</script>
+
+<!-- ===========================================================================
+     ANCHORAGE ONTOLOGY LAYER — bootstrap
+     ---------------------------------------------------------------------------
+     Wires the .eo substrate into the Anchorage mode panel. Self-contained:
+     state lives in this closure, the main app's CLAIMS/G/M are not touched.
+     =========================================================================== */
+<script>
+(function () {
+  'use strict';
+
+  // -------------------------------------------------------------
+  // State. The log is the only persistence; anchorageProjection is
+  // recomputed on every change. Active horizon is a pointer; switching
+  // is parameter substitution, not migration.
+  // -------------------------------------------------------------
+  let anchorageEvents = [];
+  let anchorageProjection = AnchorageFold.fold([], AnchorageFold.builtinHorizons.latest);
+  let activeHorizon = AnchorageFold.builtinHorizons.latest;
+  let cursorMount = null;
+
+  function refold() {
+    anchorageProjection = AnchorageFold.fold(anchorageEvents, activeHorizon);
+    if (cursorMount) cursorMount.refresh();
+  }
+
+  // -------------------------------------------------------------
+  // Demo log — small, hand-authored, exercises supersession,
+  // contradictions under comparative σ, and a Lens DEF. Used only by
+  // the "Load demo" button so the panel can be exercised without an
+  // external .eo file or a real extractor run.
+  // -------------------------------------------------------------
+  async function buildDemoEvents() {
+    const E = EOFormat;
+    const obs1 = await E.makeEvent({
+      type: 'observation', src: 'doc:1:cl:1', clause: 'Solaren International signed a security contract.',
+      phasepost: ['ins', 'figure', 'entity'],
+      G: 'Solaren International signed a contract', F: 'Solaren International', P: 'vendor identity established',
+      ts: '2024-01-10T09:00:00Z', agent: 'anchorage:extract:v1'
+    });
+    const obs2 = await E.makeEvent({
+      type: 'observation', src: 'doc:1:cl:2', clause: 'The contract value was $312,000.',
+      phasepost: ['def', 'figure', 'attribute'],
+      G: 'contract value $312,000', F: 'Solaren contract', P: 'monetary commitment',
+      ts: '2024-01-10T09:00:01Z', agent: 'anchorage:extract:v1'
+    });
+    const anc = await E.makeEvent({
+      type: 'anchor', aid: 'ent:solaren_intl', first_seen: 'doc:1:cl:1',
+      ts: '2024-01-10T09:00:02Z', agent: 'anchorage:anchor:v1'
+    });
+    const def1 = await E.makeEvent({
+      type: 'def', target: 'ent:solaren_intl', kind: 'classification',
+      operand: { cells: [['ins', 'figure', 'entity']], rationale: 'dominant cell from population' },
+      cursors: { valid_from: '2024-01-10T09:00:00Z', asserted_at: '2024-01-10T09:00:03Z' },
+      ts: '2024-01-10T09:00:03Z', agent: 'anchorage:classify:v1',
+      rationale: 'most observations land in [ins,figure,entity]'
+    });
+    const def2 = await E.makeEvent({
+      type: 'def', target: 'ent:solaren_intl', kind: 'property',
+      operand: { property_type: 'name', value: 'Solaren International' },
+      cursors: { valid_from: '2024-01-10T09:00:00Z', asserted_at: '2024-01-10T09:00:04Z' },
+      ts: '2024-01-10T09:00:04Z', agent: 'anchorage:extract:v1', rationale: 'surface form'
+    });
+    // A later property DEF supersedes the earlier under σ=latest.
+    const def3 = await E.makeEvent({
+      type: 'def', target: 'ent:solaren_intl', kind: 'property',
+      operand: { property_type: 'name', value: 'Solaren Intl., LLC' },
+      cursors: { valid_from: '2024-03-15T00:00:00Z', asserted_at: '2024-03-15T11:22:00Z' },
+      ts: '2024-03-15T11:22:00Z', agent: 'human:reporter_a', rationale: 'matches incorporation filing'
+    });
+    // A Lens DEF — substrate doesn't validate framework structure.
+    const def4 = await E.makeEvent({
+      type: 'def', target: 'ent:solaren_intl', kind: 'lens',
+      operand: { framework: 'bfo', category: 'IndependentContinuant', subcategory: 'ObjectAggregate' },
+      cursors: { valid_from: '2024-03-15T00:00:00Z', asserted_at: '2024-03-15T12:00:00Z' },
+      ts: '2024-03-15T12:00:00Z', agent: 'human:reporter_a',
+      rationale: 'corporate entity persists through time'
+    });
+    return [obs1, obs2, anc, def1, def2, def3, def4];
+  }
+
+  // -------------------------------------------------------------
+  // File I/O. Open delegates to a hidden <input type="file">; save
+  // produces a Blob and triggers a download. Both go through
+  // EOFormat.parseEoFile / serializeEoFile — no in-place edits.
+  // -------------------------------------------------------------
+  async function openEoFile(file) {
+    const text = await file.text();
+    const { events, errors, lineCount } = EOFormat.parseEoFile(text);
+    if (errors.length) {
+      console.warn('[anchorage] .eo parse: ' + errors.length + ' bad lines / ' + lineCount + ' total', errors.slice(0, 5));
+    }
+    anchorageEvents = events;
+    refold();
+    const status = document.querySelector('#mode-anchorage .aoc-status');
+    if (status) status.textContent =
+      `${events.length} events loaded${errors.length ? ' (' + errors.length + ' rejected)' : ''}`;
+  }
+
+  function downloadEoFile() {
+    const text = EOFormat.serializeEoFile(anchorageEvents);
+    const blob = new Blob([text], { type: 'application/x-ndjson' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'anchorage-' + new Date().toISOString().replace(/[:.]/g, '-') + '.eo';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  // -------------------------------------------------------------
+  // Append a new DEF authored from the cursor UI. New events are
+  // appended in memory; the user clicks "Download .eo" to persist.
+  // The substrate's audit trail is the data — nothing overwrites.
+  // -------------------------------------------------------------
+  async function appendDefEvent(partial) {
+    const evt = await EOFormat.makeEvent({
+      type: 'def',
+      ...partial,
+      ts: new Date().toISOString()
+    });
+    anchorageEvents.push(evt);
+    refold();
+    return evt;
+  }
+
+  // -------------------------------------------------------------
+  // Mount once when the panel first becomes interesting. We don't tie
+  // to DOMContentLoaded because the existing init() may still be
+  // initializing OPFS / segments at that moment; mounting on first
+  // tab-switch keeps work off the boot path.
+  // -------------------------------------------------------------
+  let mounted = false;
+  function ensureMounted() {
+    if (mounted) return;
+    const root = document.getElementById('mode-anchorage');
+    if (!root) return;
+    cursorMount = AnchorageCursor.mount(root, {
+      getProjection: () => anchorageProjection,
+      getEvents: () => anchorageEvents,
+      getActiveHorizon: () => activeHorizon,
+      setActiveHorizon: (h) => {
+        activeHorizon = h;
+        refold();
+      },
+      appendDefEvent,
+      currentUser: () => 'human:user'
+    });
+
+    // Toolbar wiring.
+    const loadBtn = root.querySelector('#aoc-load-btn');
+    const loadInput = root.querySelector('#aoc-load-input');
+    const saveBtn = root.querySelector('#aoc-save-btn');
+    const seedBtn = root.querySelector('#aoc-seed-btn');
+    if (loadBtn && loadInput) {
+      loadBtn.addEventListener('click', () => loadInput.click());
+      loadInput.addEventListener('change', () => {
+        const f = loadInput.files && loadInput.files[0];
+        if (f) openEoFile(f);
+        loadInput.value = '';
+      });
+    }
+    if (saveBtn) saveBtn.addEventListener('click', downloadEoFile);
+    if (seedBtn) seedBtn.addEventListener('click', async () => {
+      anchorageEvents = await buildDemoEvents();
+      refold();
+      const status = root.querySelector('.aoc-status');
+      if (status) status.textContent = anchorageEvents.length + ' demo events loaded';
+    });
+
+    mounted = true;
+    cursorMount.refresh();
+  }
+
+  // Mount on first switch into Anchorage mode. The existing switchMode
+  // function is global; we add a click listener that runs after it.
+  document.addEventListener('click', (e) => {
+    const tab = e.target && e.target.closest && e.target.closest('.mtab[data-mode="anchorage"]');
+    if (tab) ensureMounted();
+  }, true);
+
+  // Expose for tests / debugging — does not collide with main app globals.
+  window.AnchorageBoot = {
+    openEoFile,
+    downloadEoFile,
+    appendDefEvent,
+    getEvents: () => anchorageEvents.slice(),
+    getProjection: () => anchorageProjection,
+    setEvents: (events) => { anchorageEvents = events; refold(); }
+  };
+})();
 </script>
 
 <!-- ===========================================================================
