@@ -39,12 +39,15 @@
 
   // The phasepost address space — the EO native cell addressing scheme.
   // Mode is which phase (sig/ins/con/def/eva/nul) the clause is in.
-  // Domain is the row of the matrix; object is the column.
+  // Domain is the abstraction level (ground/particular/pattern).
+  // Object is the kind of the referent collapsed to three categories
+  // (existence/structure/significance) so the (domain × object) Site
+  // face is 3×3 — that's what the terrain panel renders.
   // Order matters: Ground row first so unfilled rows produce visible
   // sparsity in the cell-population fold output.
   const PHASEPOST_MODE = Object.freeze(['sig', 'ins', 'con', 'def', 'eva', 'nul']);
-  const PHASEPOST_DOMAIN = Object.freeze(['ground', 'figure', 'significance']);
-  const PHASEPOST_OBJECT = Object.freeze(['entity', 'event', 'attribute', 'relation', 'state']);
+  const PHASEPOST_DOMAIN = Object.freeze(['ground', 'particular', 'pattern']);
+  const PHASEPOST_OBJECT = Object.freeze(['existence', 'structure', 'significance']);
 
   const SYSTEM_PROMPT = `You are an EO clause extractor. Your only job is to read one clause at
 a time and emit a four-tuple (G, F, P, phasepost) describing it.
@@ -68,15 +71,26 @@ the clause occupies in the EO matrix:
           def — establish term (assignment of value)
           eva — evaluate against definitions (confirm / conflict)
           nul — record absence (expected pattern not found)
-  domain  ∈ {ground, figure, significance}
-  object  ∈ {entity, event, attribute, relation, state}
+  domain  ∈ {ground, particular, pattern}
+          ground     — atmospheric / unfocused / contextual
+          particular — a specific instance
+          pattern    — a categorical kind / network / paradigm
+  object  ∈ {existence, structure, significance}
+          existence    — entities, states, presences
+          structure    — relations, events, links
+          significance — framings, attributes, meanings
+
+The (domain × object) face addresses one of nine terrains:
+  Void     Field    Atmosphere    (ground row)
+  Entity   Link     Lens          (particular row)
+  Kind     Network  Paradigm      (pattern row)
 
 Output STRICT JSON, exactly the shape:
 
   {"G":"...","F":"...","P":"...","phasepost":["mode","domain","object"]}
 
 No prose, no explanation, no markdown fence. If you cannot extract the
-tuple, emit {"G":"","F":"","P":"","phasepost":["nul","ground","entity"]}.`;
+tuple, emit {"G":"","F":"","P":"","phasepost":["nul","ground","existence"]}.`;
 
   // Build the chat-completions message list for one clause.
   // ctx may carry { src, doc_title, prior_clause, next_clause } for context.

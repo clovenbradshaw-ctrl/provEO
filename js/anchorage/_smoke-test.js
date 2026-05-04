@@ -37,7 +37,7 @@ const AnchorageExtraction = fakeWindow.AnchorageExtraction;
   // 1. Build a small log.
   const obs = await EOFormat.makeEvent({
     type: 'observation', src: 'doc:1:cl:1', clause: 'A clause.',
-    phasepost: ['ins', 'figure', 'entity'],
+    phasepost: ['ins', 'particular', 'existence'],
     G: 'a', F: 'a', P: '',
     ts: '2024-01-01T00:00:00Z', agent: 'anchorage:extract:v1'
   });
@@ -109,20 +109,20 @@ const AnchorageExtraction = fakeWindow.AnchorageExtraction;
 
   // 7. Cell populations bucket per anchor.
   const cells = projLatest.cellPopulations['ent:foo'];
-  assert.strictEqual(cells['[ins,figure,entity]'], 1, 'cell pop matches the single observation');
+  assert.strictEqual(cells['[ins,particular,existence]'], 1, 'cell pop matches the single observation');
   assert.strictEqual(Object.keys(cells).length, 1, 'only one cell populated');
 
   // 8. Extraction prompt parser handles strict and fenced output.
   const r1 = AnchorageExtraction.parseExtractionResponse(
-    '{"G":"x","F":"y","P":"z","phasepost":["ins","figure","entity"]}'
+    '{"G":"x","F":"y","P":"z","phasepost":["ins","particular","existence"]}'
   );
   assert.ok(r1.ok, 'strict JSON parses');
   const r2 = AnchorageExtraction.parseExtractionResponse(
-    '```json\n{"G":"x","F":"y","P":"z","phasepost":["ins","figure","entity"]}\n```'
+    '```json\n{"G":"x","F":"y","P":"z","phasepost":["ins","particular","existence"]}\n```'
   );
   assert.ok(r2.ok, 'fenced JSON parses');
   const r3 = AnchorageExtraction.parseExtractionResponse(
-    '{"G":"","F":"","P":"","phasepost":["zzz","figure","entity"]}'
+    '{"G":"","F":"","P":"","phasepost":["zzz","particular","existence"]}'
   );
   assert.strictEqual(r3.ok, false, 'unknown mode rejected');
 
