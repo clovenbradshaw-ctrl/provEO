@@ -203,19 +203,96 @@
       const dKey = dominant ? dominant.key : null;
       if (state.terrainExclude.size && dKey && state.terrainExclude.has(dKey)) continue;
       if (state.terrainFilter.size && (!dKey || !state.terrainFilter.has(dKey))) continue;
+
+      // Search hits aid OR any observation clause for full-text feel.
       if (state.searchQuery) {
         const q = state.searchQuery.toLowerCase();
-        if (!aid.toLowerCase().includes(q)) continue;
+        let hit = aid.toLowerCase().includes(q);
+        if (!hit) {
+          const obs = (projection.observationsByAnchor || {})[aid] || [];
+          hit = obs.some(o => (o.clause || '').toLowerCase().includes(q) ||
+                              (o.G || '').toLowerCase().includes(q));
+        }
+        if (!hit) continue;
       }
-      out.push({
-        aid,
-        anchor: projection.anchors[aid],
-        cells,
-        dominant
-      });
+
+      // Time filter — keeps an anchor if it has at least one DEF/observation
+      // whose asserted_at (DEF) or ts (obs) lies in [from, to]. Either bound
+      // is optional. String compare works on ISO timestamps and bare years.
+      if (state.timeFrom || state.timeTo) {
+        const from = state.timeFrom || '';
+        const to   = state.timeTo   || '￿';
+        if (!anchorHasEventInRange(projection, aid, from, to)) continue;
+      }
+
+      // Agent filter — keep if any DEF or observation references one of
+      // the selected agents.
+      if (state.agentFilter && state.agentFilter.size) {
+        const agents = collectAnchorAgents(projection, aid);
+        let any = false;
+        for (const a of agents) if (state.agentFilter.has(a)) { any = true; break; }
+        if (!any) continue;
+      }
+
+      // Kind filter — keep if any DEF kind in the active stack is selected.
+      if (state.kindFilter && state.kindFilter.size) {
+        const stacks = (projection.defStacks || {})[aid] || {};
+        let any = false;
+        for (const k of Object.keys(stacks)) if (state.kindFilter.has(k)) { any = true; break; }
+        if (!any) continue;
+      }
+
+      out.push({ aid, anchor: projection.anchors[aid], cells, dominant });
     }
     out.sort((a, b) => a.aid.localeCompare(b.aid));
     return out;
+  }
+
+  // Helpers feeding the filter pass and the corpus-wide enumerations.
+  function anchorHasEventInRange(projection, aid, from, to) {
+    const stacks = (projection.defStacks || {})[aid] || {};
+    for (const kind of Object.keys(stacks)) {
+      for (const opKey of Object.keys(stacks[kind])) {
+        for (const evt of stacks[kind][opKey]) {
+          const t = (evt.cursors && evt.cursors.asserted_at) || evt.ts || '';
+          if (t >= from && t <= to) return true;
+        }
+      }
+    }
+    const obs = (projection.observationsByAnchor || {})[aid] || [];
+    for (const o of obs) {
+      const t = o.ts || '';
+      if (t >= from && t <= to) return true;
+    }
+    return false;
+  }
+  function collectAnchorAgents(projection, aid) {
+    const out = new Set();
+    const stacks = (projection.defStacks || {})[aid] || {};
+    for (const kind of Object.keys(stacks)) {
+      for (const opKey of Object.keys(stacks[kind])) {
+        for (const evt of stacks[kind][opKey]) {
+          if (evt.agent) out.add(evt.agent);
+        }
+      }
+    }
+    const obs = (projection.observationsByAnchor || {})[aid] || [];
+    for (const o of obs) if (o.agent) out.add(o.agent);
+    return out;
+  }
+  function corpusAgents(projection) {
+    const out = new Set();
+    for (const aid of Object.keys(projection.anchors || {})) {
+      for (const a of collectAnchorAgents(projection, aid)) out.add(a);
+    }
+    return Array.from(out).sort();
+  }
+  function corpusKinds(projection) {
+    const out = new Set();
+    for (const aid of Object.keys(projection.defStacks || {})) {
+      for (const k of Object.keys(projection.defStacks[aid])) out.add(k);
+    }
+    return Array.from(out).sort();
   }
 
   // -------------------------------------------------------------
@@ -295,13 +372,44 @@
       return;
     }
 
-    // Container for Cytoscape — needs an explicit element.
+    // Pre-compute per-node defs count so the size selector can swap
+    // between observation count and DEF count without rebuilding nodes.
+    for (const node of nodes) {
+      const aid = node.data.id;
+      const stacks = (projection.defStacks || {})[aid] || {};
+      let defs = 0;
+      for (const k of Object.keys(stacks)) {
+        for (const opKey of Object.keys(stacks[k])) defs += stacks[k][opKey].length;
+      }
+      node.data.defs = defs;
+    }
+
+    const sizeBy = state.sizeBy || 'obs';
+    const layoutKey = state.layoutKey || 'force';
+
+    // Container for Cytoscape, plus the canvas-control bar that lets the
+    // user swap layout and size encoding without leaving the graph.
     canvasEl.innerHTML = `<div class="aoc-cy" style="width:100%;height:100%;"></div>
                           <div class="aoc-canvas-meta"><span>${nodes.length} anchors · ${edges.length} relations</span></div>
                           <div class="aoc-graph-legend">
                             <span><span class="aoc-glyph aoc-glyph-existence"></span>Existence</span>
                             <span><span class="aoc-glyph aoc-glyph-structure"></span>Structure</span>
                             <span><span class="aoc-glyph aoc-glyph-significance"></span>Significance</span>
+                          </div>
+                          <div class="aoc-canvas-controls">
+                            <label>layout
+                              <select class="aoc-graph-layout">
+                                <option value="force"${layoutKey === 'force' ? ' selected' : ''}>force</option>
+                                <option value="terrain"${layoutKey === 'terrain' ? ' selected' : ''}>terrain</option>
+                                <option value="temporal"${layoutKey === 'temporal' ? ' selected' : ''}>temporal</option>
+                              </select>
+                            </label>
+                            <label>size
+                              <select class="aoc-graph-size">
+                                <option value="obs"${sizeBy === 'obs' ? ' selected' : ''}>obs</option>
+                                <option value="defs"${sizeBy === 'defs' ? ' selected' : ''}>DEFs</option>
+                              </select>
+                            </label>
                           </div>`;
     const cyContainer = canvasEl.querySelector('.aoc-cy');
 
@@ -322,6 +430,46 @@
       '</g></svg>'
     );
 
+    // Layout mapping. `force` is cose. `terrain` uses concentric (one
+    // ring per terrain row, three rings total). `temporal` uses
+    // breadthfirst with anchors ordered by first_seen so flow is
+    // left-to-right.
+    let layoutOpts;
+    if (layoutKey === 'terrain') {
+      layoutOpts = {
+        name: 'concentric',
+        animate: false,
+        padding: 30,
+        concentric: (n) => {
+          const row = n.data('terrainRow');
+          if (row === 'pattern') return 3;
+          if (row === 'particular') return 2;
+          return 1;
+        },
+        levelWidth: () => 1
+      };
+    } else if (layoutKey === 'temporal') {
+      // Pre-sort nodes by first_seen so breadthfirst preserves order.
+      // Cytoscape's breadthfirst doesn't natively support a custom sort,
+      // so we set up a "roots" hint with the earliest-first_seen anchor.
+      const sorted = nodes.slice().sort((a, b) => {
+        const af = ((projection.anchors || {})[a.data.id] || {}).first_seen || '';
+        const bf = ((projection.anchors || {})[b.data.id] || {}).first_seen || '';
+        return af.localeCompare(bf);
+      });
+      layoutOpts = {
+        name: 'breadthfirst',
+        animate: false,
+        padding: 30,
+        directed: true,
+        roots: sorted[0] ? '#' + cssEscape(sorted[0].data.id) : undefined
+      };
+    } else {
+      layoutOpts = { name: 'cose', animate: false, padding: 20 };
+    }
+
+    const sizeMapField = sizeBy === 'defs' ? 'defs' : 'obs';
+
     const cy = global.cytoscape({
       container: cyContainer,
       elements: { nodes, edges },
@@ -340,15 +488,13 @@
             'text-valign': 'center',
             'text-halign': 'right',
             'text-margin-x': 6,
-            'width': 'mapData(obs, 0, 50, 16, 36)',
-            'height': 'mapData(obs, 0, 50, 16, 36)',
+            'width': 'mapData(' + sizeMapField + ', 0, 50, 16, 36)',
+            'height': 'mapData(' + sizeMapField + ', 0, 50, 16, 36)',
             'shape': 'ellipse'
           }
         },
-        { selector: 'node[terrainObject="structure"]',    style: { 'shape': 'triangle' } },
-        // Significance: circle + asterisk overlay. Shape stays ellipse so
-        // the bounding box is round; the asterisk is painted over the
-        // terrain-colored fill via background-image.
+        { selector: 'node[terrainObject="structure"]', style: { 'shape': 'triangle' } },
+        // Significance: circle + asterisk overlay.
         {
           selector: 'node[terrainObject="significance"]',
           style: {
@@ -357,6 +503,11 @@
             'background-fit': 'contain',
             'background-clip': 'node'
           }
+        },
+        // Faded mark — used by Compare mode for σ-disagreement anchors.
+        {
+          selector: 'node.faded',
+          style: { 'opacity': 0.28, 'text-opacity': 0.4 }
         },
         {
           selector: 'edge',
@@ -369,19 +520,52 @@
             'opacity': 0.7
           }
         },
-        { selector: 'edge[op="SEG"]',  style: { 'line-style': 'dashed' } },
-        { selector: 'edge[op="SYN"]',  style: { 'line-style': 'dotted' } },
+        { selector: 'edge[op="SEG"]', style: { 'line-style': 'dashed' } },
+        { selector: 'edge[op="SYN"]', style: { 'line-style': 'dotted' } },
         {
           selector: 'node:selected',
           style: { 'border-color': '#b87a3d', 'border-width': 2 }
         }
       ],
-      layout: { name: 'cose', animate: false, padding: 20 }
+      layout: layoutOpts
     });
-    cy.on('tap', 'node', (evt) => {
-      state.selectAnchor(evt.target.id());
+    cy.on('tap', 'node', (evt) => state.selectAnchor(evt.target.id()));
+    // Double-click → fit to 1-hop neighborhood. Useful when one anchor's
+    // local subgraph matters more than the global view.
+    cy.on('dblclick', 'node', (evt) => {
+      const focal = evt.target;
+      const hop = focal.closedNeighborhood();
+      cy.animate({ fit: { eles: hop, padding: 30 } }, { duration: 250 });
     });
     state._cy = cy;
+
+    // Apply Compare-mode fade markers if requested by the caller.
+    if (state.fadeAnchors && state.fadeAnchors.size) {
+      for (const aid of state.fadeAnchors) {
+        const n = cy.getElementById(aid);
+        if (n && n.length) n.addClass('faded');
+      }
+    }
+
+    // Wire canvas controls.
+    const layoutSel = canvasEl.querySelector('.aoc-graph-layout');
+    const sizeSel   = canvasEl.querySelector('.aoc-graph-size');
+    if (layoutSel) layoutSel.addEventListener('change', () => {
+      state.layoutKey = layoutSel.value;
+      renderGraph(canvasEl, projection, state);
+    });
+    if (sizeSel) sizeSel.addEventListener('change', () => {
+      state.sizeBy = sizeSel.value;
+      renderGraph(canvasEl, projection, state);
+    });
+  }
+
+  // CSS.escape polyfill for older browsers / edge cases.
+  function cssEscape(s) {
+    if (typeof CSS !== 'undefined' && CSS && typeof CSS.escape === 'function') {
+      return CSS.escape(s);
+    }
+    return String(s).replace(/[^a-zA-Z0-9_-]/g, c => '\\' + c);
   }
 
   // -------------------------------------------------------------
@@ -477,7 +661,9 @@
     const scopeHtml = renderKindSection(aid, 'scope', perAnchor.scope, horizon);
     const lensHtml = renderLensSection(aid, perAnchor.lens, horizon);
 
-    const obsHtml = observations.slice(0, 6).map(obs => `
+    const showAllObs = !!state.expandObs;
+    const obsLimit = showAllObs ? observations.length : 6;
+    const obsHtml = observations.slice(0, obsLimit).map(obs => `
       <div class="aoc-source-clause">
         <div class="aoc-source-loc">${escapeHtml(obs.src)}</div>
         <div class="aoc-source-text">${escapeHtml(obs.clause || obs.G || '')}</div>
@@ -512,7 +698,7 @@
         <h4>SOURCE CLAUSES (${observations.length})</h4>
         <div class="aoc-source-list">
           ${obsHtml || '<em class="aoc-na">no observations linked to this anchor</em>'}
-          ${observations.length > 6 ? `<button class="aoc-source-more">show all ${observations.length}</button>` : ''}
+          ${observations.length > 6 ? `<button class="aoc-source-more">${showAllObs ? 'collapse' : 'show all ' + observations.length}</button>` : ''}
         </div>
       </section>
 
@@ -538,6 +724,15 @@
         </div>
       </footer>
     `;
+
+    // Show-all observations toggle.
+    const moreBtn = detailEl.querySelector('.aoc-source-more');
+    if (moreBtn) {
+      moreBtn.addEventListener('click', () => {
+        state.expandObs = !state.expandObs;
+        renderDetail(detailEl, aid, projection, deps, state);
+      });
+    }
 
     // Authoring affordance.
     const toggle = detailEl.querySelector('[data-author-toggle]');
@@ -688,14 +883,64 @@
         </div>
       </div>`;
 
+    // Compute the σ-disagreement set per side.
+    //
+    // For each anchor in either projection, compare the σ winner under
+    // each Horizon for every (kind, opKey). If A has a winner that B
+    // either lacks or whose winner.id differs, fade the anchor on the
+    // B side (and symmetrically). The fade tells the user "this side's
+    // active Horizon does not foreground this anchor the same way."
+    const aFade = new Set();
+    const bFade = new Set();
+    const allAids = new Set([
+      ...Object.keys(projA.anchors || {}),
+      ...Object.keys(projB.anchors || {})
+    ]);
+    for (const aid of allAids) {
+      const aProj = (projA.projections || {})[aid] || {};
+      const bProj = (projB.projections || {})[aid] || {};
+      let aDiffs = false, bDiffs = false;
+      for (const kind of new Set([...Object.keys(aProj), ...Object.keys(bProj)])) {
+        const aBuckets = (aProj[kind] && aProj[kind].buckets) || {};
+        const bBuckets = (bProj[kind] && bProj[kind].buckets) || {};
+        const allKeys = new Set([...Object.keys(aBuckets), ...Object.keys(bBuckets)]);
+        for (const opKey of allKeys) {
+          const aw = aBuckets[opKey] && aBuckets[opKey].winner;
+          const bw = bBuckets[opKey] && bBuckets[opKey].winner;
+          if (aw && (!bw || aw.id !== bw.id)) bDiffs = true;
+          if (bw && (!aw || aw.id !== bw.id)) aDiffs = true;
+        }
+      }
+      if (aDiffs) aFade.add(aid);
+      if (bDiffs) bFade.add(aid);
+    }
+
     const aPane = canvasEl.querySelector('[data-pane="a"]');
     const bPane = canvasEl.querySelector('[data-pane="b"]');
     // Render each pane via the same graph code, with a per-pane state
     // copy so the cytoscape instances don't fight over `state._cy`.
-    const aState = Object.assign({}, state, { _cy: null });
-    const bState = Object.assign({}, state, { _cy: null });
+    const aState = Object.assign({}, state, { _cy: null, fadeAnchors: aFade });
+    const bState = Object.assign({}, state, { _cy: null, fadeAnchors: bFade });
     renderGraph(aPane, projA, aState);
     renderGraph(bPane, projB, bState);
+
+    // Compare-mode tooltip wiring — hovering a faded node explains the
+    // disagreement. Cytoscape exposes hover via `mouseover` events.
+    function explainFade(cy, fade, otherProj) {
+      cy.on('mouseover', 'node', (evt) => {
+        const aid = evt.target.id();
+        if (!fade.has(aid)) return;
+        const otherAnchor = (otherProj.anchors || {})[aid];
+        const tip = otherAnchor
+          ? 'σ disagreement: this Horizon does not foreground this anchor the same way as the other side.'
+          : 'This anchor is absent under this Horizon.';
+        evt.target.qtip = tip; // metadata only — cy handles its own tooltip via shape title-style; we attach so a future tooltip layer can read it
+        const meta = canvasEl.querySelector('.aoc-canvas-meta');
+        if (meta) meta.setAttribute('title', aid + ' — ' + tip);
+      });
+    }
+    if (aState._cy) explainFade(aState._cy, aFade, projB);
+    if (bState._cy) explainFade(bState._cy, bFade, projA);
 
     canvasEl.querySelector('.aoc-cmp-a').addEventListener('change', (e) => {
       state.compareA = e.target.value;
@@ -789,12 +1034,25 @@
     const compToggle = rootEl.querySelector('.aoc-comparative-toggle');
     const viewToggleEl = rootEl.querySelector('.aoc-view-toggle');
     const searchEl = rootEl.querySelector('.aoc-search');
+    const filterFrom = rootEl.querySelector('.aoc-filter-from');
+    const filterTo   = rootEl.querySelector('.aoc-filter-to');
+    const filterAgent = rootEl.querySelector('.aoc-filter-agent');
+    const filterKind  = rootEl.querySelector('.aoc-filter-kind');
+    const filterClear = rootEl.querySelector('.aoc-filter-clear');
+    const filterCount = rootEl.querySelector('.aoc-filter-active-count');
 
     const state = {
       view: 'graph',                   // graph | tabular | structural | discourse | resolution
       terrainFilter: new Set(),
       terrainExclude: new Set(),
       searchQuery: '',
+      timeFrom: '',
+      timeTo: '',
+      agentFilter: new Set(),
+      kindFilter: new Set(),
+      layoutKey: 'force',              // force | terrain | temporal
+      sizeBy: 'obs',                   // obs | defs
+      fadeAnchors: new Set(),          // populated by compare mode
       selectedAid: null,
       compareMode: false,
       compareA: 'latest',
@@ -815,6 +1073,7 @@
 
     function refresh() {
       const projection = deps.getProjection();
+      syncFilterSelects(projection);
       renderTerrainRail(railEl, projection, state);
       renderCenter(canvasEl, projection, state);
       renderDetail(detailEl, state.selectedAid, projection, deps, state);
@@ -822,6 +1081,11 @@
         const horizonName = (deps.getActiveHorizon() || {}).name || '?';
         const total = projection.anchors ? Object.keys(projection.anchors).length : 0;
         statusEl.textContent = `${total} anchors · ${projection.defCount} DEFs · ${projection.observationCount} obs · σ=${horizonName}`;
+      }
+      if (filterCount) {
+        const n = (state.timeFrom ? 1 : 0) + (state.timeTo ? 1 : 0)
+                + state.agentFilter.size + state.kindFilter.size;
+        filterCount.textContent = n ? '(' + n + ' active)' : '';
       }
     }
 
@@ -911,12 +1175,68 @@
       });
     }
 
-    // Search input — minimal substring on aid.
+    // Search input — substring across aid + observation clauses.
     if (searchEl) {
       searchEl.addEventListener('input', () => {
         state.searchQuery = searchEl.value.trim();
         refresh();
       });
+    }
+
+    // Time / Agent / Kind filters. Time inputs accept either ISO
+    // timestamps or bare years — string compare on ISO + the leading-
+    // year prefix produces the right ordering for both.
+    if (filterFrom) filterFrom.addEventListener('input', () => {
+      state.timeFrom = filterFrom.value.trim();
+      refresh();
+    });
+    if (filterTo) filterTo.addEventListener('input', () => {
+      state.timeTo = filterTo.value.trim();
+      refresh();
+    });
+    if (filterAgent) filterAgent.addEventListener('change', () => {
+      state.agentFilter = new Set(Array.from(filterAgent.selectedOptions).map(o => o.value));
+      refresh();
+    });
+    if (filterKind) filterKind.addEventListener('change', () => {
+      state.kindFilter = new Set(Array.from(filterKind.selectedOptions).map(o => o.value));
+      refresh();
+    });
+    if (filterClear) filterClear.addEventListener('click', () => {
+      state.timeFrom = ''; state.timeTo = '';
+      state.agentFilter.clear(); state.kindFilter.clear();
+      if (filterFrom) filterFrom.value = '';
+      if (filterTo) filterTo.value = '';
+      if (filterAgent) Array.from(filterAgent.options).forEach(o => o.selected = false);
+      if (filterKind) Array.from(filterKind.options).forEach(o => o.selected = false);
+      refresh();
+    });
+
+    // Repopulate filter selects whenever the projection changes — new
+    // events may bring new agents into scope. Preserve user selections.
+    function syncFilterSelects(projection) {
+      if (filterAgent) {
+        const have = new Set(Array.from(filterAgent.options).map(o => o.value));
+        const want = corpusAgents(projection);
+        const wantSet = new Set(want);
+        if (have.size !== wantSet.size || !want.every(a => have.has(a))) {
+          const sel = state.agentFilter;
+          filterAgent.innerHTML = want.map(a =>
+            `<option value="${escapeHtml(a)}"${sel.has(a) ? ' selected' : ''}>${escapeHtml(a)}</option>`
+          ).join('');
+        }
+      }
+      if (filterKind) {
+        const have = new Set(Array.from(filterKind.options).map(o => o.value));
+        const want = corpusKinds(projection);
+        const wantSet = new Set(want);
+        if (have.size !== wantSet.size || !want.every(k => have.has(k))) {
+          const sel = state.kindFilter;
+          filterKind.innerHTML = want.map(k =>
+            `<option value="${escapeHtml(k)}"${sel.has(k) ? ' selected' : ''}>${escapeHtml(k)}</option>`
+          ).join('');
+        }
+      }
     }
 
     return { refresh, selectAnchor: state.selectAnchor };

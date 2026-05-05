@@ -576,6 +576,83 @@
 .aoc-cell-n { color: var(--color-text-tertiary, #968b78); margin-left: 4px; }
 .aoc-na { color: var(--color-text-tertiary, #968b78); font-style: italic; }
 
+/* ---------- Filter palette (search bar) ---------- */
+.aoc-filters { margin-top: 6px; font-size: 11px; }
+.aoc-filters summary {
+  cursor: pointer;
+  color: var(--color-text-secondary, #6b6358);
+  list-style: none;
+}
+.aoc-filters summary::-webkit-details-marker { display: none; }
+.aoc-filter-active-count {
+  font-size: 10px;
+  color: var(--color-accent, #b87a3d);
+  margin-left: 6px;
+}
+.aoc-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+  margin-top: 6px;
+}
+.aoc-filter-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 10px;
+  color: var(--color-text-secondary, #6b6358);
+}
+.aoc-filter-grid input,
+.aoc-filter-grid select {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  border: 0.5px solid var(--color-border-tertiary, #d8d3c5);
+  border-radius: 3px;
+  padding: 3px 5px;
+  background: white;
+}
+.aoc-filter-grid select[multiple] { min-height: 56px; }
+.aoc-filter-clear {
+  font-size: 10px;
+  background: transparent;
+  border: 0.5px solid var(--color-border-tertiary, #d8d3c5);
+  border-radius: 3px;
+  padding: 3px 8px;
+  cursor: pointer;
+  color: var(--color-text-secondary, #6b6358);
+  align-self: end;
+  height: fit-content;
+}
+
+/* ---------- Canvas controls (graph layout / size) ---------- */
+.aoc-canvas-controls {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  display: flex;
+  gap: 8px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  background: rgba(255, 255, 255, 0.85);
+  padding: 3px 6px;
+  border-radius: 3px;
+  color: var(--color-text-secondary, #6b6358);
+}
+.aoc-canvas-controls label {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.aoc-canvas-controls select {
+  font-family: inherit;
+  font-size: 10.5px;
+  border: 0.5px solid var(--color-border-tertiary, #d8d3c5);
+  border-radius: 3px;
+  padding: 1px 4px;
+  background: white;
+}
+
 /* ---------- Compare-mode toggle in toolbar ---------- */
 .aoc-compare-toggle-btn.is-active {
   border-color: var(--color-accent, #b87a3d);

@@ -365,7 +365,25 @@
         <span class="aoc-status">no log loaded</span>
       </div>
       <div class="aoc-search-bar">
-        <input class="aoc-search" type="text" placeholder="⌕ search anchors">
+        <input class="aoc-search" type="text" placeholder="⌕ search anchors and clauses">
+        <details class="aoc-filters">
+          <summary>⌗ filters <span class="aoc-filter-active-count"></span></summary>
+          <div class="aoc-filter-grid">
+            <label>Time from
+              <input class="aoc-filter-from" type="text" placeholder="ISO date or year">
+            </label>
+            <label>Time to
+              <input class="aoc-filter-to" type="text" placeholder="ISO date or year">
+            </label>
+            <label>Agent
+              <select class="aoc-filter-agent" multiple size="3"></select>
+            </label>
+            <label>Kind
+              <select class="aoc-filter-kind" multiple size="3"></select>
+            </label>
+            <button class="aoc-filter-clear" type="button">Clear all filters</button>
+          </div>
+        </details>
       </div>
       <div class="aoc-shell">
         <aside class="aoc-terrain-rail"></aside>
