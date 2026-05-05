@@ -1,5 +1,5 @@
 /* ---------- BODY ---------- */
-.body { display: flex; flex: 1; overflow: hidden; }
+.body { display: flex; flex: 1; overflow: hidden; position: relative; }
 
 /* ---------- SOURCES PANEL ---------- */
 .sources {
@@ -136,3 +136,106 @@
   overflow: hidden;
 }
 
+/* ---------- RESPONSIVE / MOBILE ---------- */
+@media (max-width: 720px) {
+  /* Drop the bordered card chrome — full viewport on phones. */
+  body { padding: 0; align-items: stretch; justify-content: stretch; }
+  .shell {
+    height: 100vh;
+    height: 100dvh;
+    max-width: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  /* Topbar: tabs scroll horizontally; non-essential controls hide. */
+  .topbar { padding: 0 8px; height: 44px; gap: 8px; }
+  .appname { margin-right: 4px; font-size: 14px; }
+  .modetabs {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .modetabs::-webkit-scrollbar { display: none; }
+  .mtab { flex-shrink: 0; padding: 5px 10px; font-size: 12px; }
+  .topright { gap: 6px; flex-shrink: 0; }
+  .topright #boot-status,
+  .topright #stage1-badge,
+  .topright #ruleset-btn,
+  .topright .focus-toggle,
+  .topright #graph-toggle,
+  .topright .srcbadge { display: none; }
+  .ws-btn { padding: 3px 6px; font-size: 10.5px; }
+  .ws-btn #ws-label { display: none; }
+
+  /* Sidebars become overlay drawers — they no longer steal flex space. */
+  .sources,
+  .right-panel:not(.explorer-detail) {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 60;
+    width: min(280px, 82vw);
+    box-shadow: 0 0 24px rgba(26,25,21,0.18);
+  }
+  .sources { left: 0; }
+  .right-panel:not(.explorer-detail) { right: 0; }
+  .sources.is-collapsed,
+  .right-panel.is-collapsed:not(.explorer-detail) {
+    width: 24px;
+    box-shadow: none;
+  }
+  .panel-expand { padding-top: 10px; font-size: 16px; }
+
+  /* Editor + review breathe room. */
+  .editor-wrap { padding: 14px 16px 18px; }
+  .review-article { padding: 18px; }
+  .article-title { font-size: 26px; }
+  .statusbar { padding: 8px 12px; gap: 10px; flex-wrap: wrap; }
+
+  /* Review mode: stack queue under the article instead of side-by-side. */
+  #mode-review.active { flex-direction: column; }
+  .review-queue {
+    width: 100%;
+    max-height: 38vh;
+    border-left: 0;
+    border-top: 0.5px solid var(--color-border-tertiary);
+  }
+
+  /* Explorer modes (Sources / Entities / Workspaces): single column with
+     filters on top; the detail panel becomes an overlay when populated. */
+  .mode-panel.explorer.active {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  .mode-panel.explorer .explorer-filters {
+    border-right: 0;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    max-height: 38vh;
+  }
+  .mode-panel.explorer .right-panel.explorer-detail {
+    display: none;
+  }
+  .mode-panel.explorer .right-panel.explorer-detail[data-empty="false"] {
+    display: flex;
+    position: absolute;
+    top: 0; bottom: 0; right: 0;
+    width: min(320px, 90vw);
+    z-index: 60;
+    box-shadow: 0 0 24px rgba(26,25,21,0.18);
+  }
+
+  /* Clipboard FAB: shrink so it stops covering the editor. */
+  .clip-fab {
+    bottom: 12px;
+    right: 12px;
+    padding: 7px 10px 7px 9px;
+    font-size: 11px;
+    gap: 6px;
+  }
+  .clip-fab > span:nth-child(2) { display: none; }
+}

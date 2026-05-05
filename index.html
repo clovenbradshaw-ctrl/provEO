@@ -13359,10 +13359,19 @@ function syncFocusToggleState() {
   btn.setAttribute('aria-pressed', both ? 'true' : 'false');
 }
 function wirePanelCollapse() {
-  // Restore persisted state.
+  // Restore persisted state. On phone-sized viewports, default both panels to
+  // collapsed when the user has no saved preference yet — otherwise they
+  // overlay the editor on first paint and hide the canvas.
   try {
-    if (localStorage.getItem(LAYOUT_KEYS.sources) === '1') $('#sources-panel')?.classList.add('is-collapsed');
-    if (localStorage.getItem(LAYOUT_KEYS.right)   === '1') $('#right-panel')?.classList.add('is-collapsed');
+    const isMobile = window.matchMedia('(max-width: 720px)').matches;
+    const savedSources = localStorage.getItem(LAYOUT_KEYS.sources);
+    const savedRight   = localStorage.getItem(LAYOUT_KEYS.right);
+    if (savedSources === '1' || (isMobile && savedSources === null)) {
+      $('#sources-panel')?.classList.add('is-collapsed');
+    }
+    if (savedRight === '1' || (isMobile && savedRight === null)) {
+      $('#right-panel')?.classList.add('is-collapsed');
+    }
   } catch {}
 
   $('#sources-collapse')?.addEventListener('click', () => setPanelCollapsed('sources', true));
