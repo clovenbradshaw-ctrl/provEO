@@ -27,17 +27,21 @@ if (!globalThis.crypto) {
 // Load order matches the index.html script tags.
 require('./eo-format.js');
 require('./fold.js');
+require('./terrains.js');
+require('./render.js');
 require('./extraction-prompt.js');
 
 const EOFormat = fakeWindow.EOFormat;
 const AnchorageFold = fakeWindow.AnchorageFold;
 const AnchorageExtraction = fakeWindow.AnchorageExtraction;
+const AnchorageRender = fakeWindow.AnchorageRender;
+const AnchorageTerrains = fakeWindow.AnchorageTerrains;
 
 (async function run() {
   // 1. Build a small log.
   const obs = await EOFormat.makeEvent({
     type: 'observation', src: 'doc:1:cl:1', clause: 'A clause.',
-    phasepost: ['ins', 'figure', 'entity'],
+    phasepost: ['ins', 'particular', 'existence'],
     G: 'a', F: 'a', P: '',
     ts: '2024-01-01T00:00:00Z', agent: 'anchorage:extract:v1'
   });
@@ -109,20 +113,20 @@ const AnchorageExtraction = fakeWindow.AnchorageExtraction;
 
   // 7. Cell populations bucket per anchor.
   const cells = projLatest.cellPopulations['ent:foo'];
-  assert.strictEqual(cells['[ins,figure,entity]'], 1, 'cell pop matches the single observation');
+  assert.strictEqual(cells['[ins,particular,existence]'], 1, 'cell pop matches the single observation');
   assert.strictEqual(Object.keys(cells).length, 1, 'only one cell populated');
 
   // 8. Extraction prompt parser handles strict and fenced output.
   const r1 = AnchorageExtraction.parseExtractionResponse(
-    '{"G":"x","F":"y","P":"z","phasepost":["ins","figure","entity"]}'
+    '{"G":"x","F":"y","P":"z","phasepost":["ins","particular","existence"]}'
   );
   assert.ok(r1.ok, 'strict JSON parses');
   const r2 = AnchorageExtraction.parseExtractionResponse(
-    '```json\n{"G":"x","F":"y","P":"z","phasepost":["ins","figure","entity"]}\n```'
+    '```json\n{"G":"x","F":"y","P":"z","phasepost":["ins","particular","existence"]}\n```'
   );
   assert.ok(r2.ok, 'fenced JSON parses');
   const r3 = AnchorageExtraction.parseExtractionResponse(
-    '{"G":"","F":"","P":"","phasepost":["zzz","figure","entity"]}'
+    '{"G":"","F":"","P":"","phasepost":["zzz","particular","existence"]}'
   );
   assert.strictEqual(r3.ok, false, 'unknown mode rejected');
 
@@ -141,6 +145,44 @@ const AnchorageExtraction = fakeWindow.AnchorageExtraction;
   const projB = AnchorageFold.fold(events.concat(def_size), AnchorageFold.builtinHorizons.latest);
   const propContradictions = projB.contradictions.filter(c => c.kind === 'property');
   assert.strictEqual(propContradictions.length, 0, 'different property types do not contradict');
+
+  // 11. Terrain mapping — observation phasepost resolves to a terrain.
+  const tEntity = AnchorageTerrains.terrainOfPhasepost(['ins', 'particular', 'existence']);
+  assert.ok(tEntity && tEntity.key === 'entity', 'particular×existence → Entity terrain');
+  const tNetwork = AnchorageTerrains.byKey('pattern', 'structure');
+  assert.ok(tNetwork && tNetwork.key === 'network', 'pattern×structure → Network terrain');
+
+  // 12. Render — native is lossless, drops always 0.
+  const nativeOut = AnchorageRender.run('native', projLatest, { getEvents: () => events });
+  assert.strictEqual(nativeOut.drops.total, 0, 'native render has no drops');
+  assert.ok(nativeOut.text.length > 0, 'native render produced output');
+
+  // 13. Render — BFO emits ttl + correctly bins drops by terrain.
+  // Our test corpus has 1 anchor with a BFO Lens DEF (ent:foo) — the
+  // anchor exists.
+  const bfoOut = AnchorageRender.run('bfo', projLatest);
+  assert.strictEqual(bfoOut.drops.kept, 1, 'one anchor kept by BFO render');
+  assert.ok(bfoOut.text.includes('IndependentContinuant'),
+            'BFO output includes the Lens category');
+  assert.ok(bfoOut.text.startsWith('@prefix bfo:'), 'BFO output is Turtle');
+
+  // 14. Render — DOLCE picks up its Lens DEF and ignores BFO Lenses.
+  const dolceOut = AnchorageRender.run('dolce', projLatest);
+  assert.strictEqual(dolceOut.drops.kept, 1, 'one anchor kept by DOLCE render');
+  assert.ok(dolceOut.text.includes('PhysicalEndurant'),
+            'DOLCE output includes the Lens category');
+
+  // 15. Render — schema.org with no Lens DEFs → all anchors dropped.
+  const schemaOut = AnchorageRender.run('schema.org', projLatest);
+  assert.strictEqual(schemaOut.drops.kept, 0, 'no schema.org Lens DEFs → 0 kept');
+  // The drops payload must report the corpus's single anchor.
+  assert.ok(schemaOut.drops.total >= 1, 'drops include the unrendered anchor');
+
+  // 16. Render — CSV emits a header + one row per anchor.
+  const csvOut = AnchorageRender.run('csv', projLatest);
+  const csvLines = csvOut.text.split('\n').filter(Boolean);
+  assert.ok(csvLines[0].startsWith('aid,'), 'CSV first line is the header');
+  assert.ok(csvLines.length >= 2, 'CSV has at least one data row');
 
   console.log('OK — all smoke checks passed.');
 })().catch(err => {
