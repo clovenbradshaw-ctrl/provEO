@@ -349,15 +349,19 @@
       <div class="aoc-toolbar">
         <button id="aoc-load-btn" type="button">Open .eo</button>
         <input id="aoc-load-input" type="file" accept=".eo,.jsonl,.txt" hidden>
-        <button id="aoc-save-btn" type="button">Download .eo</button>
-        <button id="aoc-export-bundle-btn" type="button" title="Export both the proveo log (ULID, OBS/CLAIM/EVA/REC) and the .eo substrate (sha256, five event types) as a single JSON bundle. Each substrate round-trips byte-identically.">Export bundle</button>
+        <button id="aoc-export-bundle-btn" type="button" title="Export both the proveo log and the .eo substrate as a single JSON bundle.">Export bundle</button>
         <input id="aoc-import-bundle-input" type="file" accept=".json,.proveo" hidden>
         <button id="aoc-import-bundle-btn" type="button" title="Import a previously exported bundle. Replaces both substrates' OPFS files.">Import bundle</button>
         <button id="aoc-seed-btn" type="button" title="Load a small built-in demo log to exercise the fold and cursor UI">Load demo</button>
         <label>Horizon
           <select class="aoc-horizon-select"></select>
         </label>
-        <label><input type="checkbox" class="aoc-comparative-toggle"> comparative</label>
+        <label><input type="checkbox" class="aoc-comparative-toggle" title="Switch the active Horizon to comparative — full live stack, no winner."> comparative</label>
+        <button class="aoc-compare-toggle-btn" type="button" title="Compare two Horizons side-by-side in the canvas">⊞ Compare</button>
+        <label>Render
+          <select class="aoc-render-select"></select>
+        </label>
+        <button class="aoc-render-btn" type="button" title="Run the selected render and download the result. Native is lossless; framework renders are one-way and lossy.">↓ Export</button>
         <span class="aoc-status">no log loaded</span>
       </div>
       <div class="aoc-search-bar">
@@ -1137,6 +1141,8 @@
 <script src="js/anchorage/eo-format.js"></script>
 <script src="js/anchorage/fold.js"></script>
 <script src="js/anchorage/terrains.js"></script>
+<script src="js/anchorage/render.js"></script>
+<script src="js/anchorage/views.js"></script>
 <script src="js/anchorage/extraction-prompt.js"></script>
 <script src="js/anchorage/cursor-ui.js"></script>
 <script>

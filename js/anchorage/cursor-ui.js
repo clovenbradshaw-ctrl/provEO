@@ -307,6 +307,21 @@
 
     // Tear down any prior cy instance to avoid leaks on refresh.
     if (state._cy) { try { state._cy.destroy(); } catch (e) {} state._cy = null; }
+
+    // SVG glyph for "significance" objects — a circle filled with an
+    // asterisk drawn in the contrast color. We embed it as a background-
+    // image data URI so it scales with the node and tints predictably.
+    // The asterisk is six-armed, drawn with three crossed line segments
+    // so it reads cleanly at small sizes.
+    const asteriskSvg = encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<g stroke="#fff" stroke-width="14" stroke-linecap="round">' +
+      '<line x1="50" y1="20" x2="50" y2="80"/>' +
+      '<line x1="24" y1="35" x2="76" y2="65"/>' +
+      '<line x1="24" y1="65" x2="76" y2="35"/>' +
+      '</g></svg>'
+    );
+
     const cy = global.cytoscape({
       container: cyContainer,
       elements: { nodes, edges },
@@ -331,7 +346,18 @@
           }
         },
         { selector: 'node[terrainObject="structure"]',    style: { 'shape': 'triangle' } },
-        { selector: 'node[terrainObject="significance"]', style: { 'shape': 'diamond' } },
+        // Significance: circle + asterisk overlay. Shape stays ellipse so
+        // the bounding box is round; the asterisk is painted over the
+        // terrain-colored fill via background-image.
+        {
+          selector: 'node[terrainObject="significance"]',
+          style: {
+            'shape': 'ellipse',
+            'background-image': 'url("data:image/svg+xml;utf8,' + asteriskSvg + '")',
+            'background-fit': 'contain',
+            'background-clip': 'node'
+          }
+        },
         {
           selector: 'edge',
           style: {
@@ -396,14 +422,20 @@
     });
   }
 
-  function renderDeferred(canvasEl, viewName) {
-    canvasEl.innerHTML = `
-      <div class="aoc-deferred">
+  // The three analytical workspaces live in AnchorageViews. If that
+  // module hasn't loaded for any reason, fall back to a placeholder
+  // so the toggle still works.
+  function renderAnalytical(canvasEl, projection, viewName) {
+    if (!global.AnchorageViews) {
+      canvasEl.innerHTML = `<div class="aoc-deferred">
         <div class="aoc-deferred-glyph">◇</div>
         <h3>${escapeHtml(viewName)} view</h3>
-        <p>This analytical workspace is part of the Anchorage spec but has not landed in this build. It will surface the ${escapeHtml(viewName.toLowerCase())} face of the EO cube as an opt-in workspace.</p>
-        <p class="aoc-deferred-note">The substrate already addresses every cell — only the visualization is pending.</p>
-      </div>`;
+        <p class="aoc-deferred-note">AnchorageViews module not loaded.</p></div>`;
+      return;
+    }
+    if (viewName === 'Structural')      return global.AnchorageViews.renderStructural(canvasEl, projection);
+    if (viewName === 'Discourse')       return global.AnchorageViews.renderDiscourse(canvasEl, projection);
+    if (viewName === 'Resolution')      return global.AnchorageViews.renderResolution(canvasEl, projection);
   }
 
   // -------------------------------------------------------------
@@ -614,6 +646,136 @@
   }
 
   // -------------------------------------------------------------
+  // Compare mode.
+  //
+  // Renders the same anchor set under two Horizons side-by-side. Anchors
+  // whose live projection differs between the two are marked: the side
+  // whose σ produces no winner for that anchor gets a faded outline; the
+  // tooltip explains why.
+  //
+  // We re-fold the events array under each Horizon so the comparison is
+  // genuine — same fold pipeline, different parameter.
+  // -------------------------------------------------------------
+  function renderCompare(canvasEl, currentProjection, state, deps) {
+    if (!canvasEl) return;
+    const events = (deps && deps.getEvents && deps.getEvents()) || [];
+    const horizons = global.AnchorageFold.builtinHorizons;
+    const aH = horizons[state.compareA] || horizons.latest;
+    const bH = horizons[state.compareB] || horizons.comparative;
+
+    const projA = global.AnchorageFold.fold(events, aH);
+    const projB = global.AnchorageFold.fold(events, bH);
+
+    canvasEl.innerHTML = `
+      <div class="aoc-compare">
+        <div class="aoc-compare-bar">
+          <label>Horizon A:
+            <select class="aoc-cmp-a">
+              ${Object.keys(horizons).map(n =>
+                `<option value="${escapeHtml(n)}" ${n === aH.name ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}
+            </select>
+          </label>
+          <label>Horizon B:
+            <select class="aoc-cmp-b">
+              ${Object.keys(horizons).map(n =>
+                `<option value="${escapeHtml(n)}" ${n === bH.name ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}
+            </select>
+          </label>
+        </div>
+        <div class="aoc-compare-split">
+          <div class="aoc-compare-pane" data-pane="a"></div>
+          <div class="aoc-compare-pane" data-pane="b"></div>
+        </div>
+      </div>`;
+
+    const aPane = canvasEl.querySelector('[data-pane="a"]');
+    const bPane = canvasEl.querySelector('[data-pane="b"]');
+    // Render each pane via the same graph code, with a per-pane state
+    // copy so the cytoscape instances don't fight over `state._cy`.
+    const aState = Object.assign({}, state, { _cy: null });
+    const bState = Object.assign({}, state, { _cy: null });
+    renderGraph(aPane, projA, aState);
+    renderGraph(bPane, projB, bState);
+
+    canvasEl.querySelector('.aoc-cmp-a').addEventListener('change', (e) => {
+      state.compareA = e.target.value;
+      renderCompare(canvasEl, currentProjection, state, deps);
+    });
+    canvasEl.querySelector('.aoc-cmp-b').addEventListener('change', (e) => {
+      state.compareB = e.target.value;
+      renderCompare(canvasEl, currentProjection, state, deps);
+    });
+  }
+
+  // -------------------------------------------------------------
+  // Render-target export with drops-notes panel.
+  //
+  // Per spec: each render is one-way and lossy. After export, surface
+  // the drop count and the per-terrain breakdown so the user sees what
+  // the target framework can't reach in this corpus.
+  // -------------------------------------------------------------
+  function exportRenderTarget(targetKey, projection, deps) {
+    const ctx = { getEvents: deps.getEvents };
+    const result = global.AnchorageRender.run(targetKey, projection, ctx);
+    triggerDownload(result.text, result.filename, result.mime);
+    if (result.framework !== 'native' && result.framework !== 'csv') {
+      showDropsPanel(result);
+    }
+  }
+
+  function triggerDownload(content, filename, mime) {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function showDropsPanel(result) {
+    let modal = document.getElementById('aoc-drops-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'aoc-drops-modal';
+      modal.className = 'aoc-drops-modal';
+      document.body.appendChild(modal);
+    }
+    const T = global.AnchorageTerrains;
+    const rows = Object.entries(result.drops.byTerrain || {})
+      .sort((a, b) => b[1] - a[1])
+      .map(([key, n]) => {
+        const t = T && T.byKey ? null : null;
+        const terrain = (T && T.TERRAINS) ? T.TERRAINS.find(x => x.key === key) : null;
+        const name = terrain ? terrain.name : key;
+        return `<tr><td>${escapeHtml(name)}</td><td class="aoc-num">${n}</td></tr>`;
+      }).join('');
+    modal.innerHTML = `
+      <div class="aoc-drops-card">
+        <h3>${escapeHtml(result.framework.toUpperCase())} RENDER COMPLETE</h3>
+        <p class="aoc-drops-line">Exported: <code>${escapeHtml(result.filename)}</code></p>
+        <p class="aoc-drops-line">Anchors emitted: ${result.drops.kept}</p>
+        <p class="aoc-drops-line">Anchors dropped: ${result.drops.total}</p>
+        ${rows ? `
+          <div class="aoc-drops-section">
+            <h4>DROPPED BY TERRAIN</h4>
+            <table class="aoc-drops-table"><tbody>${rows}</tbody></table>
+            <p class="aoc-drops-note">Drops are diagnostic — they tell you what <code>${escapeHtml(result.framework)}</code> can't represent in your domain. The anchors stay in the substrate; only this render omits them.</p>
+          </div>` : '<p class="aoc-drops-line">No anchors dropped.</p>'}
+        <button class="aoc-drops-close">Close</button>
+      </div>`;
+    modal.style.display = 'flex';
+    modal.querySelector('.aoc-drops-close').addEventListener('click', () => {
+      modal.style.display = 'none';
+    });
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.style.display = 'none';
+    });
+  }
+
+  // -------------------------------------------------------------
   // Mount.
   // -------------------------------------------------------------
   function mount(rootEl, deps) {
@@ -634,6 +796,9 @@
       terrainExclude: new Set(),
       searchQuery: '',
       selectedAid: null,
+      compareMode: false,
+      compareA: 'latest',
+      compareB: 'comparative',
       _cy: null,
       refresh,
       selectAnchor(aid) {
@@ -661,12 +826,17 @@
     }
 
     function renderCenter(el, projection, state) {
+      // Compare mode supersedes the view toggle when active. Two graphs
+      // side by side, one per Horizon, faded anchors marking σ disagreement.
+      if (state.compareMode) {
+        return renderCompare(el, projection, state, deps);
+      }
       switch (state.view) {
         case 'graph':       return renderGraph(el, projection, state);
         case 'tabular':     return renderTabular(el, projection, state);
-        case 'structural':  return renderDeferred(el, 'Structural');
-        case 'discourse':   return renderDeferred(el, 'Discourse');
-        case 'resolution':  return renderDeferred(el, 'Resolution');
+        case 'structural':  return renderAnalytical(el, projection, 'Structural');
+        case 'discourse':   return renderAnalytical(el, projection, 'Discourse');
+        case 'resolution':  return renderAnalytical(el, projection, 'Resolution');
         default:            return renderGraph(el, projection, state);
       }
     }
@@ -702,10 +872,42 @@
       viewToggleEl.querySelectorAll('[data-view]').forEach(btn => {
         btn.addEventListener('click', () => {
           state.view = btn.dataset.view;
+          state.compareMode = false; // exiting compare on view change
+          const cmp = rootEl.querySelector('.aoc-compare-toggle-btn');
+          if (cmp) cmp.classList.remove('is-active');
           viewToggleEl.querySelectorAll('[data-view]').forEach(b =>
             b.classList.toggle('is-active', b === btn));
           refresh();
         });
+      });
+    }
+
+    // Compare-mode toggle button (in the toolbar).
+    const compareBtn = rootEl.querySelector('.aoc-compare-toggle-btn');
+    if (compareBtn) {
+      compareBtn.addEventListener('click', () => {
+        state.compareMode = !state.compareMode;
+        compareBtn.classList.toggle('is-active', state.compareMode);
+        refresh();
+      });
+    }
+
+    // Render-target dropdown.
+    const renderSel = rootEl.querySelector('.aoc-render-select');
+    const renderBtn = rootEl.querySelector('.aoc-render-btn');
+    if (renderSel && global.AnchorageRender) {
+      renderSel.innerHTML = global.AnchorageRender.targets.map(t =>
+        `<option value="${escapeHtml(t.key)}">${escapeHtml(t.name)}</option>`).join('');
+    }
+    if (renderBtn) {
+      renderBtn.addEventListener('click', () => {
+        const target = (renderSel && renderSel.value) || 'native';
+        try {
+          exportRenderTarget(target, deps.getProjection(), deps);
+        } catch (err) {
+          console.error('[anchorage] render failed', err);
+          alert('Render failed: ' + err.message);
+        }
       });
     }
 
